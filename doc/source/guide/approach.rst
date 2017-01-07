@@ -54,7 +54,7 @@ of the splines:
 
 The reason for the two different approaches being implemented is that after implementing and switching to the standard approach
 some of the examples no longer converged to a solution.
-The examples that are effected by that are:
+The examples that are affected by that are:
 
 - :ref:`con-double-pendulum`
 - :ref:`inv-3-bar-pend`

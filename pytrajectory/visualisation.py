@@ -26,6 +26,8 @@ def plot_simulation(sim_data, H=[], fname=None):
         If not None, plot will be saved as <fname>.png
     '''
     
+    1/0 # this function seems to be obsolete
+    
     t, xt, ut = sim_data
     n = xt.shape[1]
     m = ut.shape[1]
@@ -120,7 +122,11 @@ class Animation():
         List of tuples with indices and labels of input variables that will be plotted along the picture
     '''
     
-    def __init__(self, drawfnc, simdata, plotsys=[], plotinputs=[]):
+    def __init__(self, drawfnc, simdata, plotsys=[], plotinputs=[], rcParams=None):
+        
+        if rcParams:
+            # apply provided matplotlib options
+            mpl.rcParams.update(rcParams)
         self.fig = plt.figure()
     
         self.image = 0
@@ -231,7 +237,7 @@ class Animation():
     def set_label(self, ax='ax_img', label=''):
         self.axes[ax].set_ylabel(label, rotation='horizontal', horizontalalignment='right')
         
-    def show(self, t=0.0, xlim=None, ylim=None):
+    def show(self, t=0.0, xlim=None, ylim=None, axes_callback=None, save_fname=None, show=True):
         '''
         Plots one frame of the system animation.
         
@@ -267,6 +273,7 @@ class Animation():
                 l.remove()
             image.reset()
         
+        # call the provided drawfnc
         image = self.draw(self.xt[i,:], image=image)
         
         for p in image.patches:
@@ -297,8 +304,18 @@ class Animation():
                 curve.set_data(self.t[:i], self.ut[:i])
             self.axes['ax_u%d'%k].add_line(curve)
         
+        
+        if axes_callback:
+            # this is the possibility for each example to modify the axes (like xticks etc)
+            axes_callback(self)
+        
         plt.draw()
-        plt.show()
+        
+        if save_fname:
+            plt.savefig(save_fname)
+            
+        if show:
+            plt.show()
     
     def animate(self):
         '''
@@ -331,8 +348,6 @@ class Animation():
         
         # raise number of frames
         self.nframes += 2 * add_frames
-        
-        #IPS()
         
         
         def _animate(frame):
@@ -391,6 +406,7 @@ class Animation():
         '''
         Saves the animation as a video file or animated gif.
         '''
+
         if not fps:
             fps = self.nframes/(float(self.T))  # add pause_time here?
         

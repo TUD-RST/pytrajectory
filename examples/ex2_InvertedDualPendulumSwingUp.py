@@ -7,16 +7,16 @@ import numpy as np
 
 # define the function that returns the vectorfield
 def f(x,u):
-	x1, x2, x3, x4, x5, x6 = x  # system variables
-	u, = u                      # input variable
+    x1, x2, x3, x4, x5, x6 = x  # system variables
+    u, = u                      # input variable
     
     # length of the pendulums
-	l1 = 0.7
-	l2 = 0.5
+    l1 = 0.7
+    l2 = 0.5
     
-	g = 9.81    # gravitational acceleration
+    g = 9.81    # gravitational acceleration
     
-	ff = np.array([         x2,
+    ff = np.array([         x2,
                             u,
                             x4,
                 (1/l1)*(g*sin(x3)+u*cos(x3)),
@@ -24,7 +24,7 @@ def f(x,u):
                 (1/l2)*(g*sin(x5)+u*cos(x5))
                     ])
     
-	return ff
+    return ff
 
 # system state boundary values for a = 0.0 [s] and b = 2.0 [s]
 xa = [0.0, 0.0,  np.pi, 0.0,  np.pi, 0.0]

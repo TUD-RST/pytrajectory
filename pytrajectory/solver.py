@@ -1,6 +1,9 @@
 import numpy as np
 from numpy.linalg import solve, norm
 import scipy as scp
+import time
+
+from auxiliary import NanError
 
 from log import logging
 
@@ -33,14 +36,22 @@ class Solver:
         The solver to use
     '''
     
-    def __init__(self, F, DF, x0, tol=1e-5, maxIt=100, method='leven'):
+    def __init__(self, F, DF, x0, tol=1e-5, reltol=2e-5, maxIt=50,
+                                            method='leven', mu=1e-4):
         self.F = F
         self.DF = DF
         self.x0 = x0
         self.tol = tol
-        self.reltol = 2e-5
+        self.reltol = reltol
         self.maxIt = maxIt
         self.method = method
+        
+        self.solve_count = 0
+        
+        # this is LM specific
+        self.mu=mu
+        self.res = 1
+        self.res_old = -1
         
         self.sol = None
     
@@ -51,6 +62,8 @@ class Solver:
         collocation equation system.
         '''
         
+        self.solve_count += 1
+
         if (self.method == 'leven'):
             logging.debug("Run Levenberg-Marquardt method")
             self.leven()
@@ -71,33 +84,37 @@ class Solver:
         '''
         i = 0
         x = self.x0
-        res = 1
-        res_alt = -1
         
         eye = scp.sparse.identity(len(self.x0))
 
         #mu = 1.0
-        mu = 1e-4
+        self.mu = 1e-4
         
         # borders for convergence-control
         b0 = 0.2
         b1 = 0.8
 
-        roh = 0.0
+        rho = 0.0
 
         reltol = self.reltol
         
         Fx = self.F(x)
         
-        while((res > self.tol) and (self.maxIt > i) and (abs(res-res_alt) > reltol)):
+        # measure the time for the LM-Algorithm
+        T_start = time.time()
+        
+        break_outer_loop = False
+        
+        while (not break_outer_loop):
             i += 1
             
             #if (i-1)%4 == 0:
             DFx = self.DF(x)
             DFx = scp.sparse.csr_matrix(DFx)
             
-            while (roh < b0):                
-                A = DFx.T.dot(DFx) + mu**2*eye
+            break_inner_loop = False
+            while (not break_inner_loop):                
+                A = DFx.T.dot(DFx) + self.mu**2*eye
 
                 b = DFx.T.dot(Fx)
                     
@@ -107,33 +124,85 @@ class Solver:
                 
                 Fxs = self.F(xs)
 
+                if any(np.isnan(Fxs)):
+                    # this might be caused by too small mu
+                    msg = "Invalid start guess (leads to nan)"
+                    raise NanError(msg)
+
                 normFx = norm(Fx)
                 normFxs = norm(Fxs)
 
-                roh = (normFx**2 - normFxs**2) / (normFx**2 - (norm(Fx+DFx.dot(s)))**2)
+                R1 = (normFx**2 - normFxs**2)
+                R2 = (normFx**2 - (norm(Fx+DFx.dot(s)))**2)
                 
-                if (roh<=b0): mu = 2.0*mu
-                if (roh>=b1): mu = 0.5*mu
-                #logging.debug("  roh= %f    mu= %f"%(roh,mu))
-                logging.debug('  mu = {}'.format(mu))
+                R1 = (normFx - normFxs)
+                R2 = (normFx - (norm(Fx+DFx.dot(s))))
+                rho = R1 / R2
                 
-                # the following was believed to be some kind of bug, hence the warning
-                # but that was not the case...
-                #if (roh < 0.0):
-                    #log.warn("Parameter roh in LM-method became negative", verb=3)
-                    #from IPython import embed as IPS
-                    #IPS()
+                # note smaller bigger mu means less progress but
+                # "more regular" conditions
+                
+                if R1 < 0 or R2 < 0:
+                    # the step was too big -> residuum would be increasing
+                    self.mu *= 2
+                    rho = 0.0 # ensure another iteration
+                    
+                    #logging.debug("increasing res. R1=%f, R2=%f, dismiss solution" % (R1, R2))
+
+                elif (rho<=b0):
+                    self.mu *= 2
+                elif (rho>=b1):
+                    self.mu *= 0.5
+
+                # -> if b0 < rho < b1 : leave mu unchanged
+                
+                logging.debug("  rho= %f    mu= %f"%(rho, self.mu))
+
+                if np.isnan(rho):
+                    # this should might be caused by large values for xs
+                    # but it should have been catched above
+                    logging.warn("rho = nan (should not happen)")
+                    raise NanError()
+               
+                if rho < 0:
+                    logging.warn("rho < 0 (should not happen)")
+                
+                # if the system more or less behaves linearly 
+                break_inner_loop = rho > b0
             
             Fx = Fxs
             x = xs
             
-            roh = 0.0
-            res_alt = res
-            res = normFx
-            logging.debug("nIt= %d    res= %f"%(i,res))
+            # store for possible future usage
+            self.x0 = xs
             
-            # NEW - experimental
-            #if res<1.0:
-            #    reltol = 1e-3
+            #rho = 0.0
+            self.res_old = self.res
+            self.res = normFx
+            if i>1 and self.res > self.res_old:
+                logging.warn("res_old > res  (should not happen)")
 
+            logging.debug("nIt= %d    res= %f"%(i,self.res))
+            
+            self.cond_abs_tol = self.res <= self.tol
+            self.cond_rel_tol = abs(self.res-self.res_old) <= reltol
+            self.cond_num_steps = i >= self.maxIt
+            
+            break_outer_loop = self.cond_abs_tol or self.cond_rel_tol \
+                                                 or self.cond_num_steps
+
+        # LM Algorithm finished
+        T_LM = time.time() - T_start
+        
+        if i == 0:
+            from IPython import embed as IPS
+            IPS()
+        
+        self.avg_LM_time = T_LM / i
+        
+        # Note: if self.cond_num_steps == True, the LM-Algorithm was stopped
+        # due to maximum number of iterations
+        # -> it might be worth to continue 
+        
+        
         self.sol = x

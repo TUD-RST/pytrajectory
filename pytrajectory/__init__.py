@@ -40,5 +40,5 @@ if not (int(sp_info[0]) >= 0 and int(sp_info[1]) >= 7 and int(sp_info[2][0]) >= 
     logging.warning('sympy version ({}) may be out of date'.format(sympy.__version__))
 
 # log information about current version
-logging.debug('This is PyTrajectory version {} of {}'.format(__version__, __date__))
+# logging.debug('This is PyTrajectory version {} of {}'.format(__version__, __date__))
 

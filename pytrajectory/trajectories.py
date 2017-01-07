@@ -63,9 +63,15 @@ class Trajectory(object):
 
     def _raise_spline_parts(self, k=None):
         if k is not None:
+            # This normally does not happen, and is only for 
+            # experiments and debugging
             self._parameters['n_parts_x'] *= int(k)
         else:
             self._parameters['n_parts_x'] *= self._parameters['kx']
+
+            # TODO: introduce parameter `ku` and handle it here
+            # (and in CollocationSystem.get_guess())
+            self._parameters['n_parts_u'] *= self._parameters['kx']
 
         return self.n_parts_x
     

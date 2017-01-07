@@ -206,7 +206,7 @@ With this allocation, the system of equations can be solved for :math:`\boldsymb
 remain as the free parameters of the spline function.
 
 .. note::
-   There is implemented a different approach for defining the candidate functions, see :ref:`non-standard-approach`.
+   Optionally, there is available an alternative approach for defining the candidate functions, see :ref:`non-standard-approach`.
 
 
 .. _system_structure:
@@ -296,7 +296,7 @@ and the change of the residual of the linearized approximation.
    :nowrap:
 
    \begin{equation*}
-      \tilde{R}(x_k, s_k) := \| F(x_k) \|_2^2 - \| F(x_k) + F'(x_k)x_k \|_2^2
+      \tilde{R}(x_k, s_k) := \| F(x_k) \|_2^2 - \| F(x_k) + F'(x_k)s_k \|_2^2
    \end{equation*}
 
 As a control criterion, the following quotient is introduced.

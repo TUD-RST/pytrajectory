@@ -8,13 +8,14 @@ DEBUG = False
 LOG2CONSOLE = True
 LOG2FILE = False
 
+
 # get logger
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 # log to console
 if LOG2CONSOLE:
-    console_handler = logging.StreamHandler()
+    console_handler = logging.StreamHandler(sys.stdout)
     console_formatter = logging.Formatter(fmt='%(levelname)s: \t %(message)s', datefmt='%d-%m-%Y %H:%M:%S')
     
     if DEBUG:

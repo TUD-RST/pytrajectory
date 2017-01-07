@@ -24,7 +24,9 @@ The documentation can be found at [readthedocs.org](https://pytrajectory.readthe
 Examples
 ========
 
-See the *Usage* or *Examples* section of the documentation. The examples files can also be downloaded
+See the [*Usage*](http://pytrajectory.readthedocs.io/en/master/guide/start.html#usage) or
+[*Examples*](http://pytrajectory.readthedocs.io/en/master/guide/examples/index.html) section
+of the documentation. The examples files can also be downloaded
 [here](https://github.com/TUD-RST/pytrajectory/tree/master/dist).
 
 The animation above belongs to example 8.

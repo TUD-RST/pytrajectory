@@ -23,7 +23,7 @@ def f(x,u):
     d12 = m*(lc**2+l*lc*cos(x1))+I
     phi1 = (m*lc+m*l)*g*cos(x3)+m*lc*g*cos(x1+x3)
 
-    ff = np.array([	    x2,
+    ff = np.array([     x2,
                         u1,
                         x4,
                 -1/d11*(h1+phi1+d12*u1)
@@ -47,8 +47,9 @@ xb = [  0.0,
 ua = [0.0]
 ub = [0.0]
 
-# create trajectory object
-S = ControlSystem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=ua, ub=ub)
+# create System
+first_guess = {'seed' : 1529} # choose a seed which leads to quick convergence
+S = ControlSystem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=ua, ub=ub, use_chains=True, first_guess=first_guess)
 
 # alter some method parameters to increase performance
 S.set_param('su', 10)
