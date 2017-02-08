@@ -1,10 +1,12 @@
+
 ![Constrained Double Pendulum](https://raw.github.com/TUD-RST/pytrajectory/master/doc/pic/con_double_pend_swing.gif)
 
 About
 =====
-
 [![Build Status](https://travis-ci.org/TUD-RST/pytrajectory.svg?branch=master)](https://travis-ci.org/TUD-RST/pytrajectory)
 [![PyPI version](https://badge.fury.io/py/PyTrajectory.svg)](http://badge.fury.io/py/PyTrajectory)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.276212.svg)](https://doi.org/10.5281/zenodo.276212)
+
 
 PyTrajectory is a Python library for trajectory generation for nonlinear control systems.
 It relies on solving a boundary value problem (bvp) via a collocation method. It is based
