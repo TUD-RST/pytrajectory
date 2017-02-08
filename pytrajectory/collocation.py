@@ -43,7 +43,7 @@ class CollocationSystem(object):
         self._parameters = dict()
         self._parameters['tol'] = kwargs.get('tol', 1e-5)
         self._parameters['reltol'] = kwargs.get('reltol', 2e-5)
-        self._parameters['sol_steps'] = kwargs.get('sol_steps', 100)
+        self._parameters['sol_steps'] = kwargs.get('sol_steps', 50)
         self._parameters['method'] = kwargs.get('method', 'leven')
         self._parameters['coll_type'] = kwargs.get('coll_type', 'equidistant')
         
@@ -403,7 +403,7 @@ class CollocationSystem(object):
         self.guess = guess
     
     
-    def solve(self, G, DG):
+    def solve(self, G, DG, new_solver=True):
         '''
         This method is used to solve the collocation equation system.
         
@@ -415,17 +415,25 @@ class CollocationSystem(object):
         
         DG : callable
             Function for the jacobian.
+        
+        new_solver : bool
+                     flag to determine whether a new solver instance should
+                     be initialized (default True)
         '''
 
         logging.debug("Solving Equation System")
         
         # create our solver
-        self.solver = Solver(F=G, DF=DG, x0=self.guess,
-                             tol=self._parameters['tol'],
-                             reltol=self._parameters['reltol'],
-                             maxIt=self._parameters['sol_steps'],
-                             method=self._parameters['method'])
-        
+        if new_solver:
+            self.solver = Solver(F=G, DF=DG, x0=self.guess,
+                                tol=self._parameters['tol'],
+                                reltol=self._parameters['reltol'],
+                                maxIt=self._parameters['sol_steps'],
+                                method=self._parameters['method'])
+        else:
+            # assume self.solver exists and at we already did a solution run
+            assert self.solver.solve_count > 0
+
         # solve the equation system
         self.sol = self.solver.solve()
         

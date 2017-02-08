@@ -6,6 +6,10 @@ import time
 
 from log import logging, Timer
 
+
+class NanError(ValueError):
+    pass
+
 class IntegChain(object):
     '''
     This class provides a representation of an integrator chain.

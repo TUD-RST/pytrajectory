@@ -60,6 +60,7 @@ class ControlSystem(object):
         eps           1e-2            Tolerance for the solution of the initial value problem
         ierr          1e-1            Tolerance for the error on the whole interval
         tol           1e-5            Tolerance for the solver of the equation system
+        dt_sim        1e-2            Sample time for integration (initial value problem)
         use_chains    True            Whether or not to use integrator chains
         sol_steps     100             Maximum number of iteration steps for the eqs solver
         first_guess   None            to initiate free parameters (might be useful: {'seed': value})
@@ -72,6 +73,8 @@ class ControlSystem(object):
         self._parameters['maxIt'] = kwargs.get('maxIt', 10)
         self._parameters['eps'] = kwargs.get('eps', 1e-2)
         self._parameters['ierr'] = kwargs.get('ierr', 1e-1)
+        self._parameters['dt_sim'] = kwargs.get('dt_sim', 0.01)
+        self._parameters['accIt'] = kwargs.get('accIt', 5)
 
         # create an object for the dynamical system
         self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub)
@@ -108,7 +111,7 @@ class ControlSystem(object):
             The new value
         '''
         
-        if param in {'maxIt', 'eps', 'ierr'}:
+        if param in {'maxIt', 'eps', 'ierr', 'dt_sim'}:
             self._parameters[param] = value
 
         elif param in {'n_parts_x', 'sx', 'n_parts_u', 'su', 'kx', 'use_chains', 'nodes_type', 'use_std_approach'}:
@@ -262,13 +265,18 @@ class ControlSystem(object):
         
         # do the first iteration step
         logging.info("1st Iteration: {} spline parts".format(self.eqs.trajectories.n_parts_x))
-        self._iterate()
-        
+        try:        
+            self._iterate()
+        except auxiliary.NanError:
+            logging.warn("NanError")
+            return None, None
+
         # this was the first iteration
         # now we are getting into the loop
         self.nIt = 1
         
         while not self.reached_accuracy and self.nIt < self._parameters['maxIt']:
+            
             # raise the number of spline parts
             self.eqs.trajectories._raise_spline_parts()
             
@@ -280,8 +288,12 @@ class ControlSystem(object):
                 logging.info("{}th Iteration: {} spline parts".format(self.nIt+1, self.eqs.trajectories.n_parts_x))
 
             # start next iteration step
-            self._iterate()
-
+            try:        
+                self._iterate()
+            except auxiliary.NanError:
+                logging.warn("NanError")
+                return None, None
+            
             # increment iteration number
             self.nIt += 1
 
@@ -308,6 +320,16 @@ class ControlSystem(object):
 
         As a last, the resulting initial value problem is simulated.
         '''
+        
+        # Note: in pytrajectory there are Three main levels of 'iteration'
+        # Level 3: perform one LM-Step (i.e. calculate a new set of parameters) 
+        # This is implemented in solver.py. Ends when tolerances are met or
+        # the maximum number of steps is reached
+        # Level 2: restarts the LM-Algorithm with the last values
+        # and stops if the desired accuracy for the initial value problem
+        # is met or if the maximum number of steps solution attempts is reached
+        # Level 1: increasing the spline number.
+        # In Each step solve a nonlinear optimization problem (with LM)
 
         # Initialise the spline function objects
         self.eqs.trajectories.init_splines()
@@ -320,16 +342,40 @@ class ControlSystem(object):
         G, DG = C.G, C.DG
         
         # Solve the collocation equation system
-        sol = self.eqs.solve(G, DG)
         
-        # Set the found solution
-        self.eqs.trajectories.set_coeffs(sol)
+        new_solver = True
+        while True:
+            sol = self.eqs.solve(G, DG, new_solver=new_solver)
+            
+            # in the following iterations we want to use the same solver
+            # object (we just had an intermediate look, whether the solution
+            # of the initial value problem is already sufficient accurate.)
+            
+            new_solver = False
 
-        # Solve the resulting initial value problem
-        self.simulate()
-        
-        # check if desired accuracy is reached
-        self.check_accuracy()
+            # Set the found solution
+            self.eqs.trajectories.set_coeffs(sol)
+
+            # Solve the resulting initial value problem
+            self.simulate()
+
+            # check if desired accuracy is reached
+            self.check_accuracy()
+
+            # any of the follwing  conditions ends the loop
+            slvr = self.eqs.solver
+            cond1 = self.reached_accuracy
+            
+            # following means: solver stopped not
+            # only because of maximum stepp             # number
+            cond2 = (not slvr.cond_num_steps) or slvr.cond_abs_tol \
+                                              or slvr.cond_rel_tol
+            cond3 = self.eqs.solver.solve_count >= self._parameters['accIt']
+
+            if cond1 or cond2 or cond3:
+                break
+            else:
+                logging.debug('New attempt\n\n')
 
     def simulate(self):
         '''
@@ -358,7 +404,7 @@ class ControlSystem(object):
             start.append(start_dict[x])
         
         # create simulation object
-        S = Simulator(ff, T, start, self.eqs.trajectories.u)
+        S = Simulator(ff, T, start, self.eqs.trajectories.u, dt=self._parameters['dt_sim'])
         
         logging.debug("start: %s"%str(start))
         

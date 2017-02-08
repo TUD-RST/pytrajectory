@@ -5,7 +5,7 @@ This file is part of PyTrajectory.
 from distutils.core import setup
 
 setup(name='PyTrajectory',
-    version='1.2.0',
+    version='1.3.0',
     packages=['pytrajectory'],
     requires=['numpy (>=1.8.1)',
                 'sympy (>=0.7.5)',
