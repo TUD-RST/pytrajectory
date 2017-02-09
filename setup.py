@@ -4,8 +4,10 @@ This file is part of PyTrajectory.
 
 from distutils.core import setup
 
+__version__ = '1.3.1'
+
 setup(name='PyTrajectory',
-    version='1.3.0',
+    version=__version__,
     packages=['pytrajectory'],
     requires=['numpy (>=1.8.1)',
                 'sympy (>=0.7.5)',
