@@ -15,7 +15,7 @@ from visualisation import Animation
 from log import logging
 
 # current version
-__version__ = '1.3.0'
+__version__ = '1.3.1'
 
 # Placeholder for the datetime string of latest commit
 __date__ = "2016-01-15 14:12:08"
