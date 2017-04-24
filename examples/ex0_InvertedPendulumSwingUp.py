@@ -112,6 +112,29 @@ if not 'no-pickle' in sys.argv:
 # now we can create an instance of the `Animation` class 
 # with our draw function and the simulation results
 #
+
+
+
+# this was aked for by one user:
+# save the simulation data (solution of IVP) to csv
+
+tt, xx, uu = S.sim_data
+export_array = np.hstack((tt.reshape(-1, 1), xx, uu))
+
+# to actually save the array uncomment the following:
+# np.savetxt("ex0_result.csv", export_array, delimiter=",")
+
+
+# first column: time
+# next n columns: state (here n = 4)
+# last m columns: input (here m = 1)
+
+# this can be used for interactively playing arround
+# from IPython import embed as IPS
+# IPS()
+
+
+
 # to plot the curves of some trajectories along with the picture
 # we also pass the appropriate lists as arguments (see documentation)
 if 'plot' in sys.argv or 'animate' in sys.argv:
