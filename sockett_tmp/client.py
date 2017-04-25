@@ -22,8 +22,6 @@ sock.send("exit\n")
 print "exit"
 
 
-
-
 sock.close()
 
 if 0:
