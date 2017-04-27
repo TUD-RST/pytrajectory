@@ -5,7 +5,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib.gridspec import GridSpec
-import os
+from IPython import embed as IPS
 
 
 def plot_simulation(sim_data, H=[], fname=None):
@@ -26,7 +26,7 @@ def plot_simulation(sim_data, H=[], fname=None):
         If not None, plot will be saved as <fname>.png
     '''
     
-    1/0 # this function seems to be obsolete
+    1/0  # this function seems to be obsolete
     
     t, xt, ut = sim_data
     n = xt.shape[1]
@@ -339,20 +339,21 @@ class Animation():
             xt = np.vstack((xt[0],xt,xt[-1]))
             ut = np.vstack((ut[0],ut,ut[-1]))
         
-        
-        #tt = np.linspace(0,len(t)-1,self.nframes,endpoint=True)
-        tt = np.linspace(0,xt.shape[0]-1,self.nframes,endpoint=True)
-        tt = np.hstack(([tt[0]]*add_frames,tt,[tt[-1]]*add_frames))
+        # array of indices corresponding to the shown frames
+        f_idcs = np.linspace(0,xt.shape[0]-1, self.nframes,endpoint=True)
+        f_idcs = np.hstack(([f_idcs[0]]*add_frames, f_idcs, [f_idcs[-1]]*add_frames))
+        # convert the floats to integer
+        f_idcs = np.int32(f_idcs)
         
         self.T = t[-1] - t[0] + 2 * pause_time
         
         # raise number of frames
         self.nframes += 2 * add_frames
         
-        
-        def _animate(frame):
-            i = tt[frame]
-            print "frame = {f}, t = {t}, x = {x}, u = {u}".format(f=frame, t=t[i], x=xt[i,:], u=ut[i,:])
+        def _animate(frame_nbr):
+            idx = f_idcs[frame_nbr]
+            out = "frame = {f}, t = {t}, x = {x}, u = {u}"
+            print out.format(f=frame_nbr, t=t[idx], x=xt[idx, :], u=ut[idx, :])
             
             # draw picture
             image = self.image
@@ -369,7 +370,7 @@ class Animation():
                     l.remove()
                 image.reset()
             
-            image = self.draw(xt[i,:], image=image)
+            image = self.draw(xt[idx,:], image=image)
             
             for p in image.patches:
                 ax_img.add_patch(p)
@@ -383,17 +384,17 @@ class Animation():
             # update system curves
             for k, curve in enumerate(self.syscurves):
                 try:
-                    curve.set_data(t[:i], xt[:i, self.plotsys[k][0]])
+                    curve.set_data(t[:idx], xt[:idx, self.plotsys[k][0]])
                 except:
-                    curve.set_data(t[:i], xt[:i])
+                    curve.set_data(t[:idx], xt[:idx])
                 self.axes['ax_x%d'%k].add_line(curve)
             
             # update input curves
             for k, curve in enumerate(self.inputcurves):
                 try:
-                    curve.set_data(t[:i], ut[:i,self.plotinputs[k][0]])
+                    curve.set_data(t[:idx], ut[:idx,self.plotinputs[k][0]])
                 except:
-                    curve.set_data(t[:i], ut[:i])
+                    curve.set_data(t[:idx], ut[:idx])
                 self.axes['ax_u%d'%k].add_line(curve)
             
             plt.draw()
