@@ -85,12 +85,15 @@ def listen_for_connections(port):
 
 def has_message(txt):
     """
-    Non-matching Messages ar put back into the queue
+    Ask the server if a specific message has arrived.
+    Non-matching Messages are put back into the queue
 
     :param txt: message to look for
     :return: True or False
     """
-    assert running
+    if not running:
+        return False
+
     if msgqueue.empty():
         return False
 
