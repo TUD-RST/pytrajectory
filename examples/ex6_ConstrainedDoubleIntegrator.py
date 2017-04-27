@@ -2,7 +2,7 @@
 This example of the double integrator demonstrates how to pass constraints to PyTrajectory.
 '''
 # imports
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 import numpy as np
 
 # define the vectorfield
@@ -23,7 +23,7 @@ xb = [1.0, 0.0]
 con = {1 : [-0.1, 0.65]}
 
 # create the trajectory object
-S = ControlSystem(f, a=0.0, b=2.0, xa=xa, xb=xb, constraints=con, use_chains=False)
+S = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, constraints=con, use_chains=False)
 
 # start
 x, u = S.solve()

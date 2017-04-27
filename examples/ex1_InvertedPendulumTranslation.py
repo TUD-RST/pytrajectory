@@ -1,7 +1,7 @@
 # translation of the inverted pendulum
 
 # import trajectory class and necessary dependencies
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 from sympy import sin, cos
 import numpy as np
 
@@ -38,7 +38,7 @@ xb = [  1.0,
         0.0]
 
 # create trajectory object
-S = ControlSystem(f, a=0.0, b=2.0, xa=xa, xb=xb)
+S = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb)
 
 # change method parameter to increase performance
 S.set_param('use_chains', False)

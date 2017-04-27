@@ -1,7 +1,7 @@
 # underactuated manipulator
 
 # import trajectory class and necessary dependencies
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 import numpy as np
 from sympy import cos, sin
 
@@ -39,7 +39,7 @@ ua = [0.0]
 ub = [0.0]
 
 # create trajectory object
-S = ControlSystem(f, a=0.0, b=1.8, xa=xa, xb=xb, ua=ua, ub=ub)
+S = TransitionProblem(f, a=0.0, b=1.8, xa=xa, xb=xb, ua=ua, ub=ub)
 
 # also alter some method parameters to increase performance
 S.set_param('su', 20)

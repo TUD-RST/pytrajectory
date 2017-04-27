@@ -94,7 +94,9 @@ class Spline(object):
         for i in xrange(self.n):
             # create polynomials, e.g. for cubic spline:
             #   P_i(t)= c_i_3*t^3 + c_i_2*t^2 + c_i_1*t + c_i_0
-            self._P[i] = np.poly1d(self._coeffs[i])
+            # poly1d expects coeffs in decreasing order ->  [::-1]
+
+            self._P[i] = np.poly1d(self._coeffs[i][::-1])
         
         # initialise array for provisionally evaluation of the spline
         # if there are no values for its free parameters
@@ -592,7 +594,7 @@ def make_steady(S):
     
     # transfer b_set to ordered list
     b = sorted(list(b_set), key = lambda c: c.name)
-    #b = np.array(sorted(list(b_set), key = lambda c: c.name))
+    # b = np.array(sorted(list(b_set), key = lambda c: c.name))
     
     # now we build the matrix for the equation system
     # that ensures the smoothness conditions
@@ -604,7 +606,9 @@ def make_steady(S):
     # get matrix and right hand site of the equation system
     # that ensures smoothness and compliance with the boundary values
     M, r = get_smoothness_matrix(S, N1, N2)
-    
+
+    #IPS()
+
     # get A and B matrix such that
     #
     #       M*c = r

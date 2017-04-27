@@ -76,15 +76,15 @@ class Trajectory(object):
         return self.n_parts_x
     
     def x(self, t):
-        '''
+        """
         Returns the current system state.
-        
+
         Parameters
         ----------
-        
+
         t : float
             The time point in (a,b) to evaluate the system at.
-        '''
+        """
         
         if not self.sys.a <= t <= self.sys.b:
             logging.warning("Time point 't' has to be in (a,b)")

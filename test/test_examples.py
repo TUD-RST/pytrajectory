@@ -32,7 +32,7 @@ class TestExamples(object):
     
     def assert_reached_accuracy(self, loc):
         for value in loc.values():
-            if isinstance(value, pytrajectory.system.ControlSystem):
+            if isinstance(value, pytrajectory.system.TransitionProblem):
                 assert value.reached_accuracy
 
     @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")

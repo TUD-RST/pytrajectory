@@ -3,7 +3,7 @@ This example of the inverted pendulum demonstrates how to handle possible state 
 '''
 
 # import all we need for solving the problem
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 import numpy as np
 from sympy import cos, sin
 
@@ -38,7 +38,7 @@ con = { 0 : [-0.8, 0.3],
         1 : [-2.0, 2.0] }
 
 # now we create our Trajectory object and alter some method parameters via the keyword arguments
-S = ControlSystem(f, a, b, xa, xb, ua, ub, constraints=con, kx=5, use_chains=False)
+S = TransitionProblem(f, a, b, xa, xb, ua, ub, constraints=con, kx=5, use_chains=False)
 
 # time to run the iteration
 S.solve()

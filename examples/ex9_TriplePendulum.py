@@ -1,7 +1,7 @@
 # 3-bar pendulum
 
 # import all we need for solving the problem
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 
 import numpy as np
 import sympy as sp
@@ -341,9 +341,9 @@ ua = [0.0]
 ub = [0.0]
 
 # now we create our Trajectory object and alter some method parameters via the keyword arguments
-S = ControlSystem(f, a, b, xa, xb, ua, ub, constraints=None,
-                  eps=4e-1, su=30, kx=2, use_chains=False,
-                  use_std_approach=False)
+S = TransitionProblem(f, a, b, xa, xb, ua, ub, constraints=None,
+                      eps=4e-1, su=30, kx=2, use_chains=False,
+                      use_std_approach=False)
 
 # time to run the iteration
 x, u = S.solve()

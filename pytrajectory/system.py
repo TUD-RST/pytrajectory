@@ -13,42 +13,45 @@ from simulation import Simulator
 import auxiliary
 import visualisation
 from log import logging
+import interfaceserver
 
 
 # DEBUGGING
 from IPython import embed as IPS
 
-class ControlSystem(object):
-    '''
-    Base class of the PyTrajectory project.
+
+class TransitionProblem(object):
+    """
+    Base class of the PyTrajectory project containing all information to model a transition problem
+    of a dynamical system.
 
     Parameters
     ----------
 
     ff :  callable
         Vector field (rhs) of the control system.
-    
+
     a : float
         Left border of the considered time interval.
-    
+
     b : float
         Right border of the considered time interval.
-    
+
     xa : list
         Boundary values at the left border.
-    
+
     xb : list
         Boundary values at the right border.
-    
+
     ua : list
         Boundary values of the input variables at left border.
-    
+
     ub : list
         Boundary values of the input variables at right border.
-    
+
     constraints : dict
         Box-constraints of the state variables.
-    
+
     kwargs
         ============= =============   ============================================================
         key           default value   meaning
@@ -65,7 +68,7 @@ class ControlSystem(object):
         sol_steps     100             Maximum number of iteration steps for the eqs solver
         first_guess   None            to initiate free parameters (might be useful: {'seed': value})
         ============= =============   ============================================================
-    '''
+    """
 
     def __init__(self, ff, a=0., b=1., xa=[], xb=[], ua=[], ub=[], constraints=None, **kwargs):
         # set method parameters
@@ -92,24 +95,24 @@ class ControlSystem(object):
             #       which actually contain a constrained variable
 
         # create an object for the collocation equation system
-        self.eqs = CollocationSystem(sys=self.dyn_sys, **kwargs)
+        self.eqs = CollocationSystem(masterobject=self, dynsys=self.dyn_sys, **kwargs)
 
         # We didn't really do anything yet, so this should be false
         self.reached_accuracy = False
 
     def set_param(self, param='', value=None):
-        '''
+        """
         Alters the value of the method parameters.
-        
+
         Parameters
         ----------
-        
+
         param : str
             The method parameter
-        
+
         value
             The new value
-        '''
+        """
         
         if param in {'maxIt', 'eps', 'ierr', 'dt_sim'}:
             self._parameters[param] = value
@@ -132,7 +135,7 @@ class ControlSystem(object):
             raise AttributeError("Invalid method parameter ({})".format(param))
         
     def unconstrain(self, constraints):
-        '''
+        """
         This method is used to enable compliance with desired box constraints given by the user.
         It transforms the vectorfield by projecting the constrained state variables on
         new unconstrained ones.
@@ -142,7 +145,7 @@ class ControlSystem(object):
 
         constraints : dict
             The box constraints for the state variables
-        '''
+        """
 
         # save constraints
         self.constraints = constraints
@@ -201,6 +204,7 @@ class ControlSystem(object):
         ff = np.asarray(ff_mat).flatten().tolist()
         xu = self.dyn_sys.states + self.dyn_sys.inputs
         _f_sym = sp.lambdify(xu, ff, modules='sympy')
+
         def f_sym(x, u):
             xu = np.hstack((x,u))
             return _f_sym(*xu)
@@ -214,11 +218,11 @@ class ControlSystem(object):
         self.dyn_sys = DynamicalSystem(f_sym , a, b, xa, xb, ua, ub)
 
     def constrain(self):
-        '''
+        """
         This method is used to determine the solution of the original constrained
         state variables by creating a composition of the saturation functions and
         the calculated solution for the introduced unconstrained variables.
-        '''
+        """
         
         # get a copy of the current function dictionaries
         # (containing functions for unconstrained variables y_i)
@@ -244,25 +248,35 @@ class ControlSystem(object):
             self.eqs.trajectories.x_fnc[xk] = psi_y
             self.eqs.trajectories.dx_fnc[xk] = dpsi_dy
             
-    def solve(self):
-        '''
+    def solve(self, tcpport=None):
+        """
         This is the main loop.
-        
+
         While the desired accuracy has not been reached, the collocation system will
         be set up and solved with a iteratively raised number of spline parts.
-        
+
+        Parameters
+        ----------
+
+        param : tcpport:  port for interaction with the solution process
+                          default: None (no interaction)
+
         Returns
         -------
-        
+
         callable
             Callable function for the system state.
-        
+
         callable
             Callable function for the input variables.
-        '''
+        """
 
         T_start = time.time()
-        
+
+        if tcpport is not None:
+            assert isinstance(tcpport, int)
+            interfaceserver.listen_for_connections(tcpport)
+
         # do the first iteration step
         logging.info("1st Iteration: {} spline parts".format(self.eqs.trajectories.n_parts_x))
         try:        
@@ -274,12 +288,17 @@ class ControlSystem(object):
         # this was the first iteration
         # now we are getting into the loop
         self.nIt = 1
-        
-        while not self.reached_accuracy and self.nIt < self._parameters['maxIt']:
+
+        def q_finish_loop():
+            res = self.reached_accuracy and self.nIt < self._parameters['maxIt']
+
+        while not q_finish_loop():
             
             # raise the number of spline parts
             self.eqs.trajectories._raise_spline_parts()
             
+
+            # TODO: this should be simpliefied
             if self.nIt == 1:
                 logging.info("2nd Iteration: {} spline parts".format(self.eqs.trajectories.n_parts_x))
             elif self.nIt == 2:
@@ -306,8 +325,38 @@ class ControlSystem(object):
         # return the found solution functions
         return self.eqs.trajectories.x, self.eqs.trajectories.u
 
+    def get_spline_values(self, sol, plot=False):
+        """
+        This function serves for debugging and algorithm investigation. It is supposed to be called
+        from within the solver. It calculates the corresponding curves of x and u w.r.t. the
+        actually best solution (parameter vector)
+
+        :return: tuple of arrays (t, x(t), u(t)) or None (if plot == True)
+        """
+
+        self.eqs.trajectories.set_coeffs(sol)
+
+        # does not work (does not matter, only convenience)
+        # xf = np.vectorize(self.eqs.trajectories.x)
+        # uf = np.vectorize(self.eqs.trajectories.u)
+
+        dt = 0.01
+        tt = np.arange(self.a, self.b+dt, dt)
+        xx = np.zeros((len(tt), self.dyn_sys.n_states))
+        uu = np.zeros((len(tt), self.dyn_sys.n_inputs))
+
+        for i, t in enumerate(tt):
+            xx[i, :] = self.eqs.trajectories.x(t)
+            uu[i, :] = self.eqs.trajectories.u(t)
+
+        return tt, xx, uu
+
+
+
+
+
     def _iterate(self):
-        '''
+        """
         This method is used to run one iteration step.
 
         First, new splines are initialised.
@@ -319,7 +368,7 @@ class ControlSystem(object):
         for the free parameters are applied to the corresponding splines.
 
         As a last, the resulting initial value problem is simulated.
-        '''
+        """
         
         # Note: in pytrajectory there are Three main levels of 'iteration'
         # Level 3: perform one LM-Step (i.e. calculate a new set of parameters) 
@@ -367,7 +416,7 @@ class ControlSystem(object):
             cond1 = self.reached_accuracy
             
             # following means: solver stopped not
-            # only because of maximum stepp             # number
+            # only because of maximum step             # number
             cond2 = (not slvr.cond_num_steps) or slvr.cond_abs_tol \
                                               or slvr.cond_rel_tol
             cond3 = self.eqs.solver.solve_count >= self._parameters['accIt']
@@ -540,7 +589,13 @@ class ControlSystem(object):
     @property
     def b(self):
         return self.dyn_sys.b
-    
+
+
+# For backward compatibility: make the class available under the old name
+# TODO: Introduce deprecation warning
+ControlSystem = TransitionProblem
+
+
 class DynamicalSystem(object):
     '''
     Provides access to information about the dynamical system that is the

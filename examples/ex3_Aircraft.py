@@ -1,7 +1,7 @@
 # vertical take-off aircraft
 
 # import trajectory class and necessary dependencies
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 from sympy import sin, cos
 import numpy as np
 from numpy import pi
@@ -45,7 +45,7 @@ ua = [0.5*9.81*50.0/(cos(5/360.0*2*pi)), 0.5*9.81*50.0/(cos(5/360.0*2*pi))]
 ub = [0.5*9.81*50.0/(cos(5/360.0*2*pi)), 0.5*9.81*50.0/(cos(5/360.0*2*pi))]
 
 # create trajectory object
-S = ControlSystem(f, a=0.0, b=3.0, xa=xa, xb=xb, ua=ua, ub=ub)
+S = TransitionProblem(f, a=0.0, b=3.0, xa=xa, xb=xb, ua=ua, ub=ub)
 
 # don't take advantage of the system structure (integrator chains)
 # (this will result in a faster solution here)

@@ -4,7 +4,7 @@ PyTrajectory as well as its visualisation capabilities.
 '''
 
 # import all we need for solving the problem
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 import numpy as np
 from sympy import cos, sin
 from numpy import pi
@@ -41,7 +41,7 @@ ua = [0.0]
 ub = [0.0]
 
 # now we create our Trajectory object and alter some method parameters via the keyword arguments
-S = ControlSystem(f, a, b, xa, xb, ua, ub, kx=5, use_chains=False)
+S = TransitionProblem(f, a, b, xa, xb, ua, ub, kx=5, use_chains=False)
 
 # time to run the iteration
 S.solve()

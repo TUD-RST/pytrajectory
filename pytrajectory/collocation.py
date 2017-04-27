@@ -23,22 +23,24 @@ class Container(object):
 
 
 class CollocationSystem(object):
-    '''
+    """
     This class represents the collocation system that is used
     to determine a solution for the free parameters of the
     control system, i.e. the independent coefficients of the
     trajectory splines.
-    
+
     Parameters
     ----------
-    
+
     sys : system.DynamicalSystem
         Instance of a dynamical system
-    '''
+    """
 
-    def __init__(self, sys, **kwargs):
-        self.sys = sys
-        
+    def __init__(self, masterobject, dynsys, **kwargs):
+        self.masterobject = masterobject  # reference for the supervising object
+
+        self.sys = dynsys  # the dynamical system under consideration
+
         # set parameters
         self._parameters = dict()
         self._parameters['tol'] = kwargs.get('tol', 1e-5)
@@ -46,14 +48,16 @@ class CollocationSystem(object):
         self._parameters['sol_steps'] = kwargs.get('sol_steps', 50)
         self._parameters['method'] = kwargs.get('method', 'leven')
         self._parameters['coll_type'] = kwargs.get('coll_type', 'equidistant')
-        
+
+        self.solver = None
+
         # we don't have a soution, yet
         self.sol = None
         
         # create vectorized versions of the control system's vector field
         # and its jacobian for the faster evaluation of the collocation equation system `G`
         # and its jacobian `DG` (--> see self.build())
-        f = sys.f_sym(sp.symbols(sys.states), sp.symbols(sys.inputs))
+        f = dynsys.f_sym(sp.symbols(dynsys.states), sp.symbols(dynsys.inputs))
         
         # TODO: check order of variables of differentiation ([x,u] vs. [u,x])
         #       because in dot products in later evaluation of `DG` with vector `c`
@@ -63,23 +67,23 @@ class CollocationSystem(object):
         # previously the jacobian was calculated wrt to strings which triggered strange
         # strange sympy behavior (bug) for systems with more than 9 variables
         # workarround: we use real symbols now
-        all_symbols = sp.symbols(sys.states + sys.inputs)
+        all_symbols = sp.symbols(dynsys.states + dynsys.inputs)
         Df = sp.Matrix(f).jacobian(all_symbols)
         
-        self._ff_vectorized = sym2num_vectorfield(f, sys.states, sys.inputs, vectorized=True, cse=True)
-        self._Df_vectorized = sym2num_vectorfield(Df, sys.states, sys.inputs, vectorized=True, cse=True)
+        self._ff_vectorized = sym2num_vectorfield(f, dynsys.states, dynsys.inputs, vectorized=True, cse=True)
+        self._Df_vectorized = sym2num_vectorfield(Df, dynsys.states, dynsys.inputs, vectorized=True, cse=True)
         self._f = f
         self._Df = Df
 
-        self.trajectories = Trajectory(sys, **kwargs)
+        self.trajectories = Trajectory(dynsys, **kwargs)
 
         self._first_guess = kwargs.get('first_guess', None)
 
     def build(self):
-        '''
+        """
         This method is used to set up the equations for the collocation equation system
         and defines functions for the numerical evaluation of the system and its jacobian.
-        '''
+        """
         logging.debug("Building Equation System")
         
         # make symbols local
@@ -425,11 +429,11 @@ class CollocationSystem(object):
         
         # create our solver
         if new_solver:
-            self.solver = Solver(F=G, DF=DG, x0=self.guess,
-                                tol=self._parameters['tol'],
-                                reltol=self._parameters['reltol'],
-                                maxIt=self._parameters['sol_steps'],
-                                method=self._parameters['method'])
+            self.solver = Solver(masterobject=self.masterobject, F=G, DF=DG, x0=self.guess,
+                                 tol=self._parameters['tol'],
+                                 reltol=self._parameters['reltol'],
+                                 maxIt=self._parameters['sol_steps'],
+                                 method=self._parameters['method'])
         else:
             # assume self.solver exists and at we already did a solution run
             assert self.solver.solve_count > 0

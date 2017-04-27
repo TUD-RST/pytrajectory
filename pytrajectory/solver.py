@@ -6,7 +6,11 @@ import time
 from auxiliary import NanError
 
 from log import logging
+import interfaceserver
 
+from matplotlib import pyplot as plt
+
+from IPython import embed as IPS
 
 
 class Solver:
@@ -35,9 +39,13 @@ class Solver:
     method : str
         The solver to use
     '''
-    
-    def __init__(self, F, DF, x0, tol=1e-5, reltol=2e-5, maxIt=50,
-                                            method='leven', mu=1e-4):
+
+    # noinspection PyPep8Naming
+    def __init__(self, masterobject, F, DF, x0, tol=1e-5, reltol=2e-5, maxIt=50,
+                 method='leven', mu=1e-4):
+
+        self.masterobject = masterobject
+
         self.F = F
         self.DF = DF
         self.x0 = x0
@@ -49,13 +57,19 @@ class Solver:
         self.solve_count = 0
         
         # this is LM specific
-        self.mu=mu
+        self.mu = mu
         self.res = 1
         self.res_old = -1
+        self.res_list = []
+
+        self.cond_abs_tol = False
+        self.cond_rel_tol = False
+        self.cond_num_steps = False
+        self.cond_external_interrupt = False
+        self.avg_LM_time = None
         
         self.sol = None
     
-
     def solve(self):
         '''
         This is just a wrapper to call the chosen algorithm for solving the
@@ -73,7 +87,6 @@ class Solver:
             return self.x0
         else:
             return self.sol
-
 
     def leven(self):
         '''
@@ -99,6 +112,10 @@ class Solver:
         reltol = self.reltol
         
         Fx = self.F(x)
+
+        # for particle swarm (dbg)
+        def nF(z):
+            return norm(self.F(z))
         
         # measure the time for the LM-Algorithm
         T_start = time.time()
@@ -139,7 +156,7 @@ class Solver:
                 R2 = (normFx - (norm(Fx+DFx.dot(s))))
                 rho = R1 / R2
                 
-                # note smaller bigger mu means less progress but
+                # Note: bigger mu means less progress but
                 # "more regular" conditions
                 
                 if R1 < 0 or R2 < 0:
@@ -147,11 +164,11 @@ class Solver:
                     self.mu *= 2
                     rho = 0.0 # ensure another iteration
                     
-                    #logging.debug("increasing res. R1=%f, R2=%f, dismiss solution" % (R1, R2))
+                    # logging.debug("increasing res. R1=%f, R2=%f, dismiss solution" % (R1, R2))
 
-                elif (rho<=b0):
+                elif (rho <= b0):
                     self.mu *= 2
-                elif (rho>=b1):
+                elif (rho >= b1):
                     self.mu *= 0.5
 
                 # -> if b0 < rho < b1 : leave mu unchanged
@@ -166,6 +183,14 @@ class Solver:
                
                 if rho < 0:
                     logging.warn("rho < 0 (should not happen)")
+
+                if interfaceserver.has_message(interfaceserver.messages.lmshell_inner):
+                    logging.debug("lm: inner loop shell")
+                    IPS()
+
+                if self.mu > 10:
+                    # for breakpoint (dbg)
+                    pass
                 
                 # if the system more or less behaves linearly 
                 break_inner_loop = rho > b0
@@ -176,27 +201,49 @@ class Solver:
             # store for possible future usage
             self.x0 = xs
             
-            #rho = 0.0
+            # rho = 0.0
             self.res_old = self.res
             self.res = normFx
-            if i>1 and self.res > self.res_old:
+            # save value for graphics etc
+            self.res_list.append(self.res)
+
+            if i > 1 and self.res > self.res_old:
                 logging.warn("res_old > res  (should not happen)")
 
-            logging.debug("nIt= %d    res= %f"%(i,self.res))
+            logging.debug("nIt= %d    res= %f" % (i, self.res))
             
             self.cond_abs_tol = self.res <= self.tol
             self.cond_rel_tol = abs(self.res-self.res_old) <= reltol
             self.cond_num_steps = i >= self.maxIt
-            
+
+            if interfaceserver.has_message(interfaceserver.messages.lmshell_outer):
+                logging.debug("lm: outer loop shell")
+                mo = self.masterobject
+                IPS()
+
+            if interfaceserver.has_message(interfaceserver.messages.run_ivp):
+                self.cond_external_interrupt = True
+
+            if interfaceserver.has_message(interfaceserver.messages.plot_reslist):
+                plt.plot(self.res_list)
+                plt.ylim(min(self.res_list), np.percentile(self.res_list, 80))
+                plt.show()
+
+            if interfaceserver.has_message(interfaceserver.messages.change_x):
+                logging.debug("lm: change x")
+                dx = (np.random.rand(len(x))*0.5-1)*0.001 * np.abs(x)
+                x2 = x + dx
+                logging.debug("lm: alternative value: %s" % norm(self.F(x2)) )
+                self.x0 = x2
+                logging.info("start lm again")
+                return self.leven()
+                # IPS()
+
             break_outer_loop = self.cond_abs_tol or self.cond_rel_tol \
-                                                 or self.cond_num_steps
+                               or self.cond_num_steps or self.cond_external_interrupt
 
         # LM Algorithm finished
         T_LM = time.time() - T_start
-        
-        if i == 0:
-            from IPython import embed as IPS
-            IPS()
         
         self.avg_LM_time = T_LM / i
         
