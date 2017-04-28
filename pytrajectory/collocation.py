@@ -182,7 +182,8 @@ class CollocationSystem(object):
             # debug:
             if info:
                 # see Container docstring for motivation
-                iC = Container(X=X, U=U, F=F, dX=dX, res=res)
+                iC = Container(X=X, U=U, F=F, dX=dX, res=res,
+                               Mx=Mx, Mx_abs=Mx_abs, Mu=Mu, Mu_abs=Mu_abs)
                 res = iC
 
             return res
@@ -301,7 +302,7 @@ class CollocationSystem(object):
         for ip, p in enumerate(cpts):
             for ix, xx in enumerate(states):
                 # get index range of `xx` in vector of all indep coeffs
-                i,j = indic[xx]
+                i, j = indic[xx]
 
                 # determine derivation order according to integrator chains
                 dorder_fx = _get_derivation_order(x_fnc[xx])
@@ -398,11 +399,11 @@ class CollocationSystem(object):
 
                     free_coeffs_guess = s_new.interpolate(s_old.f, m0=df0, mn=dfn)
                     guess = np.hstack((guess, free_coeffs_guess))
-                    
+
                 else:
                     # if it is a input variable, just take the old solution
                     guess = np.hstack((guess, self.trajectories._old_splines[k]._indep_coeffs))
-        
+
         # the new guess
         self.guess = guess
     

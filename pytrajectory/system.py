@@ -7,7 +7,6 @@ import pickle
 import copy
 import time
 
-from trajectories import Trajectory
 from collocation import CollocationSystem
 from simulation import Simulator
 import auxiliary
@@ -17,7 +16,7 @@ import interfaceserver
 
 
 # DEBUGGING
-from IPython import embed as IPS
+from ipHelp import IPS
 
 
 class TransitionProblem(object):
@@ -290,7 +289,8 @@ class TransitionProblem(object):
         self.nIt = 1
 
         def q_finish_loop():
-            res = self.reached_accuracy and self.nIt < self._parameters['maxIt']
+            res = self.reached_accuracy or self.nIt >= self._parameters['maxIt']
+            return res
 
         while not q_finish_loop():
             
@@ -351,10 +351,6 @@ class TransitionProblem(object):
 
         return tt, xx, uu
 
-
-
-
-
     def _iterate(self):
         """
         This method is used to run one iteration step.
@@ -391,11 +387,10 @@ class TransitionProblem(object):
         G, DG = C.G, C.DG
         
         # Solve the collocation equation system
-        
+
         new_solver = True
         while True:
             sol = self.eqs.solve(G, DG, new_solver=new_solver)
-            
             # in the following iterations we want to use the same solver
             # object (we just had an intermediate look, whether the solution
             # of the initial value problem is already sufficient accurate.)
@@ -414,7 +409,7 @@ class TransitionProblem(object):
             # any of the follwing  conditions ends the loop
             slvr = self.eqs.solver
             cond1 = self.reached_accuracy
-            
+
             # following means: solver stopped not
             # only because of maximum step             # number
             cond2 = (not slvr.cond_num_steps) or slvr.cond_abs_tol \

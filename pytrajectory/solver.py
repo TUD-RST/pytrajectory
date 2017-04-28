@@ -219,6 +219,7 @@ class Solver:
             if interfaceserver.has_message(interfaceserver.messages.lmshell_outer):
                 logging.debug("lm: outer loop shell")
                 mo = self.masterobject
+                sx1 = mo.eqs.trajectories.splines['x1']
                 IPS()
 
             if interfaceserver.has_message(interfaceserver.messages.run_ivp):

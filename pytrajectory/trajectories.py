@@ -47,6 +47,9 @@ class Trajectory(object):
         
         self._old_splines = None
 
+        # variable to save the coefficients of the solution
+        self.coeffs_sol = None
+
     @property
     def n_parts_x(self):
         '''
@@ -133,16 +136,16 @@ class Trajectory(object):
         return arr
     
     def init_splines(self):
-        '''
+        """
         This method is used to create the necessary spline function objects.
-        
+
         Parameters
         ----------
-        
+
         boundary_values : dict
             Dictionary of boundary values for the state and input splines functions.
-        
-        '''
+
+        """
         logging.debug("Initialise Splines")
         
         # store the old splines to calculate the guess later
@@ -244,29 +247,33 @@ class Trajectory(object):
         self.dx_fnc = dx_fnc
         
     def set_coeffs(self, sol):
-        '''
+        """
         Set found numerical values for the independent parameters of each spline.
 
         This method is used to get the actual splines by using the numerical
         solutions to set up the coefficients of the polynomial spline parts of
         every created spline.
-        
+
         Parameters
         ----------
-        
+
         sol : numpy.ndarray
             The solution vector for the free parameters, i.e. the independent coefficients.
-        
-        '''
+
+        """
         # TODO: look for bugs here!
         logging.debug("Set spline coefficients")
-        
+
+        # task: find which of the free parameters belong to which spline object
         sol_bak = sol.copy()
         subs = dict()
 
+        # iterate over the dict {'x1': [cx1_..., ...], 'u1': [cu1_...]}
         for k, v in sorted(self.indep_coeffs.items(), key=lambda (k, v): k):
             i = len(v)
             subs[k] = sol[:i]
+
+            # "shorten" the solution
             sol = sol[i:]
         
         if self._parameters['use_chains']:
