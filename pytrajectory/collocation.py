@@ -409,22 +409,22 @@ class CollocationSystem(object):
     
     
     def solve(self, G, DG, new_solver=True):
-        '''
+        """
         This method is used to solve the collocation equation system.
-        
+
         Parameters
         ----------
-        
+
         G : callable
             Function that "evaluates" the equation system.
-        
+
         DG : callable
             Function for the jacobian.
-        
+
         new_solver : bool
                      flag to determine whether a new solver instance should
                      be initialized (default True)
-        '''
+        """
 
         logging.debug("Solving Equation System")
         
@@ -445,6 +445,12 @@ class CollocationSystem(object):
         return self.sol
 
     def save(self):
+        """
+        create a dictionary which contains all relevant information about that object
+        (used for serialization)
+
+        :return:    dict
+        """
 
         save = dict()
 

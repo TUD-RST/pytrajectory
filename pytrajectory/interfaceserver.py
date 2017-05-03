@@ -34,16 +34,20 @@ class ThreadedServer(object):
     def __init__(self, host, port):
         self.host = host
         self.port = port
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        for i in range(5):
+        confirmflag = False
+        for i in range(500):
             try:
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 self.sock.bind((self.host, self.port+i))
+                break
             except socket.error as err:
+                confirmflag = True
                 logging.warn("port {} already in use, increasing by 1.".format(self.port+i))
                 continue
-
-
+        logging.debug("Connected to localhost:{}".format(self.port + i))
+        if confirmflag:
+            raw_input("Press Enter.")
 
     def listen(self):
         self.sock.listen(5)

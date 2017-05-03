@@ -63,6 +63,7 @@ class TransitionProblem(object):
         ierr          1e-1            Tolerance for the error on the whole interval
         tol           1e-5            Tolerance for the solver of the equation system
         dt_sim        1e-2            Sample time for integration (initial value problem)
+        reltol        2e-5            Rel. tolerance (for LM A. to be confident with local minimum)
         use_chains    True            Whether or not to use integrator chains
         sol_steps     100             Maximum number of iteration steps for the eqs solver
         first_guess   None            to initiate free parameters (might be useful: {'seed': value})
@@ -77,6 +78,7 @@ class TransitionProblem(object):
         self._parameters['ierr'] = kwargs.get('ierr', 1e-1)
         self._parameters['dt_sim'] = kwargs.get('dt_sim', 0.01)
         self._parameters['accIt'] = kwargs.get('accIt', 5)
+        self._parameters['reltol'] = kwargs.get('reltol', 2e-5)
 
         # create an object for the dynamical system
         self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub)
@@ -406,20 +408,35 @@ class TransitionProblem(object):
             # check if desired accuracy is reached
             self.check_accuracy()
 
-            # any of the follwing  conditions ends the loop
+            # now decide whether to continue with this solver or not
             slvr = self.eqs.solver
-            cond1 = self.reached_accuracy
 
-            # following means: solver stopped not
-            # only because of maximum step             # number
-            cond2 = (not slvr.cond_num_steps) or slvr.cond_abs_tol \
-                                              or slvr.cond_rel_tol
-            cond3 = self.eqs.solver.solve_count >= self._parameters['accIt']
+            if slvr.cond_external_interrupt:
+                logging.debug('Continue minimization after external interrupt')
+                continue
 
-            if cond1 or cond2 or cond3:
+            if slvr.cond_num_steps and slvr.solve_count < self._parameters['accIt']:
+                msg = 'Continue minimization (not yet reached tolerance nor limit of attempts)'
+                logging.debug(msg)
+                continue
+
+            if self.reached_accuracy or slvr.cond_abs_tol or slvr.cond_rel_tol:
                 break
-            else:
-                logging.debug('New attempt\n\n')
+
+            #
+            # # any of the follwing  conditions ends the loop
+            # cond1 = self.reached_accuracy
+            #
+            # # following means: solver stopped not
+            # # only because of maximum step             # number
+            # cond2 = (not slvr.cond_num_steps) or slvr.cond_abs_tol \
+            #                                   or slvr.cond_rel_tol
+            # cond3 = slvr.solve_count >= self._parameters['accIt']
+            #
+            # if cond1 or cond2 or cond3:
+            #     break
+            # else:
+            #     logging.debug('New attempt\n\n')
 
     def simulate(self):
         '''

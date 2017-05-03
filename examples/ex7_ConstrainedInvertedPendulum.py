@@ -7,6 +7,9 @@ from pytrajectory import TransitionProblem
 import numpy as np
 from sympy import cos, sin
 
+from pytrajectory import log
+log.console_handler.setLevel(10)
+
 # first, we define the function that returns the vectorfield
 def f(x,u):
     x1, x2, x3, x4 = x  # system variables
@@ -37,11 +40,15 @@ ub = [0.0]
 con = { 0 : [-0.8, 0.3], 
         1 : [-2.0, 2.0] }
 
+first_guess = {'seed': 20}
 # now we create our Trajectory object and alter some method parameters via the keyword arguments
-S = TransitionProblem(f, a, b, xa, xb, ua, ub, constraints=con, kx=5, use_chains=False)
+S = TransitionProblem(f, a, b, xa, xb, ua, ub, constraints=con, kx=2, eps=5e-2,
+                      first_guess=first_guess, use_chains=False, sol_steps=1300,
+                      reltol=2e-5)
 
 # time to run the iteration
-S.solve()
+S.solve(tcpport=5006)
+# S.solve()
 
 
 # the following code provides an animation of the system above

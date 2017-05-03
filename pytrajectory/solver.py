@@ -61,6 +61,8 @@ class Solver:
         self.res = 1
         self.res_old = -1
         self.res_list = []
+        self.mu_list = []
+        self.ntries_list = []
 
         self.cond_abs_tol = False
         self.cond_rel_tol = False
@@ -71,12 +73,15 @@ class Solver:
         self.sol = None
     
     def solve(self):
-        '''
+        """
         This is just a wrapper to call the chosen algorithm for solving the
         collocation equation system.
-        '''
+        """
         
         self.solve_count += 1
+
+        # reset that flag
+        self.cond_external_interrupt = False
 
         if (self.method == 'leven'):
             logging.debug("Run Levenberg-Marquardt method")
@@ -89,18 +94,20 @@ class Solver:
             return self.sol
 
     def leven(self):
-        '''
+        """
         This method is an implementation of the Levenberg-Marquardt-Method
         to solve nonlinear least squares problems.
-        
+
         For more information see: :ref:`levenberg_marquardt`
-        '''
+        """
         i = 0
         x = self.x0
         
         eye = scp.sparse.identity(len(self.x0))
 
-        #mu = 1.0
+        # this is interesting for debugging
+        n_spln_prts = self.masterobject.eqs.trajectories.n_parts_x
+
         self.mu = 1e-4
         
         # borders for convergence-control
@@ -122,15 +129,15 @@ class Solver:
         
         break_outer_loop = False
         
-        while (not break_outer_loop):
+        while not break_outer_loop:
             i += 1
             
-            #if (i-1)%4 == 0:
             DFx = self.DF(x)
             DFx = scp.sparse.csr_matrix(DFx)
             
             break_inner_loop = False
-            while (not break_inner_loop):                
+            count_inner = 0
+            while not break_inner_loop:
                 A = DFx.T.dot(DFx) + self.mu**2*eye
 
                 b = DFx.T.dot(Fx)
@@ -194,6 +201,7 @@ class Solver:
                 
                 # if the system more or less behaves linearly 
                 break_inner_loop = rho > b0
+                count_inner += 1
             
             Fx = Fxs
             x = xs
@@ -206,11 +214,13 @@ class Solver:
             self.res = normFx
             # save value for graphics etc
             self.res_list.append(self.res)
+            self.mu_list.append(self.mu)
+            self.ntries_list.append(count_inner)
 
             if i > 1 and self.res > self.res_old:
                 logging.warn("res_old > res  (should not happen)")
 
-            logging.debug("nIt= %d    res= %f" % (i, self.res))
+            logging.debug("sp=%d  nIt=%d    res=%f" % (n_spln_prts, i, self.res))
             
             self.cond_abs_tol = self.res <= self.tol
             self.cond_rel_tol = abs(self.res-self.res_old) <= reltol
@@ -228,11 +238,13 @@ class Solver:
             if interfaceserver.has_message(interfaceserver.messages.plot_reslist):
                 plt.plot(self.res_list)
                 plt.ylim(min(self.res_list), np.percentile(self.res_list, 80))
+                plt.figure()
+                plt.plot(self.ntries_list)
                 plt.show()
 
             if interfaceserver.has_message(interfaceserver.messages.change_x):
                 logging.debug("lm: change x")
-                dx = (np.random.rand(len(x))*0.5-1)*0.001 * np.abs(x)
+                dx = (np.random.rand(len(x))*0.5-1)*0.1 * np.abs(x)
                 x2 = x + dx
                 logging.debug("lm: alternative value: %s" % norm(self.F(x2)) )
                 self.x0 = x2
@@ -242,6 +254,7 @@ class Solver:
 
             break_outer_loop = self.cond_abs_tol or self.cond_rel_tol \
                                or self.cond_num_steps or self.cond_external_interrupt
+            self.log_break_reasons(break_outer_loop)
 
         # LM Algorithm finished
         T_LM = time.time() - T_start
@@ -254,3 +267,19 @@ class Solver:
         
         
         self.sol = x
+
+    def log_break_reasons(self, flag):
+        if not flag:
+            return
+
+        reasons = []
+
+        if self.cond_abs_tol:
+            reasons.append("abs tol")
+        if self.cond_rel_tol:
+            reasons.append("rel tol")
+        if self.cond_num_steps:
+            reasons.append("num steps")
+        if self.cond_external_interrupt:
+            reasons.append("ext intrpt")
+        logging.debug("LM-Break reason: {}".format(", ".join(reasons)))

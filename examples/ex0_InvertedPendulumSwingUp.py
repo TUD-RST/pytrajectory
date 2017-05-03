@@ -40,11 +40,16 @@ xb = [0.0, 0.0, 0.0, 0.0]
 ua = [0.0]
 ub = [0.0]
 
+from pytrajectory import log
+log.console_handler.setLevel(10)
+
 # now we create our Trajectory object and alter some method parameters via the keyword arguments
-S = TransitionProblem(f, a, b, xa, xb, ua, ub, kx=5, use_chains=False)
+
+first_guess = {'seed': 20}
+S = TransitionProblem(f, a, b, xa, xb, ua, ub, first_guess=first_guess, kx=2, eps=5e-2, use_chains=False, sol_steps=1300)
 
 # time to run the iteration
-S.solve()
+S.solve(tcpport=5006)
 
 
 # now that we (hopefully) have found a solution,
