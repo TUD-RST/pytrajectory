@@ -13,9 +13,13 @@ import time
 import Queue
 from log import logging
 
+from ipHelp import IPS
+
 # for data
 msgqueue = Queue.Queue()
+ctrlqueue = Queue.Queue()
 running = False
+listener = None
 
 
 # Colloct all known messages here to avoid confusion
@@ -25,13 +29,21 @@ class MessageContainer(object):
         self.lmshell_outer = "lmshell_outer"
         self.plot_reslist = "plot_reslist"
         self.change_x = "change_x"
+        # change the weight matrix
+        self.change_w = "change_w"
         self.run_ivp = "run_ivp"
 
 messages = MessageContainer()
 
+server = []
+client_list = []
+threads = []
+
 
 class ThreadedServer(object):
     def __init__(self, host, port):
+
+        server.append(self)
         self.host = host
         self.port = port
         confirmflag = False
@@ -55,8 +67,17 @@ class ThreadedServer(object):
             logging.info("listening")
             # wait for an incomming connection
             client, address = self.sock.accept()
+            if not ctrlqueue.empty():
+                msg = ctrlqueue.get()
+                ctrlqueue.task_done()
+                if "exit" in msg:
+                    break
+
             client.settimeout(None)
+            client_list.append(client)
             sublistener = threading.Thread(target=self.listentoclient, args=(client, address))
+
+            threads.append(sublistener)
 
             # end this thread if the main thread finishes
             sublistener.daemon = True
@@ -77,15 +98,71 @@ class ThreadedServer(object):
                 return False
 
 
+def start_stopable_thread(callable, dt=0.1, name=None):
+    """
+    This function produces a function that starts a thread,
+    and then waits for a message to terminate
+
+    This contruction (with a parent thread that polls a queue)
+    allows to savely stop threads which perform blocking operations
+
+    :param callable:    callable which will be the thread
+    :param dt:          waiting time in seconds
+    """
+
+    def thrdfnc():
+        thr = threading.Thread(target=callable)
+        if name is not None:
+            thr.name = name
+        threads.append(thr)
+        thr.daemon = True
+        thr.start()
+
+        while True:
+            if not ctrlqueue.empty():
+                msg = ctrlqueue.get()
+                ctrlqueue.task_done()
+                if "exit" in msg:
+                    break
+            time.sleep(dt)
+
+        print "finish threads"
+
+    return thrdfnc
+
+
 def listen_for_connections(port):
-    listener = threading.Thread(target=ThreadedServer('', port).listen)
-    listener.daemon = True
-    listener.start()
+
+    target = ThreadedServer('', port).listen
+    thrdfnc = start_stopable_thread(target, name="listen-thread")
+
+    thr = threading.Thread(target=thrdfnc)
+    threads.append(thr)
+    thr.daemon = True
+    thr.start()
 
     # TODO: implement that flag without global keyword
     global running
     running = True
 
+
+def stop_listening():
+
+    ctrlqueue.put("exit")
+    # time.sleep(2)
+    # IPS()
+    # server[-1].sock.close()
+    # time.sleep(2)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(server[-1].sock.getsockname())
+
+    sock.close()
+    server[-1].sock.close()
+
+    # TODO: implement that flag without global keyword
+    global running
+    running = False
 
 def has_message(txt):
     """

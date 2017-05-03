@@ -325,6 +325,10 @@ class TransitionProblem(object):
         
         self.T_sol = time.time() - T_start
         # return the found solution functions
+
+        if interfaceserver.running:
+            interfaceserver.stop_listening()
+
         return self.eqs.trajectories.x, self.eqs.trajectories.u
 
     def get_spline_values(self, sol, plot=False):
@@ -388,6 +392,10 @@ class TransitionProblem(object):
         C = self.eqs.build()
         G, DG = C.G, C.DG
         
+        old_res = 1e20
+        old_sol = None
+
+
         # Solve the collocation equation system
 
         new_solver = True
@@ -407,6 +415,9 @@ class TransitionProblem(object):
 
             # check if desired accuracy is reached
             self.check_accuracy()
+            if self.reached_accuracy:
+                # we found a solution
+                break
 
             # now decide whether to continue with this solver or not
             slvr = self.eqs.solver
@@ -420,8 +431,26 @@ class TransitionProblem(object):
                 logging.debug(msg)
                 continue
 
-            if self.reached_accuracy or slvr.cond_abs_tol or slvr.cond_rel_tol:
+            if slvr.cond_rel_tol and slvr.solve_count < self._parameters['accIt']:
+                # we are in a local minimum
+                # > try to jump out by randomly changing the solution
+                if self.eqs.trajectories.n_parts_x >= 40:
+                    # values between 0.32 and 3.2:
+                    scale = 10**(np.random.rand(len(slvr.x0))-.5)
+                    # only use the actual value
+                    if slvr.res < old_res:
+                        old_sol = slvr.x0
+                        old_res = slvr.res
+                        slvr.x0 *= scale
+                    else:
+                        slvr.x0 = old_sol*scale
+                    logging.debug('Continue minimization with changed x0')
+                    continue
+
+            if slvr.cond_abs_tol or slvr.cond_rel_tol:
                 break
+            else:
+                raise ValueError("unexpected state")
 
             #
             # # any of the follwing  conditions ends the loop

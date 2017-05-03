@@ -188,6 +188,8 @@ class CollocationSystem(object):
 
             return res
 
+        G.dim, G.argdim = Mx.shape
+
         # and its jacobian
         def DG(c):
             # first we calculate the x and u values in all collocation points
@@ -229,6 +231,7 @@ class CollocationSystem(object):
         # store internal information for diagnose purposes
         C.take_indices = take_indices
         self.C = C
+
         return C
 
     def _get_index_dict(self):

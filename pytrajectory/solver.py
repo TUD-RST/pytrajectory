@@ -10,7 +10,7 @@ import interfaceserver
 
 from matplotlib import pyplot as plt
 
-from IPython import embed as IPS
+from ipHelp import IPS
 
 
 class Solver:
@@ -64,6 +64,9 @@ class Solver:
         self.mu_list = []
         self.ntries_list = []
 
+        # this is for the weight
+        self.W = None
+
         self.cond_abs_tol = False
         self.cond_rel_tol = False
         self.cond_num_steps = False
@@ -93,6 +96,34 @@ class Solver:
         else:
             return self.sol
 
+    def set_weights(self, mode=None):
+        """
+        Attempt to leave local minima by changing the weight of the components of F
+
+        :param mode:    init/unchanged, unit matrix or seed for random diagonal matrix
+        :return:
+        """
+        if mode is None:
+            # if not initialized, do it
+            if self.W is None:
+                self.set_weights("eye")
+            return
+        elif mode == "eye":
+            values = np.ones(self.F.dim)
+        elif mode == "random":
+            # between 1 and 10
+            values = 1 + np.random.rand(self.F.dim)*9
+        elif mode.startswith("seed="):
+            seed = float(mode.split("=")[1])
+            np.random.seed(seed)
+            # between 1 and 10
+            values = 1 + np.random.rand(self.F.dim)*9
+        else:
+            msg = "invalid mode: {}".format(mode)
+            raise ValueError(msg)
+
+        self.W = scp.sparse.csr_matrix(np.diag(values))
+
     def leven(self):
         """
         This method is an implementation of the Levenberg-Marquardt-Method
@@ -117,8 +148,12 @@ class Solver:
         rho = 0.0
 
         reltol = self.reltol
-        
-        Fx = self.F(x)
+
+        # set self.W and its inverse
+        self.set_weights()
+        # Winv = scp.sparse.csr_matrix(np.diag(1.0/np.diag(self.W.toarray())))
+
+        Fx = self.W.dot(self.F(x))
 
         # for particle swarm (dbg)
         def nF(z):
@@ -132,7 +167,7 @@ class Solver:
         while not break_outer_loop:
             i += 1
             
-            DFx = self.DF(x)
+            DFx = self.W.dot(self.DF(x))
             DFx = scp.sparse.csr_matrix(DFx)
             
             break_inner_loop = False
@@ -146,7 +181,7 @@ class Solver:
 
                 xs = x + np.array(s).flatten()
                 
-                Fxs = self.F(xs)
+                Fxs = self.W.dot(self.F(xs))
 
                 if any(np.isnan(Fxs)):
                     # this might be caused by too small mu
@@ -156,9 +191,9 @@ class Solver:
                 normFx = norm(Fx)
                 normFxs = norm(Fxs)
 
-                R1 = (normFx**2 - normFxs**2)
-                R2 = (normFx**2 - (norm(Fx+DFx.dot(s)))**2)
-                
+                # R1 = (normFx**2 - normFxs**2)
+                # R2 = (normFx**2 - (norm(Fx+DFx.dot(s)))**2)
+
                 R1 = (normFx - normFxs)
                 R2 = (normFx - (norm(Fx+DFx.dot(s))))
                 rho = R1 / R2
@@ -195,7 +230,7 @@ class Solver:
                     logging.debug("lm: inner loop shell")
                     IPS()
 
-                if self.mu > 10:
+                if self.mu > 1:
                     # for breakpoint (dbg)
                     pass
                 
@@ -223,7 +258,10 @@ class Solver:
             logging.debug("sp=%d  nIt=%d    res=%f" % (n_spln_prts, i, self.res))
             
             self.cond_abs_tol = self.res <= self.tol
-            self.cond_rel_tol = abs(self.res-self.res_old) <= reltol
+            if self.res > 1:
+                self.cond_rel_tol = abs(self.res-self.res_old)/self.res <= reltol
+            else:
+                self.cond_rel_tol = abs(self.res-self.res_old) <= reltol
             self.cond_num_steps = i >= self.maxIt
 
             if interfaceserver.has_message(interfaceserver.messages.lmshell_outer):
@@ -238,9 +276,14 @@ class Solver:
             if interfaceserver.has_message(interfaceserver.messages.plot_reslist):
                 plt.plot(self.res_list)
                 plt.ylim(min(self.res_list), np.percentile(self.res_list, 80))
-                plt.figure()
-                plt.plot(self.ntries_list)
+                # plt.figure()
+                # plt.plot(self.ntries_list)
                 plt.show()
+
+            if interfaceserver.has_message(interfaceserver.messages.change_w):
+                logging.info("start lm again with chaged weights")
+                self.set_weights("random")
+                return self.leven()
 
             if interfaceserver.has_message(interfaceserver.messages.change_x):
                 logging.debug("lm: change x")
