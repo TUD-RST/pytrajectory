@@ -6,20 +6,25 @@ from splines import Spline, differentiate
 from log import logging
 import auxiliary
 
+from ipHelp import IPS
+
 class Trajectory(object):
-    '''
-    This class handles the creation and managing of the spline functions 
+    """
+    This class handles the creation and managing of the spline functions
     that are intended to approximate the desired trajectories.
-    
+
     Parameters
     ----------
-    
+
     sys : system.DynamicalSystem
         Instance of a dynamical system providing information like
         vector field function and boundary values
-    '''
+    """
     
-    def __init__(self, sys, **kwargs):
+    def __init__(self, masterobject, sys, **kwargs):
+
+        self.masterobject = masterobject
+
         # save the dynamical system
         self.sys = sys
 
@@ -117,15 +122,15 @@ class Trajectory(object):
         return arr
     
     def dx(self, t):
-        '''
+        """
         Returns the state of the 1st derivatives of the system variables.
-        
+
         Parameters
         ----------
-        
+
         t : float
             The time point in (a,b) to evaluate the 1st derivatives at.
-        '''
+        """
         
         if not self.sys.a <= t <= self.sys.b:
             logging.warning("Time point 't' has to be in (a,b)")
@@ -245,7 +250,7 @@ class Trajectory(object):
         self.x_fnc = x_fnc
         self.u_fnc = u_fnc
         self.dx_fnc = dx_fnc
-        
+
     def set_coeffs(self, sol):
         """
         Set found numerical values for the independent parameters of each spline.

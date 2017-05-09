@@ -9,7 +9,7 @@ from solver import Solver
 
 from auxiliary import sym2num_vectorfield
 
-from IPython import embed as IPS
+from ipHelp import IPS
 
 class Container(object):
     """
@@ -58,6 +58,8 @@ class CollocationSystem(object):
         # and its jacobian for the faster evaluation of the collocation equation system `G`
         # and its jacobian `DG` (--> see self.build())
         f = dynsys.f_sym(sp.symbols(dynsys.states), sp.symbols(dynsys.inputs))
+
+        self.all_free_parameters = None
         
         # TODO: check order of variables of differentiation ([x,u] vs. [u,x])
         #       because in dot products in later evaluation of `DG` with vector `c`
@@ -75,7 +77,7 @@ class CollocationSystem(object):
         self._f = f
         self._Df = Df
 
-        self.trajectories = Trajectory(dynsys, **kwargs)
+        self.trajectories = Trajectory(masterobject, dynsys, **kwargs)
 
         self._first_guess = kwargs.get('first_guess', None)
 
@@ -92,6 +94,7 @@ class CollocationSystem(object):
         
         # determine for each spline the index range of its free coeffs in the concatenated
         # vector of all free coeffs
+        # Note: this call also sets the variable self.all_free_parameters
         indic = self._get_index_dict()
 
         # compute dependence matrices
@@ -170,9 +173,9 @@ class CollocationSystem(object):
             # to lower ends of integrator chains (via eqind)
             # other equations need not be solved
             #F = ff_vec(X, U).take(eqind, axis=0)
-            F = ff_vec(X, U).ravel(order='F').take(take_indices, axis=0)[:,None]
+            F = ff_vec(X, U).ravel(order='F').take(take_indices, axis=0)[:, None]
         
-            dX = Mdx.dot(c)[:,None] + Mdx_abs
+            dX = Mdx.dot(c)[:, None] + Mdx_abs
             dX = dX.take(take_indices, axis=0)
             #dX = np.array(dX).reshape((x_len, -1), order='F').take(eqind, axis=0)
     
@@ -235,10 +238,17 @@ class CollocationSystem(object):
         return C
 
     def _get_index_dict(self):
-        # here we do something that will be explained after we've done it  ;-)
+        """
+        Determine the order of the free parameters and the corresponding indices for each quantity
+
+        :return:    dict of index-pairs
+        """
+        # see below for explanation
         indic = dict()
         i = 0
         j = 0
+
+        self.all_free_parameters = []
     
         # iterate over spline quantities
         for k, v in sorted(self.trajectories.indep_coeffs.items(), key=lambda (k, v): k):
@@ -246,6 +256,7 @@ class CollocationSystem(object):
             j += len(v)
             indic[k] = (i, j)
             i = j
+            self.all_free_parameters.extend(v)
     
         # iterate over all quantities including inputs
         # and take care of integrator chain elements
@@ -253,9 +264,11 @@ class CollocationSystem(object):
             for sq in self.sys.states + self.sys.inputs:
                 for ic in self.trajectories._chains:
                     if sq in ic:
+                        msg = "Not sure whether self.all_free_parametes is affected."
+                        raise NotImplementedError(msg)
                         indic[sq] = indic[ic.upper]
     
-        # as promised: here comes the explanation
+        # explanation:
         #
         # now, the dictionary 'indic' looks something like
         #
@@ -341,7 +354,7 @@ class CollocationSystem(object):
         return Mx, Mx_abs, Mdx, Mdx_abs, Mu, Mu_abs
 
     def get_guess(self):
-        '''
+        """
         This method is used to determine a starting value (guess) for the
         solver of the collocation equation system.
 
@@ -354,7 +367,7 @@ class CollocationSystem(object):
         in these points.
 
         The solution of this system is the new start value for the solver.
-        '''
+        """
 
         if not self.trajectories._old_splines:
             if self._first_guess is None:
@@ -409,8 +422,7 @@ class CollocationSystem(object):
 
         # the new guess
         self.guess = guess
-    
-    
+
     def solve(self, G, DG, new_solver=True):
         """
         This method is used to solve the collocation equation system.
