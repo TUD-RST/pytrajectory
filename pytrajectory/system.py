@@ -2,10 +2,10 @@
 # IMPORTS
 import numpy as np
 import sympy as sp
-from scipy import sparse
 import pickle
 import copy
 import time
+import inspect
 
 from collocation import CollocationSystem
 from simulation import Simulator
@@ -83,7 +83,12 @@ class TransitionProblem(object):
         # create an object for the dynamical system
         self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub)
 
-        # handle eventual system constraints
+        # 2017-05-09 14:41:14
+        # Note: there are two kinds of constraints handling:
+        # (1) variable transformation (old, tested, also used by Graichen et al.)
+        # (2) penalty term (new, currently under development)
+
+        # handle eventual system constraints (variable transformation)
         self.constraints = constraints
         if self.constraints is not None:
             # transform the constrained vectorfield into an unconstrained one
@@ -468,10 +473,10 @@ class TransitionProblem(object):
             #     logging.debug('New attempt\n\n')
 
     def simulate(self):
-        '''
+        """
         This method is used to solve the resulting initial value problem
         after the computation of a solution for the input trajectories.
-        '''
+        """
 
         logging.debug("Solving Initial Value Problem")
 
@@ -488,7 +493,7 @@ class TransitionProblem(object):
             
         x_vars = sys.states
         start_dict = dict([(k, v[0]) for k, v in sys.boundary_values.items() if k in x_vars])
-        ff = sys.f_num
+        ff = sys.f_num_simulation
         
         for x in x_vars:
             start.append(start_dict[x])
@@ -502,17 +507,17 @@ class TransitionProblem(object):
         self.sim_data = S.simulate()
     
     def check_accuracy(self):
-        '''
+        """
         Checks whether the desired accuracy for the boundary values was reached.
 
         It calculates the difference between the solution of the simulation
         and the given boundary values at the right border and compares its
         maximum against the tolerance.
-        
+
         If set by the user it also calculates some kind of consistency error
         that shows how "well" the spline functions comply with the system
         dynamic given by the vector field.
-        '''
+        """
         
         # this is the solution of the simulation
         a = self.sim_data[0][0]
@@ -545,7 +550,10 @@ class TransitionProblem(object):
         eps = self._parameters['eps']
         if ierr:
             # calculate maximum consistency error on the whole interval
-            maxH = auxiliary.consistency_error((a,b), self.eqs.trajectories.x, self.eqs.trajectories.u, self.eqs.trajectories.dx, self.dyn_sys.f_num)
+            maxH = auxiliary.consistency_error((a,b),
+                                               self.eqs.trajectories.x, self.eqs.trajectories.u,
+                                               self.eqs.trajectories.dx,
+                                               self.dyn_sys.f_num_simulation)
             
             reached_accuracy = (maxH < ierr) and (max(err) < eps)
             logging.debug('maxH = %f'%maxH)
@@ -593,9 +601,9 @@ class TransitionProblem(object):
         visualisation.plot_simulation(self.sim_data, H)
 
     def save(self, fname=None):
-        '''
+        """
         Save data using the python module :py:mod:`pickle`.
-        '''
+        """
 
         save = dict.fromkeys(['sys', 'eqs', 'traj'])
 
@@ -638,7 +646,7 @@ ControlSystem = TransitionProblem
 
 
 class DynamicalSystem(object):
-    '''
+    """
     Provides access to information about the dynamical system that is the
     object of the control process.
 
@@ -656,7 +664,7 @@ class DynamicalSystem(object):
 
     ua, ub : iterables
         The initial and final conditions for the input variables
-    '''
+    """
 
     def __init__(self, f_sym, a=0., b=1., xa=[], xb=[], ua=[], ub=[]):
         self.f_sym = f_sym
@@ -673,14 +681,40 @@ class DynamicalSystem(object):
         
         # init dictionary for boundary values
         self.boundary_values = self._get_boundary_dict_from_lists(xa, xb, ua, ub)
+        self.xa = xa
+        self.xb = xb
+
+        # collect some information about penalty constraints
+        if 'evalconstr' in inspect.getargspec(f_sym).args:
+            f_sym.has_constraint_penalties = True
+
+            # number of returned values - number of states
+            nc = len(f_sym(xa, [0]*self.n_inputs, evalconstr=True)) - self.n_states
+            if nc < 1:
+                msg = "No constraint equations found, but signature of f_sym indicates such."
+                raise ValueError(msg)
+            self.n_pconstraints = nc
+
+        else:
+            f_sym.has_constraint_penalties = False
+            self.n_pconstraints = 0
 
         # create a numeric counterpart for the vector field
         # for faster evaluation
-        self.f_num = auxiliary.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states, u_sym=self.inputs,
-                                                   vectorized=False, cse=False)
+        self.f_num = auxiliary.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
+                                                   u_sym=self.inputs, vectorized=False,
+                                                   cse=False, evalconstr=True)
+
+        # to handle penalty contraints it is necessary to distinguish between
+        # the extended vectorfield (state equations + constraints) and
+        # the basic vectorfiled (only state equations)
+        # for simulation, only the the basic vf shall be used
+        self.f_num_simulation = auxiliary.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
+                                                   u_sym=self.inputs, vectorized=False,
+                                                   cse=False, evalconstr=False)
 
     def _determine_system_dimensions(self, n):
-        '''
+        """
         Determines the number of state and input variables.
 
         Parameters
@@ -688,7 +722,7 @@ class DynamicalSystem(object):
 
         n : int
             Length of the list of initial state values
-        '''
+        """
 
         # first, determine system dimensions
         logging.debug("Determine system/input dimensions")
@@ -699,7 +733,7 @@ class DynamicalSystem(object):
         
         # now we want to determine the input dimension
         # therefore we iteratively increase the inputs dimension and try to call
-        # the vectorfield
+        # the vectorfield-function
         found_n_inputs = False
         x = np.ones(n_states)
 
@@ -723,10 +757,10 @@ class DynamicalSystem(object):
         return n_states, n_inputs
 
     def _get_boundary_dict_from_lists(self, xa, xb, ua, ub):
-        '''
+        """
         Creates a dictionary of boundary values for the state and input variables
         for easier access.
-        '''
+        """
 
         # consistency check
         assert len(xa) == len(xb) == self.n_states

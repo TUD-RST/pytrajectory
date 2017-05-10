@@ -120,6 +120,7 @@ class CollocationSystem(object):
         delta = 2
         n_cpts = self.trajectories.n_parts_x * delta + 1
         
+        # relevant for integrator chains
         # this (-> `take_indices`) will be the array with indices of the rows we need
         # 
         # to get these indices we iterate over all rows and take those whose indices
@@ -173,14 +174,34 @@ class CollocationSystem(object):
             # to lower ends of integrator chains (via eqind)
             # other equations need not be solved
             #F = ff_vec(X, U).take(eqind, axis=0)
-            F = ff_vec(X, U).ravel(order='F').take(take_indices, axis=0)[:, None]
-        
+
+            F0 = ff_vec(X, U)  # shape: (ns + np) x nc
+            # ns: number of states
+            # np: number of penalty constraints
+            # nc: number of collocation points
+
+            # now, this 2d array should be rearranged to a flattened vector
+            # the constraint-values should be handled separately (they are not part of ff(x)-xdot)
+            F1 = F0[:n_states, :]
+            C = F0[n_states:, :]
+
+            # ravel-docs:
+            # 'F' means to index the elements in column-major, Fortran-style order, with the
+            # first index changing fastest, and the last index changing slowest.
+
+            F = F1.ravel(order='F').take(take_indices, axis=0)[:, None]
+
+            # calculate xdot:
             dX = Mdx.dot(c)[:, None] + Mdx_abs
+            # dX has shape (ns*nc) x 1
+
             dX = dX.take(take_indices, axis=0)
-            #dX = np.array(dX).reshape((x_len, -1), order='F').take(eqind, axis=0)
-    
+
             G = F - dX
-            res = np.asarray(G).ravel(order='F')
+
+            assert G.shape[1] == 1
+            # now, append the values of the constraints
+            res = np.concatenate((np.asarray(G).ravel(order='F'), C.ravel(order='F')))
 
             # debug:
             if info:
@@ -191,7 +212,12 @@ class CollocationSystem(object):
 
             return res
 
+        # save the dimension of the result and the argument for this function
+        # this is true without penalty constraints
         G.dim, G.argdim = Mx.shape
+
+        # regard additional constraint equations
+        G.dim += n_cpts*self.sys.n_pconstraints
 
         # and its jacobian
         def DG(c):
@@ -202,25 +228,51 @@ class CollocationSystem(object):
             U = Mu.dot(c)[:,None] + Mu_abs
             U = np.array(U).reshape((n_inputs, -1), order='F')
             
-            # get the jacobian blocks and turn them into the right shape
-            DF_blocks = Df_vec(X,U).transpose([2,0,1])
+            # get the Jacobian blocks and turn them into the right shape
+            DF_blocks0 = Df_vec(X, U).transpose([2, 0, 1])
 
-            # build a block diagonal matrix from the blocks
-            DF_csr = sparse.block_diag(DF_blocks, format='csr').dot(DXU)
-        
+            # axis: 0 -> collocation point
+            # axis: 1 -> equation (of vectorfiled)
+            # axis: 2 -> variable (x_i or u_j)
+            # DF_blocks0.shape -> nc x (ns + np) x (ns + ni)
+            # nc: collocation points, ns: states, ni: inputs, np: penalty constraints
+
+            # extract the part corresponding to the main vf-equations
+            DF_blocks1 = DF_blocks0[:, :n_states, :]
+            # rearrange this 3d array to a sparse block-diagonal matrix
+            # first axis is the block number (corresponding to the collocation point)
+            # also multiply by DXU (to get the jac. w.r.t. the free parameters
+            # instead of the specific X and U values)
+            DF_csr_main = sparse.block_diag(DF_blocks1, format='csr').dot(DXU)
+
             # if we make use of the system structure
             # we have to select those rows which correspond to the equations
             # that have to be solved
             if self.trajectories._parameters['use_chains']:
-                DF_csr = sparse.csr_matrix(DF_csr.toarray().take(take_indices, axis=0))
+
+                DF_csr_main = sparse.csr_matrix(DF_csr_main.toarray().take(take_indices, axis=0))
                 # TODO: is the performance gain that results from not having to solve
                 #       some equations (use integrator chains) greater than
                 #       the performance loss that results from transfering the
                 #       sparse matrix to a full numpy array and back to a sparse matrix?
-        
-            DG = DF_csr - DdX
-        
-            return DG
+
+            DG = DF_csr_main - DdX
+
+            # now, extract the part corresponding to the penalty constraints
+            Jac_constr0 = DF_blocks0[:, n_states:, :]
+
+            # arrange these blocks to a blockdiagonal and multiply by DXU (see above)
+            Jac_constr1 = sparse.block_diag(Jac_constr0, format='csr').dot(DXU)
+
+            # now stack this hyperrow below DF_csr0
+            res = sparse.vstack((DG, Jac_constr1))
+
+            return res
+
+        # dbg (call the new functions)
+        z = np.zeros((G.argdim,))
+        G(z)
+        DG(z)
 
         C = Container(G=G, DG=DG,
                       Mx=Mx, Mx_abs=Mx_abs,

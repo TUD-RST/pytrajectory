@@ -298,6 +298,9 @@ class Solver:
             break_outer_loop = self.cond_abs_tol or self.cond_rel_tol \
                                or self.cond_num_steps or self.cond_external_interrupt
             self.log_break_reasons(break_outer_loop)
+            if break_outer_loop:
+                pass
+                # IPS()
 
         # LM Algorithm finished
         T_LM = time.time() - T_start
@@ -307,8 +310,7 @@ class Solver:
         # Note: if self.cond_num_steps == True, the LM-Algorithm was stopped
         # due to maximum number of iterations
         # -> it might be worth to continue 
-        
-        
+
         self.sol = x
 
     def log_break_reasons(self, flag):

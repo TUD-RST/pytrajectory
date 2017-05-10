@@ -4,37 +4,40 @@ import sympy as sp
 from sympy.utilities.lambdify import _get_namespace
 import time
 
+from ipHelp import IPS
+
 from log import logging, Timer
 
 
 class NanError(ValueError):
     pass
 
+
 class IntegChain(object):
-    '''
+    """
     This class provides a representation of an integrator chain.
-    
+
     For the elements :math:`(x_i)_{i=1,...,n}` of the chain the relation
     :math:`\dot{x}_i = x_{i+1}` applies.
-    
+
     Parameters
     ----------
-    
+
     lst : list
         Ordered list of the integrator chain's elements.
-    
+
     Attributes
     ----------
-    
+
     elements : tuple
         Ordered list of all elements that are part of the integrator chain
-    
+
     upper : str
         Upper end of the integrator chain
-    
+
     lower : str
         Lower end of the integrator chain
-    '''
+    """
     
     def __init__(self, lst):
         # check if elements are sympy.Symbol's or already strings
@@ -90,25 +93,25 @@ class IntegChain(object):
 
 
 def find_integrator_chains(dyn_sys):
-    '''
+    """
     Searches for integrator chains in given vector field matrix `fi`,
     i.e. equations of the form :math:`\dot{x}_i = x_j`.
-    
+
     Parameters
     ----------
-    
+
     dyn_sys : pytrajectory.system.DynamicalSystem
         Instance of a dynamical system
-    
+
     Returns
     -------
-    
+
     list
         Found integrator chains.
-    
+
     list
         Indices of the equations that have to be solved using collocation.
-    '''
+    """
 
     # next, we look for integrator chains
     logging.debug("Looking for integrator chains")
@@ -117,9 +120,13 @@ def find_integrator_chains(dyn_sys):
     state_sym = sp.symbols(dyn_sys.states)
     input_sym = sp.symbols(dyn_sys.inputs)
     f = dyn_sys.f_sym(state_sym, input_sym)
-    
-    assert dyn_sys.n_states == len(f)
-    
+
+    # take care of constraints (with penalty terms)
+    if dyn_sys.f_sym.has_constraint_penalties:
+        assert dyn_sys.n_states < len(f)
+    else:
+        assert dyn_sys.n_states == len(f)
+
     chaindict = {}
     for i in xrange(len(f)):
         # substitution because of sympy difference betw. 1.0 and 1
@@ -192,47 +199,64 @@ def find_integrator_chains(dyn_sys):
     
     return chains, eqind
 
-def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False):
-    '''
-    This function takes a callable vector field of a control system that is to be evaluated with symbols
-    for the state and input variables and returns a corresponding function that can be evaluated with
-    numeric values for these variables.
-    
+
+def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False, evalconstr=None):
+    """
+    This function takes a callable vector field of a dynamical system that is to be evaluated with
+    symbols for the state and input variables and returns a corresponding function that can be
+    evaluated with numeric values for these variables.
+
     Parameters
     ----------
-    
+
     f_sym : callable or array_like
         The callable ("symbolic") vector field of the control system.
-    
+
     x_sym : iterable
         The symbols for the state variables of the control system.
-    
+
     u_sym : iterable
         The symbols for the input variables of the control system.
-    
+
     vectorized : bool
         Whether or not to return a vectorized function.
 
     cse : bool
         Whether or not to make use of common subexpressions in vector field
-    
+
+    evalconstr : None (default) or bool
+        Whether or not to include the constraint equations (which might be represented
+        as the last part of the vf)
+
     Returns
     -------
-    
+
     callable
         The callable ("numeric") vector field of the control system.
-    '''
-
-    # make sure we got symbols as arguments
-     
+    """
 
     # get a representation of the symbolic vector field
     if callable(f_sym):
-        if all(isinstance(s, sp.Symbol) for s in x_sym + u_sym):
+
+        # ensure data type of arguments
+        if all(isinstance(s, str) for s in x_sym + u_sym):
+            x_sym = sp.symbols(x_sym)
+            u_sym = sp.symbols(u_sym)
+
+        if not all(isinstance(s, sp.Symbol) for s in x_sym + u_sym):
+            msg = "unexpected types in {}".format(x_sym + u_sym)
+            raise TypeError(msg)
+
+        if f_sym.has_constraint_penalties:
+            assert evalconstr is not None
+            F_sym = f_sym(x_sym, u_sym, evalconstr)
+        else:
             F_sym = f_sym(x_sym, u_sym)
-        elif all(isinstance(s, str) for s in x_sym + u_sym):
-            F_sym = f_sym(sp.symbols(x_sym), sp.symbols(u_sym))
     else:
+        # f_sym was not a callable
+        if evalconstr is not None:
+            msg = "expected a callable for usage with the flag evalconstr"
+            raise ValueError(msg)
         F_sym = f_sym
     
     sym_type = type(F_sym)
@@ -283,14 +307,17 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False):
         # we pass the expression as a matrix
         # then the created function returns an 2d-array
         F_sym = sp.Matrix(F_sym)
+    else:
+        msg = "unexpected number of dimensions: {}".format(F_sym)
+        raise ValueError(msg)
 
     # now we can create the numeric function
     if cse:
         _f_num = cse_lambdify(x_sym + u_sym, F_sym,
-                              modules=[{'ImmutableMatrix':np.array}, 'numpy'])
+                              modules=[{'ImmutableMatrix': np.array}, 'numpy'])
     else:
         _f_num = sp.lambdify(x_sym + u_sym, F_sym,
-                             modules=[{'ImmutableMatrix':np.array}, 'numpy'])
+                             modules=[{'ImmutableMatrix': np.array}, 'numpy'])
     
     # create a wrapper as the actual function due to the behaviour
     # of lambdify()
@@ -310,13 +337,14 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False):
         
     return f_num
 
+
 def check_expression(expr):
-    '''
+    """
     Checks whether a given expression is a sympy epression or a list
     of sympy expressions.
 
     Throws an exception if not.
-    '''
+    """
 
     # if input expression is an iterable
     # apply check recursively
@@ -328,7 +356,7 @@ def check_expression(expr):
             raise TypeError("Not a sympy expression!")
 
 def make_cse_eval_function(input_args, replacement_pairs, ret_filter=None, namespace=None):
-    '''
+    """
     Returns a function that evaluates the replacement pairs created
     by the sympy cse.
 
@@ -347,7 +375,7 @@ def make_cse_eval_function(input_args, replacement_pairs, ret_filter=None, names
 
     namespace : dict
         A namespace in which to define the function
-    '''
+    """
 
     function_buffer = '''
 def eval_replacements_fnc(args):
@@ -390,10 +418,11 @@ def eval_replacements_fnc(args):
 
     return eval_replacements_fnc
 
+
 def cse_lambdify(args, expr, **kwargs):
-    '''
+    """
     Wrapper for sympy.lambdify which makes use of common subexpressions.
-    '''
+    """
     
     # Note:
     # This was expected to speed up the evaluation of the created functions.
@@ -475,39 +504,39 @@ def cse_lambdify(args, expr, **kwargs):
     
 
 def saturation_functions(y_fnc, dy_fnc, y0, y1):
-    '''
-    Creates callable saturation function and its first derivative to project 
+    """
+    Creates callable saturation function and its first derivative to project
     the solution found for an unconstrained state variable back on the original
     constrained one.
-    
+
     For more information, please have a look at :ref:`handling_constraints`.
-    
+
     Parameters
     ----------
-    
+
     y_fnc : callable
         The calculated solution function for an unconstrained variable.
-    
+
     dy_fnc : callable
         The first derivative of the unconstrained solution function.
-    
+
     y0 : float
         Lower saturation limit.
-    
+
     y1 : float
         Upper saturation limit.
-    
+
     Returns
     -------
-    
+
     callable
         A callable of a saturation function applied to a calculated solution
         for an unconstrained state variable.
-    
+
     callable
-        A callable for the first derivative of a saturation function applied 
+        A callable for the first derivative of a saturation function applied
         to a calculated solution for an unconstrained state variable.
-    '''
+    """
     
     # Calculate the parameter m such that the slope of the saturation function
     # at t = 0 becomes 1
@@ -527,44 +556,61 @@ def saturation_functions(y_fnc, dy_fnc, y0, y1):
     return psi_y, dpsi_dy
 
 
+def penalty_expression(x, xmin, xmax):
+    """
+    return a quadratic parabola (vertex in the middle between xmin and xmax)
+    which is almost zero between xmin and xmax (exponentially faded).
+
+    :param x:
+    :param xmin:
+    :param xmax:
+    :return:
+    """
+    m = 5
+    xmid = (xmax - xmin)/2
+    res = (x-xmid)**2/(1 + sp.exp(m*(x - xmin))) + (x-xmid)**2/(1 + sp.exp(m*(xmax - x)))
+    # sp.plot(res, (x, xmin-xmid, xmax+xmid))
+    return res
+
+
 def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, npts=500, return_error_array=False):
-    '''
+    """
     Calculates an error that shows how "well" the spline functions comply with the system
     dynamic given by the vector field.
-    
+
     Parameters
     ----------
-    
+
     I : tuple
         The considered time interval.
-    
+
     x_fnc : callable
         A function for the state variables.
-    
+
     u_fnc : callable
         A function for the input variables.
-    
+
     dx_fnc : callable
         A function for the first derivatives of the state variables.
-    
+
     ff_fnc : callable
         A function for the vectorfield of the control system.
-    
+
     npts : int
         Number of point to determine the error at.
-    
+
     return_error_array : bool
         Whether or not to return the calculated errors (mainly for plotting).
-    
+
     Returns
     -------
-    
+
     float
         The maximum error between the systems dynamic and its approximation.
-    
+
     numpy.ndarray
         An array with all errors calculated on the interval.
-    '''
+    """
     
     # get some test points to calculate the error at
     tt = np.linspace(I[0], I[1], npts, endpoint=True)
@@ -607,7 +653,3 @@ if __name__ == '__main__':
     f_num_check = np.array([[-3.0],
                             [-np.sin(3.0) + np.cos(1.0)],
                             [np.exp(-np.sin(3.0) + np.cos(1.0))]])
-    
-
-    
-    IPS()
