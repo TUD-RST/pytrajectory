@@ -121,9 +121,9 @@ class Spline(object):
         return self._P[key]
 
     def _switch_approaches(self):
-        '''
+        """
         Changes the spline approach.
-        '''
+        """
         
         # first we create an equivalent spline which uses the
         # respectively other approach
@@ -153,18 +153,18 @@ class Spline(object):
         self._use_std_approach = S._use_std_approach
     
     def _eval(self, t, d=0):
-        '''
+        """
         Returns the value of the spline's `d`-th derivative at `t`.
-        
+
         Parameters
         ----------
-        
+
         t : float
             The point at which to evaluate the spline `d`-th derivative
-        
+
         d : int
             The derivation order
-        '''
+        """
         
         # get polynomial part where t is in
         i = int(np.floor(t * self.n / self.b))
@@ -176,28 +176,28 @@ class Spline(object):
             return self._P[i].deriv(d)(t - (i+1)*self._h)
     
     def f(self, t):
-        '''This is just a wrapper to evaluate the spline itself.'''
+        """This is just a wrapper to evaluate the spline itself."""
         if not self._prov_flag:
             return self._eval(t, d=0)
         else:
             return self.get_dependence_vectors(t, d=0)
 
     def df(self, t):
-        '''This is just a wrapper to evaluate the spline's 1st derivative.'''
+        """This is just a wrapper to evaluate the spline's 1st derivative."""
         if not self._prov_flag:
             return self._eval(t, d=1)
         else:
             return self.get_dependence_vectors(t, d=1)
         
     def ddf(self, t):
-        '''This is just a wrapper to evaluate the spline's 2nd derivative.'''
+        """This is just a wrapper to evaluate the spline's 2nd derivative."""
         if not self._prov_flag:
             return self._eval(t, d=2)
         else:
             return self.get_dependence_vectors(t, d=2)
         
     def dddf(self, t):
-        '''This is just a wrapper to evaluate the spline's 3rd derivative.'''
+        """This is just a wrapper to evaluate the spline's 3rd derivative."""
         if not self._prov_flag:
             return self._eval(t, d=3)
         else:
@@ -212,22 +212,22 @@ class Spline(object):
         self._boundary_values = value
     
     def make_steady(self):
-        '''
+        """
         Please see :py:func:`pytrajectory.splines.make_steady`
-        '''
+        """
         make_steady(S=self)
         self._indep_coeffs_sym = self._indep_coeffs.copy()
     
     def differentiate(self, d=1, new_tag=''):
-        '''
+        """
         Returns the `d`-th derivative of this spline function object.
-        
+
         Parameters
         ----------
-        
+
         d : int
             The derivation order.
-        '''
+        """
         return differentiate(self, d, new_tag)
     
     def get_dependence_vectors(self, points, d=0):
@@ -358,10 +358,10 @@ class Spline(object):
         self._prov_flag = False
     
     def interpolate(self, fnc=None, m0=None, mn=None):
-        '''
+        """
         Determines the spline's coefficients such that it interpolates
         a given function.
-        '''
+        """
         
         points = self.nodes
         assert callable(fnc)
@@ -470,21 +470,21 @@ class Spline(object):
         return save
     
     def plot(self, show=True, ret_array=False):
-        '''
+        """
         Plots the spline function or returns an array with its values at
         some points of the spline interval.
-        
+
         Parameters
         ----------
-        
+
         show : bool
             Whethter to plot the spline's curve or not.
-        
+
         ret_array : bool
             Wheter to return an array with values of the spline at points
             of the interval.
-            
-        '''
+
+        """
         
         if not show and not ret_array:
             # nothing to do here...
@@ -512,25 +512,25 @@ class Spline(object):
             return St
 
 def get_spline_nodes(a=0.0, b=1.0, n=10, nodes_type='equidistant'):
-    '''
+    """
     Generates :math:`n` spline nodes in the interval :math:`[a,b]`
     of given type.
-    
+
     Parameters
     ----------
-    
+
     a : float
         Lower border of the considered interval.
-    
+
     b : float
         Upper border of the considered interval.
-    
+
     n : int
         Number of nodes to generate.
-    
+
     nodes_type : str
         How to generate the nodes.
-    '''
+    """
     
     if nodes_type == 'equidistant':
         nodes = np.linspace(a, b, n, endpoint=True)
@@ -540,16 +540,16 @@ def get_spline_nodes(a=0.0, b=1.0, n=10, nodes_type='equidistant'):
     return nodes
     
 def differentiate(spline_fnc):
-    '''
+    """
     Returns the derivative of a callable spline function.
-    
+
     Parameters
     ----------
-    
+
     spline_fnc : callable
         The spline function to derivate.
-    
-    '''
+
+    """
     # `im_func` is the function's id
     # `im_self` is the object of which `func` is the method
     if spline_fnc.im_func == Spline.f.im_func:
@@ -560,20 +560,21 @@ def differentiate(spline_fnc):
         return spline_fnc.im_self.dddf
     else:
         raise NotImplementedError()
-    
+
+
 def make_steady(S):
-    '''
+    """
     This method sets up and solves equations that satisfy boundary conditions and
     ensure steadiness and smoothness conditions of the spline `S` in every joining point.
-    
+
     Please see the documentation for more details: :ref:`candidate_functions`
-    
+
     Parameters
     ----------
-    
+
     S : Spline
         The spline function object for which to solve smoothness and boundary conditions.
-    '''
+    """
     
     # This should be yet untouched
     if S._steady_flag:
