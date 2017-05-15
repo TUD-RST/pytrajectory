@@ -169,7 +169,12 @@ class Solver:
             
             DFx = self.W.dot(self.DF(x))
             DFx = scp.sparse.csr_matrix(DFx)
-            
+
+            if np.any(np.isnan(DFx.toarray())):
+                msg = "Invalid start guess (leads to nan in Jacobian)"
+                logging.warn(msg)
+                raise NanError(msg)
+
             break_inner_loop = False
             count_inner = 0
             while not break_inner_loop:
@@ -185,7 +190,8 @@ class Solver:
 
                 if any(np.isnan(Fxs)):
                     # this might be caused by too small mu
-                    msg = "Invalid start guess (leads to nan)"
+                    msg = "Invalid start guess (leads to nan in Function)"
+                    logging.warn(msg)
                     raise NanError(msg)
 
                 normFx = norm(Fx)
@@ -221,6 +227,7 @@ class Solver:
                     # this should might be caused by large values for xs
                     # but it should have been catched above
                     logging.warn("rho = nan (should not happen)")
+                    IPS()
                     raise NanError()
                
                 if rho < 0:

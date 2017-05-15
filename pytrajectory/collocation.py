@@ -7,19 +7,9 @@ from log import logging, Timer
 from trajectories import Trajectory
 from solver import Solver
 
-from auxiliary import sym2num_vectorfield
+from auxiliary import sym2num_vectorfield, Container, NanError
 
 from ipHelp import IPS
-
-class Container(object):
-    """
-    Simple data structure to store additional internal information for
-    debugging and checking the algorithms.
-    Some of the attributes might indeed be neccessary
-    """
-    def __init__(self, **kwargs):
-        for key, value in kwargs.iteritems():
-            self.__setattr__(str(key), value)
 
 
 class CollocationSystem(object):
@@ -220,7 +210,7 @@ class CollocationSystem(object):
         G.dim += n_cpts*self.sys.n_pconstraints
 
         # and its jacobian
-        def DG(c):
+        def DG(c, debug=False):
             # first we calculate the x and u values in all collocation points
             # with the current numerical values of the free parameters
             X = Mx.dot(c)[:,None] + Mx_abs
@@ -230,6 +220,24 @@ class CollocationSystem(object):
             
             # get the Jacobian blocks and turn them into the right shape
             DF_blocks0 = Df_vec(X, U).transpose([2, 0, 1])
+
+            # dbg !!
+
+            # it might happen that some expressions like (exp(100 - u1)) lead to nan
+            # in the lambdified version; use sympy evalf as fallback
+
+            flag_arr = np.isnan(DF_blocks0)
+            if np.any(flag_arr):
+                nan_idcs = np.argwhere(flag_arr)
+                for i1, i2, i3 in nan_idcs:
+                    x = X[:, i1]
+                    u = U[:, i1]
+                    args = zip(self.sys.states, x) + zip(self.sys.inputs, u)
+                    sym_res = np.float(self._Df.subs(args).evalf()[i2, i3])
+                    if np.isnan(sym_res):
+                        msg = "NaN-fallback did not work"
+                        raise NanError(msg)
+                    DF_blocks0[i1, i2, i3] = sym_res
 
             # axis: 0 -> collocation point
             # axis: 1 -> equation (of vectorfiled)

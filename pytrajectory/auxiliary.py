@@ -13,6 +13,15 @@ class NanError(ValueError):
     pass
 
 
+class Container(object):
+    """
+    Simple and flexible data structure to store all kinds of objects
+    """
+    def __init__(self, **kwargs):
+        for key, value in kwargs.iteritems():
+            self.__setattr__(str(key), value)
+
+
 class IntegChain(object):
     """
     This class provides a representation of an integrator chain.
@@ -634,6 +643,9 @@ def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, npts=500, return_error_ar
     else:
         return max_con_err
 
+
+def vector_eval(func, argarr):
+    return np.array([func(arg) for arg in argarr])
 
 if __name__ == '__main__':
     from sympy import sin, cos, exp
