@@ -14,31 +14,31 @@ from ipHelp import IPS
 
 
 class Solver:
-    '''
+    """
     This class provides solver for the collocation equation system.
-    
-    
+
+
     Parameters
     ----------
-    
+
     F : callable
         The callable function that represents the equation system
-    
+
     DF : callable
         The function for the jacobian matrix of the eqs
-    
+
     x0: numpy.ndarray
         The start value for the sover
-    
+
     tol : float
         The (absolute) tolerance of the solver
-    
+
     maxIt : int
         The maximum number of iterations of the solver
-    
+
     method : str
         The solver to use
-    '''
+    """
 
     # noinspection PyPep8Naming
     def __init__(self, masterobject, F, DF, x0, tol=1e-5, reltol=2e-5, maxIt=50,

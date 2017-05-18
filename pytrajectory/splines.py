@@ -614,12 +614,25 @@ def make_steady(S):
         # we need n + 3 free parameters
         # all of zeroth order (n) and 2 of first order (the first, and last slope)
         # and the very last coeff (3rd order of last piece) -> that one is free by construction
-        a = np.hstack( (coeffs[:, 0], coeffs[[0, -1], 1], coeffs[-1, -1]) )
+
+        # a = np.hstack( (coeffs[:, 0], coeffs[[0, -1], 1], coeffs[-1, -1]) )
+
+        # !! zu Testzwecken nochmal die alten Koeffizienten nehmen
+        # Haupsaechlich 3. Ordnung
+
+        a = np.hstack( (coeffs[:, -1], coeffs[0, :-1]) )
+
     elif nu == 0:
         # this is the most relevant case
         # all but first coeffs for 0th order (absolute part) an two slopes (first and last)
         # the first coeff is not free because of boundary condition
-        a = np.hstack( (coeffs[1:, 0], coeffs[0, 1], coeffs[-1, 1]) )
+        # a = np.hstack( (coeffs[1:, 0], coeffs[0, 1], coeffs[-1, 1]) )
+
+        # !! zu Testzwecken nochmal die alten Koeffizienten nehmen
+        # Haupsaechlich 3. Ordnung
+
+        a = np.hstack((coeffs[:, -1], coeffs[0, 1]))
+
     elif nu == 1:
         raise NotImplementedError("Not yet converted to usage of 0th order coeffs")
         a = coeffs[:-1, 0]
