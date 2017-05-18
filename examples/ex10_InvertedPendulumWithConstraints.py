@@ -36,7 +36,7 @@ def f(x, u, evalconstr=True):
         res += pe(x2, -10, 10)
         res += pe(x3, -10, 10)
         res += pe(x4, -10, 10)
-        res += pe(u1, -10, 10)
+        res += pe(u1, -30, 20)
         ff.append(res)
     
     return ff

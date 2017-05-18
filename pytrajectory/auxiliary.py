@@ -644,6 +644,26 @@ def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, npts=500, return_error_ar
         return max_con_err
 
 
+def datefname(ext, timestamp=None):
+    """
+    return a filename like 2017-05-18-11-29-42.pdf
+
+    :param ext:         (str) fname extension
+    :param timestamp:   float or None, optional timestamp
+    :return:            fname (string)
+    """
+
+    assert isinstance(ext, basestring)
+
+    if timestamp is None:
+        timestamp = time.time()
+    timetuple = time.localtime(timestamp)
+
+    res = time.strftime(r"%Y-%m-%d-%H-%M-%S", timetuple)
+    res += ext
+    return res
+
+
 def vector_eval(func, argarr):
     return np.array([func(arg) for arg in argarr])
 

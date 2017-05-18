@@ -1,6 +1,7 @@
 # IMPORTS
 import numpy as np
 import copy
+from collections import OrderedDict
 
 from splines import Spline, differentiate
 from log import logging
@@ -140,12 +141,15 @@ class Trajectory(object):
         
         return arr
     
-    def init_splines(self):
+    def init_splines(self, export=False):
         """
         This method is used to create the necessary spline function objects.
 
         Parameters
         ----------
+
+        export : bool
+            Whether or not return the created objects
 
         boundary_values : dict
             Dictionary of boundary values for the state and input splines functions.
@@ -159,10 +163,10 @@ class Trajectory(object):
         bv = self.sys.boundary_values
         
         # dictionaries for splines and callable solution function for x,u and dx
-        splines = dict()
-        x_fnc = dict()
-        u_fnc = dict()
-        dx_fnc = dict()
+        splines = OrderedDict()
+        x_fnc = OrderedDict()
+        u_fnc = OrderedDict()
+        dx_fnc = OrderedDict()
         
         if self._parameters['use_chains']:
             # first handle variables that are part of an integrator chain
@@ -245,11 +249,17 @@ class Trajectory(object):
         for ss in splines.keys():
             indep_coeffs[ss] = splines[ss]._indep_coeffs
         
-        self.indep_coeffs = indep_coeffs
-        self.splines = splines
-        self.x_fnc = x_fnc
-        self.u_fnc = u_fnc
-        self.dx_fnc = dx_fnc
+        if not export:
+            # this is the usual case
+            self.indep_coeffs = indep_coeffs
+            self.splines = splines
+            self.x_fnc = x_fnc
+            self.u_fnc = u_fnc
+            self.dx_fnc = dx_fnc
+        else:
+            C = auxiliary.Container(indep_coeffs=indep_coeffs, splines=splines,
+                                    x_fnc=x_fnc, u_fnc=u_fnc, dx_fnc=dx_fnc)
+            return C
 
     def set_coeffs(self, sol):
         """

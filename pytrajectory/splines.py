@@ -2,6 +2,7 @@ import numpy as np
 import sympy as sp
 import scipy.sparse as sparse
 from scipy.sparse.linalg import spsolve
+from scipy.interpolate import interp1d
 
 from log import logging
 
@@ -362,10 +363,14 @@ class Spline(object):
         Determines the spline's coefficients such that it interpolates
         a given function.
         """
-        
-        points = self.nodes
+        #1/0 # !! diese Funktion nutzen
+
+        if not callable(fnc):
+            fnc = self._interpolate_array(fnc)
+
         assert callable(fnc)
-        
+        points = self.nodes
+
         if 0 and not self._use_std_approach:
             assert self._steady_flag
 
@@ -455,6 +460,19 @@ class Spline(object):
         #self.set_coefficients(free_coeffs=free_coeffs)
 
         return free_coeffs
+
+    def _interpolate_array(self, value_tuple):
+        """
+        auxiliary function
+        :param value_tuple:  sequence of length 2 like (tt, xx)
+        :return: interpolating function
+        """
+
+        assert len(value_tuple) == 2
+        tt, xx = value_tuple
+        assert tt.shape == xx.shape
+
+        return interp1d(tt, xx)
 
     def save(self):
         save = dict()

@@ -6,6 +6,7 @@ import pickle
 import copy
 import time
 import inspect
+from collections import OrderedDict
 
 from collocation import CollocationSystem
 from simulation import Simulator
@@ -13,6 +14,10 @@ import auxiliary
 import visualisation
 from log import logging
 import interfaceserver
+
+import matplotlib.pyplot as plt
+
+
 
 
 # DEBUGGING
@@ -105,6 +110,11 @@ class TransitionProblem(object):
 
         # We didn't really do anything yet, so this should be false
         self.reached_accuracy = False
+
+        self.sim_data = None
+        self.sim_data_xx = None
+        self.sim_data_uu = None
+        self.sim_data_tt = None
 
     def set_param(self, param='', value=None):
         """
@@ -400,7 +410,6 @@ class TransitionProblem(object):
         old_res = 1e20
         old_sol = None
 
-
         # Solve the collocation equation system
 
         new_solver = True
@@ -417,6 +426,78 @@ class TransitionProblem(object):
 
             # Solve the resulting initial value problem
             self.simulate()
+
+            # dbg: create new splines (to interpolate the obtained result)
+            C = self.eqs.trajectories.init_splines(export=True)
+            new_params = OrderedDict()
+
+            tt = self.sim_data_tt
+            new_spline_values = []
+            old_spline_values = []
+
+            data = list(self.sim_data_xx.T) + list(self.sim_data_uu.T)
+            for i, (key, s) in enumerate(C.splines.iteritems()):
+
+                coeffs = s.interpolate((self.sim_data_tt, data[i]))
+                s.set_coefficients(coeffs)
+                new_spline_values.append(auxiliary.vector_eval(s.f, tt))
+
+                s_old = self.eqs.trajectories.splines[key]
+                old_spline_values.append(auxiliary.vector_eval(s_old.f, tt))
+                sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)  # List of tuples like (cx1_0_0, 2.41)
+
+                new_params.update(sym_num_tuples)
+
+            new_sol = []
+            notfound = []
+            for key in self.eqs.all_free_parameters:
+                value = new_params.pop(key, None)
+                if value is not None:
+                    new_sol.append(value)
+                else:
+                    notfound.append(key)
+
+            #  Vergleich:
+
+            mm = 1./25.4  # mm to inch
+            scale = 8
+            fs = [75*mm*scale, 35*mm*scale]
+            rows = np.round((len(data) + 2)/2.0 + .25)  # round up
+
+            # input part of the vectorfiled
+            gg = self.eqs._Df_vectorized(self.sim_data_xx.T, self.sim_data_uu.T).transpose(2, 0, 1)
+            gg = gg[:, :-1, -1]
+
+            # drift part of the vf
+            ff = self.eqs._ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0).T[:, :-1]
+
+            if 1:
+                plt.figure(figsize=fs)
+                for i in xrange(len(data)):
+                    plt.subplot(rows, 2, i+1)
+                    plt.plot(tt, data[i], 'k', lw=3, label='sim')
+                    plt.plot(tt, old_spline_values[i], label='old')
+                    plt.plot(tt, new_spline_values[i], label='new')
+                    ax = plt.axis()
+                    plt.vlines(s.nodes, -10, 10, color="0.85")
+                    plt.axis(ax)
+                    plt.grid(1)
+                plt.legend(loc='best')
+
+                plt.subplot(rows, 2, i + 2)
+                plt.title("vf: f")
+                plt.plot(tt, ff)
+
+                plt.subplot(rows, 2, i + 3)
+                plt.title("vf: g")
+                plt.plot(tt, gg)
+
+                fname =  auxiliary.datefname(ext="pdf")
+                plt.savefig(fname)
+                logging.debug(fname + " written.")
+
+                plt.show()
+                # IPS()
 
             # check if desired accuracy is reached
             self.check_accuracy()
@@ -458,7 +539,7 @@ class TransitionProblem(object):
                 raise ValueError("unexpected state")
 
             #
-            # # any of the follwing  conditions ends the loop
+            # # any of the following  conditions ends the loop
             # cond1 = self.reached_accuracy
             #
             # # following means: solver stopped not
@@ -503,8 +584,9 @@ class TransitionProblem(object):
         
         logging.debug("start: %s"%str(start))
         
-        # start forward simulation
+        # forward simulation
         self.sim_data = S.simulate()
+        self.sim_data_tt, self.sim_data_xx, self.sim_data_uu = self.sim_data
     
     def check_accuracy(self):
         """
@@ -545,7 +627,7 @@ class TransitionProblem(object):
         
         logging.debug(40*"-")
         
-        #if self._ierr:
+        # if self._ierr:
         ierr = self._parameters['ierr']
         eps = self._parameters['eps']
         if ierr:
@@ -639,6 +721,10 @@ class TransitionProblem(object):
     def b(self):
         return self.dyn_sys.b
 
+    @property
+    def tt(self):
+        return self.dyn_sys.tt
+
 
 # For backward compatibility: make the class available under the old name
 # TODO: Introduce deprecation warning
@@ -670,6 +756,7 @@ class DynamicalSystem(object):
         self.f_sym = f_sym
         self.a = a
         self.b = b
+        self.tt = np.linspace(a, b, 1000)
 
         # analyse the given system
         self.n_states, self.n_inputs = self._determine_system_dimensions(n=len(xa))
