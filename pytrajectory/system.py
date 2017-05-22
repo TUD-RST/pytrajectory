@@ -70,14 +70,31 @@ class TransitionProblem(object):
         dt_sim        1e-2            Sample time for integration (initial value problem)
         reltol        2e-5            Rel. tolerance (for LM A. to be confident with local minimum)
         accIt         5               How often try to escape local minimum without increasing
-                                      spline parts
+                                      number of spline parts
         use_chains    True            Whether or not to use integrator chains
         sol_steps     100             Maximum number of iteration steps for the eqs solver
         first_guess   None            to initiate free parameters (might be useful: {'seed': value})
+        refsol        Container       optional data (C.tt, C.xx, C.uu) for the reference trajectory
         ============= =============   ============================================================
     """
 
-    def __init__(self, ff, a=0., b=1., xa=[], xb=[], ua=[], ub=[], constraints=None, **kwargs):
+    def __init__(self, ff, a=0., b=1., xa=None, xb=None, ua=None, ub=None, constraints=None, **kwargs):
+
+        if xa is None:
+            xa = []
+        if xb is None:
+            xb = []
+        if ua is None:
+            ua = []
+        if ub is None:
+            ub = []
+
+        # convenience for single input case:
+        if np.isscalar(ua):
+            ua = [ua]
+        if np.isscalar(ub):
+            ub= [ub]
+
         # set method parameters
         self._parameters = dict()
         self._parameters['maxIt'] = kwargs.get('maxIt', 10)
@@ -86,6 +103,8 @@ class TransitionProblem(object):
         self._parameters['dt_sim'] = kwargs.get('dt_sim', 0.01)
         self._parameters['accIt'] = kwargs.get('accIt', 5)
         self._parameters['reltol'] = kwargs.get('reltol', 2e-5)
+
+        self.refsol = kwargs.get('refsol', None)  # this serves to reproduce a given trajectory
 
         # create an object for the dynamical system
         self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub)
@@ -266,6 +285,15 @@ class TransitionProblem(object):
             self.eqs.trajectories.x_fnc[xk] = psi_y
             self.eqs.trajectories.dx_fnc[xk] = dpsi_dy
             
+    def check_refsol_consistency(self):
+        assert isinstance(self.refsol, auxiliary.Container)
+        tt, xx, uu = self.refsol.tt, self.refsol.xx, self.refsol.uu
+        assert tt[0] == self.a
+        assert tt[-1] == self.b
+
+        assert np.allclose(xx[0, :], self.dyn_sys.xa)
+        assert np.allclose(xx[-1, :], self.dyn_sys.xb)
+
     def solve(self, tcpport=None):
         """
         This is the main loop.
@@ -295,6 +323,47 @@ class TransitionProblem(object):
             assert isinstance(tcpport, int)
             interfaceserver.listen_for_connections(tcpport)
 
+        if self.refsol is not None:
+            self.check_refsol_consistency()
+            auxiliary.make_refsol_callable(self.refsol)
+            for i in range(self.refsol.n_raise_spline_parts):
+                self.eqs.trajectories._raise_spline_parts()
+
+            if 1:
+                # dbg visualization
+
+                C = self.eqs.trajectories.init_splines(export=True)
+                self.eqs.guess = None
+                new_params = OrderedDict()
+
+                tt = self.refsol.tt
+                new_spline_values = []
+                fnclist = self.refsol.xxfncs + self.refsol.uufncs
+
+                for i, (key, s) in enumerate(C.splines.iteritems()):
+                    coeffs = s.interpolate(fnclist[i], set_coeffs=True)
+                    new_spline_values.append(auxiliary.vector_eval(s.f, tt))
+
+                    sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)  # List of tuples like (cx1_0_0, 2.41)
+                    new_params.update(sym_num_tuples)
+
+                mm = 1./25.4  # mm to inch
+                scale = 8
+                fs = [75*mm*scale, 35*mm*scale]
+                rows = np.round((len(new_spline_values) + 0)/2.0 + .25)  # round up
+
+                plt.figure(figsize=fs)
+                for i in xrange(len(new_spline_values)):
+                    plt.subplot(rows, 2, i + 1)
+                    plt.plot(tt, self.refsol.xu_list[i], 'k', lw=3, label='sim')
+                    plt.plot(tt, new_spline_values[i], label='new')
+                    ax = plt.axis()
+                    plt.vlines(s.nodes, -1000, 1000, color="0.85")
+                    plt.axis(ax)
+                    plt.grid(1)
+                plt.legend(loc='best')
+                plt.show()
+
         # do the first iteration step
         logging.info("1st Iteration: {} spline parts".format(self.eqs.trajectories.n_parts_x))
         try:        
@@ -310,6 +379,8 @@ class TransitionProblem(object):
         def q_finish_loop():
             res = self.reached_accuracy or self.nIt >= self._parameters['maxIt']
             return res
+
+        IPS()
 
         while not q_finish_loop():
             
@@ -404,6 +475,7 @@ class TransitionProblem(object):
         
         # Get an initial value (guess)
         self.eqs.get_guess()
+
         
         # Build the collocation equations system
         C = self.eqs.build()
@@ -861,8 +933,7 @@ class DynamicalSystem(object):
 
         # consistency check
         assert len(xa) == len(xb) == self.n_states
-        #assert len(ua) == len(ub) == self.n_inputs
-        if not ua and not ub:
+        if ua is None and ub is None:
             ua = [None] * self.n_inputs
             ub = [None] * self.n_inputs
 

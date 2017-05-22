@@ -40,17 +40,17 @@ class Trajectory(object):
         self._chains, self._eqind = auxiliary.find_integrator_chains(sys)
         self._parameters['use_chains'] = kwargs.get('use_chains', True)
 
-        # Initialise dictionaries as containers for all
-        # spline functions that will be created
-        self.splines = dict()
-        self.x_fnc = dict()
-        self.u_fnc = dict()
-        self.dx_fnc = dict()
+        # These will become OrderedDicts later
+        self.splines = None
+        self.x_fnc = None
+        self.u_fnc = None
+        self.dx_fnc = None
         
         # This will be the free parameters of the control problem
         # (list of all independent spline coefficients)
-        self.indep_coeffs = []
-        
+        self.indep_coeffs = None
+
+        # This will hold a deep copy of self.splines
         self._old_splines = None
 
         # variable to save the coefficients of the solution
@@ -58,9 +58,9 @@ class Trajectory(object):
 
     @property
     def n_parts_x(self):
-        '''
+        """
         Number of polynomial spline parts for system variables.
-        '''
+        """
         return self._parameters['n_parts_x']
 
     @property
@@ -158,8 +158,13 @@ class Trajectory(object):
         logging.debug("Initialise Splines")
         
         # store the old splines to calculate the guess later
-        self._old_splines = copy.deepcopy(self.splines)
-        
+        # self._old_splines = copy.deepcopy(self.splines)
+        self._old_splines = auxiliary.copy_splines(self.splines)
+
+        # dbg:
+        if self.splines is not None:
+            assert not list(self.splines.values())[0]._prov_flag
+
         bv = self.sys.boundary_values
         
         # dictionaries for splines and callable solution function for x,u and dx
@@ -226,7 +231,8 @@ class Trajectory(object):
             if not x_fnc.has_key(xx):
                 splines[xx] = Spline(self.sys.a, self.sys.b, n=self.n_parts_x, bv={0:bv[xx]}, tag=xx,
                                      nodes_type=self._parameters['nodes_type'],
-                                     use_std_approach=self._parameters['use_std_approach'])
+                                     use_std_approach=self._parameters['use_std_approach'],
+                                     masterobject=self.masterobject)
                 splines[xx].make_steady()
                 splines[xx].type = 'x'
                 x_fnc[xx] = splines[xx].f
@@ -236,7 +242,8 @@ class Trajectory(object):
             if not u_fnc.has_key(uu):
                 splines[uu] = Spline(self.sys.a, self.sys.b, n=self.n_parts_u, bv={0:bv[uu]}, tag=uu,
                                      nodes_type=self._parameters['nodes_type'],
-                                     use_std_approach=self._parameters['use_std_approach'])
+                                     use_std_approach=self._parameters['use_std_approach'],
+                                     masterobject=self.masterobject)
                 splines[uu].make_steady()
                 splines[uu].type = 'u'
                 u_fnc[uu] = splines[uu].f
@@ -245,7 +252,7 @@ class Trajectory(object):
         for xx in self.sys.states:
             dx_fnc[xx] = differentiate(x_fnc[xx])
 
-        indep_coeffs = dict()
+        indep_coeffs = OrderedDict()
         for ss in splines.keys():
             indep_coeffs[ss] = splines[ss]._indep_coeffs
         
@@ -302,7 +309,7 @@ class Trajectory(object):
             self.splines[k].set_coefficients(free_coeffs=subs[k])
         
         # yet another dictionary for solution and coeffs
-        coeffs_sol = dict()
+        coeffs_sol = OrderedDict()
 
         # used for indexing
         i = 0
@@ -329,4 +336,3 @@ class Trajectory(object):
         save['coeffs_col'] = self.coeffs_sol
 
         return save
-        

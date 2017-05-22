@@ -4,6 +4,8 @@ import sympy as sp
 from sympy.utilities.lambdify import _get_namespace
 import time
 from pytrajectory.splines import Spline
+from scipy.interpolate import interp1d
+from collections import OrderedDict
 
 from ipHelp import IPS
 
@@ -666,6 +668,13 @@ def datefname(ext, timestamp=None):
 
 
 def vector_eval(func, argarr):
+    """
+    return an array of results of func evaluated at the elements of argarr
+
+    :param func:        function
+    :param argarr:      array of arguments
+    :return:
+    """
     return np.array([func(arg) for arg in argarr])
 
 if __name__ == '__main__':
@@ -687,6 +696,7 @@ if __name__ == '__main__':
                             [-np.sin(3.0) + np.cos(1.0)],
                             [np.exp(-np.sin(3.0) + np.cos(1.0))]])
 
+
 def new_spline(Tend, n_parts, targetvalues, tag,):
     """
     :param Tend:
@@ -702,3 +712,49 @@ def new_spline(Tend, n_parts, targetvalues, tag,):
     s.make_steady()
     s.interpolate(targetvalues, set_coeffs=True)
     return s
+
+
+def copy_splines(splinedict):
+
+    if splinedict is None:
+        return None
+
+    res = OrderedDict()
+    for k, v in splinedict.items():
+        S = Spline(v.a, v.b, n=v.n, tag=v.tag, bv=v._boundary_values,
+                   use_std_approach=v._use_std_approach)
+        S.masterobject = v.masterobject
+        S._dep_array = v._dep_array
+        S._dep_array_abs = v._dep_array_abs
+        S._steady_flag = v._steady_flag
+        S._prov_flag = v._prov_flag
+
+        res[k] = S
+    return res
+
+def make_refsol_callable(refsol):
+    """
+    Assuming refsol is a container for a reference solution, this function creates interpolating
+    functions from the value arrays
+
+    :param refsol:
+    :return:
+    """
+
+    x_list = list(refsol.xx.T)
+    u_list = list(np.atleast_2d(refsol.uu))
+
+    refsol.xu_list = x_list + u_list
+
+    tt = refsol.tt
+
+    refsol.xxfncs = []
+    refsol.uufncs = []
+
+    for xarr in x_list:
+        assert len(tt) == len(xarr)
+        refsol.xxfncs.append(interp1d(tt, xarr))
+
+    for uarr in u_list:
+        assert len(tt) == len(uarr)
+        refsol.uufncs.append(interp1d(tt, uarr))

@@ -142,14 +142,13 @@ class Animation():
         
         self.axes['ax_img'].set_frame_on(True)
         self.axes['ax_img'].set_aspect('equal')
-        self.axes['ax_img'].set_axis_bgcolor('w')
+        self.axes['ax_img'].set_facecolor('w')
         
         self.nframes = int(round(24*(self.t[-1] - self.t[0])))
         
         self.draw = drawfnc
         
         # set axis limits and labels of system curves
-        #xlim = (0.0, self.t[-1] - self.t[0])
         xlim = (self.t[0], self.t[-1])
         for i, idxlabel in enumerate(self.plotsys):
             idx, label = idxlabel

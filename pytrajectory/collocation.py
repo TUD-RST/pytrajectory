@@ -2,6 +2,7 @@
 import numpy as np
 import sympy as sp
 from scipy import sparse
+from collections import OrderedDict
 
 from log import logging, Timer
 from trajectories import Trajectory
@@ -39,10 +40,10 @@ class CollocationSystem(object):
         self._parameters['method'] = kwargs.get('method', 'leven')
         self._parameters['coll_type'] = kwargs.get('coll_type', 'equidistant')
 
+        # yet we don't have a solver, soution, guess
         self.solver = None
-
-        # we don't have a soution, yet
         self.sol = None
+        self. guess = None
         
         # create vectorized versions of the control system's vector field
         # and its jacobian for the faster evaluation of the collocation equation system `G`
@@ -430,22 +431,24 @@ class CollocationSystem(object):
         """
 
         if not self.trajectories._old_splines:
-            if self._first_guess is None:
-                free_coeffs_all = np.hstack(self.trajectories.indep_coeffs.values())
-                guess = 0.1 * np.ones(free_coeffs_all.size)
-            else:
+            # we are at the first iteration (no old splines exist)
+            if self._first_guess is not None:
+                assert self.masterobject.refsol is None  # together guess and refsol make no sense
+
                 guess = np.empty(0)
+
+                # iterate over the system quantities (x_i, u_j)
             
-                for k, v in sorted(self.trajectories.indep_coeffs.items(), key = lambda (k, v): k):
+                for k, v in sorted(self.trajectories.indep_coeffs.items(), key=lambda (k, v): k):
                     logging.debug("Get new guess for spline {}".format(k))
 
-                    if self._first_guess.has_key(k):
+                    if k in self._first_guess:
                         s = self.trajectories.splines[k]
                         f = self._first_guess[k]
 
                         free_coeffs_guess = s.interpolate(f)
 
-                    elif self._first_guess.has_key('seed'):
+                    elif 'seed' in self._first_guess:
                         np.random.seed(self._first_guess.get('seed'))
                         free_coeffs_guess = np.random.random(len(v))
                         
@@ -453,7 +456,15 @@ class CollocationSystem(object):
                         free_coeffs_guess = 0.1 * np.ones(len(v))
 
                     guess = np.hstack((guess, free_coeffs_guess))
+            elif self.masterobject.refsol is not None:
+                guess = self.interpolate_refsol()
+
+            else:
+                # first_guess and refsol are None
+                free_coeffs_all = np.hstack(self.trajectories.indep_coeffs.values())
+                guess = 0.1*np.ones(free_coeffs_all.size)
         else:
+            # old_splines do exist
             guess = np.empty(0)
             
             # now we compute a new guess for every free coefficient of every new (finer) spline
@@ -473,15 +484,40 @@ class CollocationSystem(object):
                     df0 = s_old.df(self.sys.a)
                     dfn = s_old.df(self.sys.b)
 
-                    free_coeffs_guess = s_new.interpolate(s_old.f, m0=df0, mn=dfn)
+                    try:
+                        free_coeffs_guess = s_new.interpolate(s_old.f, m0=df0, mn=dfn)
+                    except TypeError as e:
+                        IPS()
                     guess = np.hstack((guess, free_coeffs_guess))
 
                 else:
+                    # FIXME: This code is currently not executed
+                    assert False
                     # if it is a input variable, just take the old solution
                     guess = np.hstack((guess, self.trajectories._old_splines[k]._indep_coeffs))
 
         # the new guess
         self.guess = guess
+
+    def interpolate_refsol(self):
+        """
+
+        :return:    guess (vector of values for free parameters)
+        """
+        fnc_list = self.masterobject.refsol.xxfncs + self.masterobject.refsol.uufncs
+        assert isinstance(self.trajectories.indep_coeffs, OrderedDict)
+
+        guess = np.empty(0)
+
+        # assume that both fnc_list and indep_coeffs.items() are sorted like
+        # [x1, ... xn, u1, ..., un]
+        for fnc, (k, v) in zip(fnc_list, self.trajectories.indep_coeffs.items()):
+            logging.debug("Get guess from refsol for spline {}".format(k))
+            s_new = self.trajectories.splines[k]
+            free_coeffs_guess = s_new.interpolate(fnc)
+            guess = np.hstack((guess, free_coeffs_guess))
+
+        return guess
 
     def solve(self, G, DG, new_solver=True):
         """

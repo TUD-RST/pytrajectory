@@ -7,7 +7,7 @@ from scipy.interpolate import interp1d
 from log import logging
 
 # DEBUG
-from IPython import embed as IPS
+from ipHelp import IPS
 
 
 class Spline(object):
@@ -62,6 +62,8 @@ class Spline(object):
 
         if bv is None:
             bv = {}
+
+        self.masterobject = kwargs.get("masterobject")
 
         self._use_std_approach = use_std_approach
         
@@ -421,10 +423,10 @@ class Spline(object):
             d = 2.0*np.ones(self.nodes.size-2)
             u = np.array([h[k] / (h[k] + h[k+1]) for k in xrange(self.nodes.size-2)])
             
-            # right hand site of the equation system
+            # right hand side of the equation system
             r = np.array([(3.0/h[k])*l[k]*(vv[k+1] - vv[k]) + (3.0/h[k+1])*u[k]*(vv[k+2]-vv[k+1])\
                           for k in xrange(self.nodes.size-2)])
-            
+
             # add conditions for unique solution
             
             # boundary derivatives
@@ -547,6 +549,9 @@ class Spline(object):
         
         if ret_array:
             return St
+
+# End of class Spline
+
 
 def get_spline_nodes(a=0.0, b=1.0, n=10, nodes_type='equidistant'):
     """

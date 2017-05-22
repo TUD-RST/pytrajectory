@@ -16,7 +16,7 @@ import control.matlab as controlm
 # sys.path.append('/Volumes/work/workspaces/PYTHON/mymodules')
 import symbtools as st
 
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 from pytrajectory import penalty_expression as pe
 from numpy import pi
 
@@ -101,7 +101,9 @@ log.console_handler.setLevel(10)
 # x, u = S.solve()
 
 first_guess = {'seed': 0}
-S = ControlSystem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb, ua=ua, ub=ub, use_chains=False, first_guess=first_guess, ierr=None, maxIt=3, eps=1e-1, sol_steps=100, reltol=1e-3, accIt=1)
+S = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb, ua=ua, ub=ub, use_chains=False,
+                      first_guess=first_guess, ierr=None, maxIt=3, eps=1e-1, sol_steps=100,
+                      reltol=1e-3, accIt=1)
 
 ff = S.eqs.sys.f_num_simulation
 
@@ -117,6 +119,7 @@ uu = aux.vector_eval(uspline.f, tt2)
 
 sim = Simulator(ff, Tb, xa, uspline.f)
 tt, xx, uu = sim.simulate()
+uu = np.atleast_2d(uu)
 
 data = list(xx.T) + [uu.T]
 
@@ -125,19 +128,36 @@ scale = 8
 fs = [75*mm*scale, 35*mm*scale]
 rows = np.round((len(data) + 0)/2.0 + .25)  # round up
 
-plt.figure(figsize=fs)
+if 0:
+    plt.figure(figsize=fs)
 
-for i in xrange(len(data)):
-    plt.subplot(rows, 2, i+1)
-    plt.plot(tt, data[i], 'b', lw=3, label='sim')
-    plt.grid(1)
+    for i in xrange(len(data)):
+        plt.subplot(rows, 2, i+1)
+        plt.plot(tt, data[i], 'b', lw=3, label='sim')
+        plt.grid(1)
 
-plt.show()
-
+    plt.show()
 # sys.exit()
 
-
 S.sim_data = (tt, xx, uu)
+
+# Simulation is ready, now try to reproduce this solution via collocation
+
+refsol = aux.Container(tt=tt, xx=xx, uu=uu, n_raise_spline_parts=3)
+
+
+S2 = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xx[0, :], xb=xx[-1, :], ua=uu[0, :],
+                       ub=uu[-1, :], use_chains=False, refsol=refsol, ierr=None, maxIt=3,
+                       eps=1e-1, sol_steps=100, reltol=1e-3, accIt=1)
+
+print S
+print S2
+
+S2.solve(tcpport=None)
+
+
+# for animation
+S = S2
 
 
 if 0:
@@ -146,7 +166,7 @@ if 0:
     for i in range(N):
         print i, "------"
         first_guess = {'seed': i}
-        S = ControlSystem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb, ua=ua, ub=ub, use_chains=False, first_guess=first_guess, ierr=None, maxIt=3, eps=1e-1, sol_steps=100, reltol=1e-3, accIt=1)
+        S = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb, ua=ua, ub=ub, use_chains=False, first_guess=first_guess, ierr=None, maxIt=3, eps=1e-1, sol_steps=100, reltol=1e-3, accIt=1)
 
         # run iteration
         S.solve(tcpport=5006)
@@ -166,7 +186,6 @@ if 0:
     raise SystemExit
 
 
-import sys
 import matplotlib as mpl
 from pytrajectory.visualisation import Animation
 from sympy import cos, sin
@@ -231,9 +250,11 @@ def draw(xt, image):
 A = Animation(drawfnc=draw, simdata=S.sim_data, plotsys=[(3,'$x$'),(7,'$\\dot{x}$')], plotinputs=[(0,'$u$')])
 xmin = 0
 xmax = 0
-A.set_limits(xlim=(xmin - 1.5, xmax + 1.5), ylim=(-2.0,2.0))
+A.set_limits(xlim=(xmin - 1.5, xmax + 1.5), ylim=(-2.0, 2.0))
 
 # if 'plot' in sys.argv:
-# A.show(t=S.b)
-A.animate()
-A.save('TriplePendulum1.gif')
+A.show(t=S.b)
+
+if 0:
+    A.animate()
+    A.save('TriplePendulum1.gif')
