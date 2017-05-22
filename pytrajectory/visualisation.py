@@ -9,22 +9,22 @@ from IPython import embed as IPS
 
 
 def plot_simulation(sim_data, H=[], fname=None):
-    '''
+    """
     This method provides graphics for each system variable, manipulated
     variable and error function and plots the solution of the simulation.
-    
+
     Parameters
     ----------
-    
+
     sim_data : tuple
         Contains collocation points, and simulation results of system and input variables.
-    
+
     H : dict
         Dictionary of the callable error functions
-    
+
     fname : str
         If not None, plot will be saved as <fname>.png
-    '''
+    """
     
     1/0  # this function seems to be obsolete
     
@@ -99,28 +99,28 @@ def plot_simulation(sim_data, H=[], fname=None):
 
 
 class Animation():
-    '''
+    """
     Provides animation capabilities.
-    
+
     Given a callable function that draws an image of the system state and smiulation data
     this class provides a method to created an animated representation of the system.
-    
-    
+
+
     Parameters
     ----------
-    
+
     drawfnc : callable
         Function that returns an image of the current system state according to :attr:`simdata`
-    
+
     simdata : numpy.ndarray
         Array that contains simulation data (time, system states, input states)
-    
+
     plotsys : list
         List of tuples with indices and labels of system variables that will be plotted along the picture
-    
+
     plotinputs : list
         List of tuples with indices and labels of input variables that will be plotted along the picture
-    '''
+    """
     
     def __init__(self, drawfnc, simdata, plotsys=[], plotinputs=[], rcParams=None):
         
@@ -178,9 +178,9 @@ class Animation():
         plt.rc('text', usetex=True)
     
     class Image():
-        '''
+        """
         This is just a container for the drawn system.
-        '''
+        """
         def __init__(self):
             self.patches = []
             self.lines = []
@@ -238,15 +238,15 @@ class Animation():
         self.axes[ax].set_ylabel(label, rotation='horizontal', horizontalalignment='right')
         
     def show(self, t=0.0, xlim=None, ylim=None, axes_callback=None, save_fname=None, show=True):
-        '''
+        """
         Plots one frame of the system animation.
-        
+
         Parameters
         ----------
-        
+
         t : float
             The time for which to plot the system
-        '''
+        """
         
         # determine index of sim_data values correponding to given time
         if t <= self.t[0]:
@@ -318,9 +318,9 @@ class Animation():
             plt.show()
     
     def animate(self):
-        '''
+        """
         Starts the animation of the system.
-        '''
+        """
         t = self.t
         xt = self.xt
         ut = self.ut
@@ -333,6 +333,9 @@ class Animation():
         
         # add so many frames that they fill the `pause`
         add_frames = int(fps * pause_time)
+
+        if len(ut.shape) == 1:
+            ut = ut.reshape(-1, 1)
         
         for i in xrange(add_frames):
             t = np.hstack((t[0],t,t[-1]))
@@ -404,9 +407,9 @@ class Animation():
     
     
     def save(self, fname, fps=None, dpi=200):
-        '''
+        """
         Saves the animation as a video file or animated gif.
-        '''
+        """
 
         if not fps:
             fps = self.nframes/(float(self.T))  # add pause_time here?
