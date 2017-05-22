@@ -182,7 +182,7 @@ class Solver:
 
                 b = DFx.T.dot(Fx)
                     
-                s = -scp.sparse.linalg.spsolve(A,b)
+                s = -scp.sparse.linalg.spsolve(A, b)
 
                 xs = x + np.array(s).flatten()
                 

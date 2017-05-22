@@ -290,8 +290,8 @@ class Trajectory(object):
         sol_bak = sol.copy()
         subs = dict()
 
-        # iterate over the dict {'x1': [cx1_..., ...], 'u1': [cu1_...]}
-        for k, v in sorted(self.indep_coeffs.items(), key=lambda (k, v): k):
+        # iterate over the OrderedDict {'x1': [cx1_..., ...], 'u1': [cu1_...]}
+        for k, v in self.indep_coeffs.items():
             i = len(v)
             subs[k] = sol[:i]
 
@@ -315,7 +315,7 @@ class Trajectory(object):
         i = 0
         j = 0
 
-        for k, v in sorted(self.indep_coeffs.items(), key=lambda (k, v): k):
+        for k, v in self.indep_coeffs.items():
             j += len(v)
             coeffs_sol[k] = sol_bak[i:j]
             i = j
@@ -330,7 +330,8 @@ class Trajectory(object):
         save['parameters'] = self._parameters
 
         # splines
-        save['splines'] = dict((var, spline.save()) for var, spline in self.splines.iteritems())
+        save['splines'] = OrderedDict((var, spline.save()) \
+                                      for var, spline in self.splines.iteritems())
 
         # sol
         save['coeffs_col'] = self.coeffs_sol

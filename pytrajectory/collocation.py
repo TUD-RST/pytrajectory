@@ -311,8 +311,8 @@ class CollocationSystem(object):
 
         self.all_free_parameters = []
     
-        # iterate over spline quantities
-        for k, v in sorted(self.trajectories.indep_coeffs.items(), key=lambda (k, v): k):
+        # iterate over spline quantities (OrderedDict)
+        for k, v in self.trajectories.indep_coeffs.items():
             # increase j by the number of indep coeffs on which it depends
             j += len(v)
             indic[k] = (i, j)
@@ -356,12 +356,12 @@ class CollocationSystem(object):
         inputs = self.sys.inputs
         
         # total number of independent coefficients
-        free_param = np.hstack(sorted(self.trajectories.indep_coeffs.values(), key=lambda arr: arr[0].name))
+        free_param = np.hstack(self.trajectories.indep_coeffs.values())
         n_dof = free_param.size
         
         # store internal information:
         self.dbgC = Container(cpts=cpts, indic=indic, dx_fnc=dx_fnc, x_fnc=x_fnc, u_fnc=u_fnc)
-        self.dbgC.free_param=free_param
+        self.dbgC.free_param = free_param
 
         lx = len(cpts) * self.sys.n_states
         lu = len(cpts) * self.sys.n_inputs
@@ -439,7 +439,7 @@ class CollocationSystem(object):
 
                 # iterate over the system quantities (x_i, u_j)
             
-                for k, v in sorted(self.trajectories.indep_coeffs.items(), key=lambda (k, v): k):
+                for k, v in self.trajectories.indep_coeffs.items():
                     logging.debug("Get new guess for spline {}".format(k))
 
                     if k in self._first_guess:
@@ -469,7 +469,7 @@ class CollocationSystem(object):
             
             # now we compute a new guess for every free coefficient of every new (finer) spline
             # by interpolating the corresponding old (coarser) spline
-            for k, v in sorted(self.trajectories.indep_coeffs.items(), key = lambda (k, v): k):
+            for k, v in self.trajectories.indep_coeffs.items():
                 # TODO: introduce a parameter `ku` (factor for increasing spline resolution for u)
                 # formerly its spline resolution was constant
                 # (from that period stems the following if-statement)
@@ -649,13 +649,14 @@ def _get_derivation_order(fnc):
         raise ValueError()
 
 def _build_sol_from_free_coeffs(splines):
-    '''
+    """
     Concatenates the values of the independent coeffs
     of all splines in given dict to build pseudo solution.
-    '''
+    """
 
     sol = np.empty(0)
-    for k, v in sorted(splines.items(), key = lambda (k, v): k):
+    assert isinstance(splines, OrderedDict)
+    for k, v in splines.items():
         assert not v._prov_flag
         sol = np.hstack([sol, v._indep_coeffs])
 

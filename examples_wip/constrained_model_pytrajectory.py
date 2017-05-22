@@ -136,6 +136,7 @@ if 0:
         plt.plot(tt, data[i], 'b', lw=3, label='sim')
         plt.grid(1)
 
+    plt.savefig("ivp.pdf")
     plt.show()
 # sys.exit()
 
@@ -143,7 +144,7 @@ S.sim_data = (tt, xx, uu)
 
 # Simulation is ready, now try to reproduce this solution via collocation
 
-refsol = aux.Container(tt=tt, xx=xx, uu=uu, n_raise_spline_parts=3)
+refsol = aux.Container(tt=tt, xx=xx, uu=uu, n_raise_spline_parts=0)
 
 
 S2 = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xx[0, :], xb=xx[-1, :], ua=uu[0, :],

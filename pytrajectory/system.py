@@ -326,6 +326,7 @@ class TransitionProblem(object):
         if self.refsol is not None:
             self.check_refsol_consistency()
             auxiliary.make_refsol_callable(self.refsol)
+
             for i in range(self.refsol.n_raise_spline_parts):
                 self.eqs.trajectories._raise_spline_parts()
 
@@ -379,8 +380,6 @@ class TransitionProblem(object):
         def q_finish_loop():
             res = self.reached_accuracy or self.nIt >= self._parameters['maxIt']
             return res
-
-        IPS()
 
         while not q_finish_loop():
             
