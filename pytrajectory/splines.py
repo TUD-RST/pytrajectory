@@ -43,7 +43,7 @@ class Spline(object):
         or the ones used in the project thesis
     """
 
-    def __init__(self, a=0.0, b=1.0, n=5, bv={},
+    def __init__(self, a=0.0, b=1.0, n=5, bv=None,
                  tag='', use_std_approach=False, **kwargs):
         # there are two different approaches implemented for evaluating
         # the splines which mainly differ in the node that is used in the 
@@ -59,6 +59,10 @@ class Spline(object):
         #
         # until this issue is resolved the user is enabled to choose between
         # the two approaches be altering the following attribute
+
+        if bv is None:
+            bv = {}
+
         self._use_std_approach = use_std_approach
         
         # interval boundaries
@@ -256,7 +260,8 @@ class Spline(object):
         """
         
         if np.size(points) > 1:
-            raise NotImplementedError()
+            msg = "This function does not yet support vectorization."
+            raise NotImplementedError(msg)
         t = points
         
         # determine the spline part to evaluate
@@ -358,10 +363,22 @@ class Spline(object):
         # now we have numerical values for the coefficients so we can set this to False
         self._prov_flag = False
     
-    def interpolate(self, fnc=None, m0=None, mn=None):
+    def interpolate(self, fnc=None, m0=None, mn=None, set_coeffs=False):
         """
         Determines the spline's coefficients such that it interpolates
         a given function.
+
+        Parameters
+        ----------
+
+        fnc : callable
+
+        m0 : float
+
+        mn : float
+
+        set_coeffs: bool
+            determine whether the calculated coefficients should be set to self or not
         """
         #1/0 # !! diese Funktion nutzen
 
@@ -457,7 +474,8 @@ class Spline(object):
             free_coeffs = np.array([coeffs[i] for i in free_coeff_indices])
         
         # set solution for the free coefficients
-        #self.set_coefficients(free_coeffs=free_coeffs)
+        if set_coeffs:
+            self.set_coefficients(free_coeffs=free_coeffs)
 
         return free_coeffs
 
@@ -470,7 +488,8 @@ class Spline(object):
 
         assert len(value_tuple) == 2
         tt, xx = value_tuple
-        assert tt.shape == xx.shape
+
+        assert len(tt) == len(xx)
 
         return interp1d(tt, xx)
 
@@ -923,6 +942,7 @@ def _switch_coeffs(S, all_coeffs=False, dep_arrays=None):
         switched_coeffs = new_M_inv.dot(np.hstack(tmp))
 
     return switched_coeffs
+
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt

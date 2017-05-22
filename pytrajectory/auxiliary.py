@@ -3,6 +3,7 @@ import numpy as np
 import sympy as sp
 from sympy.utilities.lambdify import _get_namespace
 import time
+from pytrajectory.splines import Spline
 
 from ipHelp import IPS
 
@@ -685,3 +686,19 @@ if __name__ == '__main__':
     f_num_check = np.array([[-3.0],
                             [-np.sin(3.0) + np.cos(1.0)],
                             [np.exp(-np.sin(3.0) + np.cos(1.0))]])
+
+def new_spline(Tend, n_parts, targetvalues, tag,):
+    """
+    :param Tend:
+    :param n_parts:
+    :param targetvalues:    pair of arrays or callable
+    :param tag:
+    :return:                Spline object
+    """
+
+    s = Spline(0, Tend, n=n_parts, bv=None, tag=tag, nodes_type="equidistant",
+                 use_std_approach="use_std_approach")
+
+    s.make_steady()
+    s.interpolate(targetvalues, set_coeffs=True)
+    return s

@@ -69,6 +69,8 @@ class TransitionProblem(object):
         tol           1e-5            Tolerance for the solver of the equation system
         dt_sim        1e-2            Sample time for integration (initial value problem)
         reltol        2e-5            Rel. tolerance (for LM A. to be confident with local minimum)
+        accIt         5               How often try to escape local minimum without increasing
+                                      spline parts
         use_chains    True            Whether or not to use integrator chains
         sol_steps     100             Maximum number of iteration steps for the eqs solver
         first_guess   None            to initiate free parameters (might be useful: {'seed': value})
@@ -438,8 +440,7 @@ class TransitionProblem(object):
             data = list(self.sim_data_xx.T) + list(self.sim_data_uu.T)
             for i, (key, s) in enumerate(C.splines.iteritems()):
 
-                coeffs = s.interpolate((self.sim_data_tt, data[i]))
-                s.set_coefficients(coeffs)
+                coeffs = s.interpolate((self.sim_data_tt, data[i]), set_coeffs=True)
                 new_spline_values.append(auxiliary.vector_eval(s.f, tt))
 
                 s_old = self.eqs.trajectories.splines[key]
@@ -471,7 +472,7 @@ class TransitionProblem(object):
             # drift part of the vf
             ff = self.eqs._ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0).T[:, :-1]
 
-            if 1:
+            if 0:
                 plt.figure(figsize=fs)
                 for i in xrange(len(data)):
                     plt.subplot(rows, 2, i+1)
@@ -651,12 +652,12 @@ class TransitionProblem(object):
         self.reached_accuracy = reached_accuracy
     
     def plot(self):
-        '''
+        """
         Plot the calculated trajectories and show interval error functions.
 
         This method calculates the error functions and then calls
         the :py:func:`visualisation.plotsim` function.
-        '''
+        """
 
         try:
             import matplotlib
@@ -752,7 +753,16 @@ class DynamicalSystem(object):
         The initial and final conditions for the input variables
     """
 
-    def __init__(self, f_sym, a=0., b=1., xa=[], xb=[], ua=[], ub=[]):
+    def __init__(self, f_sym, a=0., b=1., xa=None, xb=None, ua=None, ub=None):
+
+        if xa is None:
+            xa = []
+        if xb is None:
+            xb = []
+        if ua is None:
+            ua = []
+        if ub is None:
+            ub = []
         self.f_sym = f_sym
         self.a = a
         self.b = b

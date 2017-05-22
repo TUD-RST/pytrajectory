@@ -26,6 +26,14 @@ class Simulator(object):
     """
 
     def __init__(self, ff, T, start, u, dt=0.01):
+        """
+
+        :param ff:      vectorfield function
+        :param T:       end Time
+        :param start:   initial state
+        :param u:       input function u(t)
+        :param dt:
+        """
         self.ff = ff
         self.T = T
         self.u = u

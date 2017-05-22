@@ -14,6 +14,7 @@ from simulation import Simulator
 from visualisation import Animation
 from log import logging
 from auxiliary import penalty_expression
+import auxiliary as aux
 
 # current version
 __version__ = '1.3.1'
