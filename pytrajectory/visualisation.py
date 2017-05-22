@@ -134,6 +134,9 @@ class Animation():
         self.t = simdata[0]
         self.xt = simdata[1]
         self.ut = simdata[2]
+
+        if np.ndim(self.ut) == 1:
+            self.ut = self.ut.reshape(-1, 1)  # one column
         
         self.plotsys = plotsys
         self.plotinputs = plotinputs
@@ -154,24 +157,24 @@ class Animation():
             idx, label = idxlabel
             
             try:
-                ylim = (min(self.xt[:,idx]), max(self.xt[:,idx]))
+                ylim = (min(self.xt[:, idx]), max(self.xt[:, idx]))
             except:
                 ylim = (min(self.xt), max(self.xt))
             
-            self.set_limits(ax='ax_x%d'%i, xlim=xlim, ylim=ylim)
-            self.set_label(ax='ax_x%d'%i, label=label)
+            self.set_limits(ax='ax_x%d' % i, xlim=xlim, ylim=ylim)
+            self.set_label(ax='ax_x%d' % i, label=label)
             
         # set axis limits and labels of input curves
         for i, idxlabel in enumerate(self.plotinputs):
             idx, label = idxlabel
             
             try:
-                ylim = (min(self.ut[:,idx]), max(self.ut[:,idx]))
+                ylim = (min(self.ut[:, idx]), max(self.ut[:, idx]))
             except:
                 ylim = (min(self.ut), max(self.ut))
             
-            self.set_limits(ax='ax_u%d'%i, xlim=xlim, ylim=ylim)
-            self.set_label(ax='ax_u%d'%i, label=label)
+            self.set_limits(ax='ax_u%d' % i, xlim=xlim, ylim=ylim)
+            self.set_label(ax='ax_u%d' % i, label=label)
         
         # enable LaTeX text rendering --> slow
         plt.rc('text', usetex=True)
@@ -247,7 +250,7 @@ class Animation():
             The time for which to plot the system
         """
         
-        # determine index of sim_data values correponding to given time
+        # determine index of sim_data values corresponding to given time
         if t <= self.t[0]:
             i = 0
         elif t >= self.t[-1]:
@@ -273,7 +276,7 @@ class Animation():
             image.reset()
         
         # call the provided drawfnc
-        image = self.draw(self.xt[i,:], image=image)
+        image = self.draw(self.xt[i, :], image=image)
         
         for p in image.patches:
             ax_img.add_patch(p)
@@ -292,16 +295,19 @@ class Animation():
             try:
                 curve.set_data(self.t[:i], self.xt[:i, self.plotsys[k][0]])
             except:
+                assert False  # TODO: this should not happen (unclear index handling)
                 curve.set_data(self.t[:i], self.xt[:i])
             self.axes['ax_x%d'%k].add_line(curve)
         
         # update input curves
         for k, curve in enumerate(self.inputcurves):
             try:
-                curve.set_data(self.t[:i], self.ut[:i,self.plotinputs[k][0]])
-            except:
+                curve.set_data(self.t[:i], self.ut[:i, self.plotinputs[k][0]])
+            except Exception as e:
+                assert False  # TODO: this should not happen (unclear index handling)
+                # TODO: better exception handling
                 curve.set_data(self.t[:i], self.ut[:i])
-            self.axes['ax_u%d'%k].add_line(curve)
+            self.axes['ax_u%d' % k].add_line(curve)
         
         
         if axes_callback:

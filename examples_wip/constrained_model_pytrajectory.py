@@ -79,6 +79,7 @@ def model_rhs(state, u, evalconstr=True):
 
 Ta = 0.0
 Tb = 6.5
+Tb = 1.6
 Tb = 0.8
 
 ua = 0.0
@@ -107,7 +108,8 @@ S = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb, ua=ua, ub=ub, use_cha
 
 ff = S.eqs.sys.f_num_simulation
 
-u_values = np.r_[0, 1, 0, -1, 0]*10
+# u_values = np.r_[0, 10, 0, -10, 0,  -10, 0, 10, 10, 0,]
+u_values = np.r_[0, 10, 0, -10, 0]
 tt1 = np.linspace(Ta, Tb, len(u_values))
 
 uspline = aux.new_spline(Tb, 10, (tt1, u_values), 'u1')
@@ -121,7 +123,7 @@ sim = Simulator(ff, Tb, xa, uspline.f)
 tt, xx, uu = sim.simulate()
 uu = np.atleast_2d(uu)
 
-data = list(xx.T) + [uu.T]
+data = list(xx.T) + list(uu.T)
 
 mm = 1./25.4  # mm to inch
 scale = 8
@@ -136,29 +138,27 @@ if 0:
         plt.plot(tt, data[i], 'b', lw=3, label='sim')
         plt.grid(1)
 
-    plt.savefig("ivp.pdf")
+    # plt.savefig("ivp.pdf")
     plt.show()
-# sys.exit()
+    # sys.exit()
 
-S.sim_data = (tt, xx, uu)
+    S.sim_data = (tt, xx, uu)
 
-# Simulation is ready, now try to reproduce this solution via collocation
+else:
+    # Simulation is ready, now try to reproduce this solution via collocation
 
-refsol = aux.Container(tt=tt, xx=xx, uu=uu, n_raise_spline_parts=0)
+    refsol = aux.Container(tt=tt, xx=xx, uu=uu, n_raise_spline_parts=0)
 
+    xb = xx[-1, :]
 
-S2 = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xx[0, :], xb=xx[-1, :], ua=uu[0, :],
-                       ub=uu[-1, :], use_chains=False, refsol=refsol, ierr=None, maxIt=3,
-                       eps=1e-1, sol_steps=100, reltol=1e-3, accIt=1)
+    S2 = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xx[0, :], xb=xb, ua=uu[0, :],
+                           ub=uu[-1, :], use_chains=False, refsol=refsol, ierr=None, maxIt=3,
+                           eps=1e-1, sol_steps=100, reltol=1e-3, accIt=1)
 
-print S
-print S2
+    S2.solve(tcpport=None)
 
-S2.solve(tcpport=None)
-
-
-# for animation
-S = S2
+    # for animation
+    S = S2
 
 
 if 0:
@@ -248,13 +248,16 @@ def draw(xt, image):
     return image
 
 # create Animation object
-A = Animation(drawfnc=draw, simdata=S.sim_data, plotsys=[(3,'$x$'),(7,'$\\dot{x}$')], plotinputs=[(0,'$u$')])
+A = Animation(drawfnc=draw, simdata=S.sim_data,
+              plotsys=[(3, '$x$'), (7, '$\\dot{x}$')], plotinputs=[(0, '$u$')])
 xmin = 0
 xmax = 0
 A.set_limits(xlim=(xmin - 1.5, xmax + 1.5), ylim=(-2.0, 2.0))
 
 # if 'plot' in sys.argv:
-A.show(t=S.b)
+
+if 1:
+    A.show(t=S.b)
 
 if 0:
     A.animate()

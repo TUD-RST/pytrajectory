@@ -726,11 +726,17 @@ def copy_splines(splinedict):
         S.masterobject = v.masterobject
         S._dep_array = v._dep_array
         S._dep_array_abs = v._dep_array_abs
-        S._steady_flag = v._steady_flag
+        # S._steady_flag = v._steady_flag
+        if v._steady_flag:
+            S.make_steady()
+        S._coeffs = v._coeffs
+        S.set_coefficients(coeffs=v._coeffs)
+        S._coeffs_sym = v._coeffs_sym
         S._prov_flag = v._prov_flag
 
         res[k] = S
     return res
+
 
 def make_refsol_callable(refsol):
     """
@@ -742,7 +748,10 @@ def make_refsol_callable(refsol):
     """
 
     x_list = list(refsol.xx.T)
-    u_list = list(np.atleast_2d(refsol.uu))
+
+    nt = refsol.xx.shape[0]
+    assert nt == refsol.uu.shape[0]
+    u_list = list(refsol.uu.reshape(nt, -1).T)
 
     refsol.xu_list = x_list + u_list
 

@@ -42,6 +42,7 @@ class Simulator(object):
         # this is where the solutions go
         self.xt = []
         self.ut = []
+        self.nu = len(np.atleast_1d(self.u(0)))
 
         # time steps
         self.t = []
@@ -94,4 +95,6 @@ class Simulator(object):
         t = 0
         while t <= self.T:
             t, y = self.calcstep()
+
+        self.ut = np.array(self.ut).reshape(-1, self.nu)
         return [np.array(self.t), np.array(self.xt), np.array(self.ut)]

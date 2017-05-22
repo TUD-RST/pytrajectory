@@ -292,7 +292,8 @@ class TransitionProblem(object):
         assert tt[-1] == self.b
 
         assert np.allclose(xx[0, :], self.dyn_sys.xa)
-        assert np.allclose(xx[-1, :], self.dyn_sys.xb)
+        if not np.allclose(xx[-1, :], self.dyn_sys.xb):
+            logging.warn("boundary values and reference solution not consistent")
 
     def solve(self, tcpport=None):
         """

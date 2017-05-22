@@ -307,13 +307,10 @@ class Spline(object):
             Array with coefficients of the polynomial spline parts.
         """
 
-        # decide what to do
-        if coeffs is None  and free_coeffs is None:
+        if coeffs is None and free_coeffs is None:
             msg = "Probably unintended call to set_coefficients without meaningfull arguments."
             raise ValueError(msg)
-            # nothing to do
-            pass
-        
+
         elif coeffs is not None and free_coeffs is None:
             # set all the coefficients for the spline's polynomial parts
             # 

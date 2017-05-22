@@ -6,6 +6,7 @@ from collections import OrderedDict
 from splines import Spline, differentiate
 from log import logging
 import auxiliary
+import sympy as sp
 
 from ipHelp import IPS
 
@@ -160,6 +161,10 @@ class Trajectory(object):
         # store the old splines to calculate the guess later
         # self._old_splines = copy.deepcopy(self.splines)
         self._old_splines = auxiliary.copy_splines(self.splines)
+        if self._old_splines is not None and isinstance(self._old_splines['x1'].f(0), sp.Basic):
+            msg = "Unexpectedly got an provisional spline for saving."
+            # coeffs not set properly
+            raise ValueError(msg)
 
         # dbg:
         if self.splines is not None:
