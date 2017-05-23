@@ -3,13 +3,17 @@ import numpy as np
 import sympy as sp
 from sympy.utilities.lambdify import _get_namespace
 import time
-from pytrajectory.splines import Spline
 from scipy.interpolate import interp1d
+import scipy.integrate
+from scipy.linalg import expm
 from collections import OrderedDict
+
+from pytrajectory.splines import Spline
+from pytrajectory.simulation import Simulator
+from log import logging, Timer
 
 from ipHelp import IPS
 
-from log import logging, Timer
 
 
 class NanError(ValueError):
@@ -710,8 +714,93 @@ def new_spline(Tend, n_parts, targetvalues, tag,):
                  use_std_approach="use_std_approach")
 
     s.make_steady()
+    assert np.ndim(targetvalues[0]) == 1
+    assert np.ndim(targetvalues[1]) == 1
     s.interpolate(targetvalues, set_coeffs=True)
     return s
+
+def siumlate_with_input(tp, inputseq, n_parts ):
+    """
+
+    :param tp:          TransitionProblem
+    :param inputseq:    Sequence of input values (will be spline-interpolated)
+    :param n_parts:     number of spline parts for the input
+    :return:
+    """
+
+    tt = np.linspace(tp.a, tp.b, len(inputseq))
+    # currently only for single input systems
+    su1 = new_spline(tp.b, n_parts, (tt, inputseq), 'u1')
+    sim = Simulator(tp.dyn_sys.f_num_simulation, tp.b, tp.dyn_sys.xa, su1.f)
+    tt, xx, uu = sim.simulate()
+
+    return tt, xx, uu
+
+
+def calc_gramian(A, B, T, info=False):
+    """
+    calculate the gramian matrix corresponding to A, B, by numerically solving an ode
+
+    :param A:
+    :param B:
+    :param T:
+    :return:
+    """
+
+    # this is inspired by
+    # https://github.com/markwmuller/controlpy/blob/master/controlpy/analysis.py
+
+    # the ode is very simple because the rhs does not depend on the state x (only on t)
+    def rhs(x, t):
+        factor1 = np.dot(expm(A*(T-t)), B)
+        dx = np.dot(factor1, factor1.T).reshape(-1)
+        return dx
+
+    x0 = (A*0).reshape(-1)
+    G = scipy.integrate.odeint(rhs, x0, [0, T])[-1, :].reshape(A.shape)
+
+    if info:
+        return rhs
+
+    return G
+
+
+def ddot(*args):
+    return reduce(np.dot, args, 1)
+
+
+def calc_linear_bvp_solution(A, B, T, xa, xb, xref=None):
+    """
+    calculate the textbook solution to the linear bvp
+
+    :param A:
+    :param B:
+    :param T:
+    :param xa:
+    :param xb:
+    :param xref:   reference for linearization
+    :return:
+    """
+
+    if xref is None:
+        xref = np.array(xa).reshape(-1, 1)*0
+    else:
+        xref = xref.reshape(-1, 1)
+
+    # -> column vectors
+    xa = np.array(xa).reshape(-1, 1) - xref
+    xb = np.array(xb).reshape(-1, 1) - xref
+
+    G = calc_gramian(A, B, T)
+    Ginv = np.linalg.inv(G)
+    def input_fnc(t):
+        e = expm(A*(T-t))
+        term2 = ddot(expm(A*T), xa)
+        res = ddot(B.T, e.T, Ginv, (xb-term2))
+        assert res.shape == (1, 1)
+        return res[0]
+
+    return input_fnc
 
 
 def copy_splines(splinedict):

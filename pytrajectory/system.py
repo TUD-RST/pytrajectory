@@ -949,3 +949,36 @@ class DynamicalSystem(object):
             boundary_values[u] = (ua[j], ub[j])
 
         return boundary_values
+
+    def get_linearization(self, xref, uref=None):
+        """
+        return A, B matrices of the Jacobian Linearization
+
+        :param xref:
+        :param uref:
+        :return:
+        """
+
+        if uref is None:
+            uref = np.zeros(self.n_inputs)
+
+        xx = sp.symbols(self.states)
+        uu = sp.symbols(self.inputs)
+
+        n = self.n_states
+        assert len(xref) == n
+        assert len(uref) == self.n_inputs
+
+        f_sym_martix = sp.Matrix(self.f_sym(xx, uu))[:n, :]
+        Dfdx = f_sym_martix.jacobian(self.states)
+        Dfdu = f_sym_martix.jacobian(self.inputs)
+
+        replacements = zip(self.states, xref) + zip(self.inputs, uref)
+
+        # for some strange reason np.array has to be called twice to get
+        # float arrays instead of object-arrays
+        npa = np.array
+        A = npa( npa(Dfdx.subs(replacements)), dtype=np.float)
+        B = npa( npa(Dfdu.subs(replacements)), dtype=np.float)
+
+        return A, B

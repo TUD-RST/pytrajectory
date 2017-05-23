@@ -82,11 +82,14 @@ Tb = 6.5
 Tb = 1.6
 Tb = 0.8
 
+Tb *= 2
+
 ua = 0.0
 ub = 0.0
 
-xa = [pi, pi, pi, 0.0, 0.0, 0.0, 0.0, 0.0]
-xb = [1.5*pi, 0.8*pi, 0.6*pi, 1.0, 0.0, 0.0, 0.0, 0.0]
+xa = np.array([pi, pi, pi, 0.0, 0.0, 0.0, 0.0, 0.0])
+xb = np.array([1.5*pi, 0.8*pi, 0.6*pi, 1.0, 0.0, 0.0, 0.0, 0.0])
+xb = np.array([pi, pi, pi, 1.0, 0.0, 0.0, 0.0, 0.0])
 
 # S = ControlSystem(model_rhs, Ta, Tb, xa, xb, ua, ub)
 # state, u = S.solve()
@@ -108,34 +111,107 @@ S = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb, ua=ua, ub=ub, use_cha
 
 ff = S.eqs.sys.f_num_simulation
 
+A, B = S.dyn_sys.get_linearization(xa)
+
+
+x_ref = xa.reshape(-1)
+
+
+def model_linear(state, u):
+
+    state = np.array(state)  # - x_ref
+    res = np.dot(A, state) + np.dot(B, u)
+
+    return res
+
+
+u_func = aux.calc_linear_bvp_solution(A, B, Tb, xa, xb, xref=x_ref)
+tt1 = np.linspace(Ta, Tb, 100)
+
+
+u_scale = 1
+uul = aux.vector_eval(u_func, tt1).squeeze() * u_scale
+
 # u_values = np.r_[0, 10, 0, -10, 0,  -10, 0, 10, 10, 0,]
 u_values = np.r_[0, 10, 0, -10, 0]
-tt1 = np.linspace(Ta, Tb, len(u_values))
+u_values2 = np.r_[0, 10, 0, -20, 0]
+u_values0 = np.r_[0, 0, 0, 0, 0]
 
-uspline = aux.new_spline(Tb, 10, (tt1, u_values), 'u1')
+Slin = TransitionProblem(model_linear, a=Ta, b=Tb, xa=xa-x_ref, xb=xb-x_ref, ua=ua, ub=ub, use_chains=False,
+                      first_guess=first_guess, ierr=None, maxIt=3, eps=1e-1, sol_steps=100,
+                      reltol=1e-3, accIt=1)
 
-tt2 = np.linspace(Ta, Tb, 1000)
-uu = aux.vector_eval(uspline.f, tt2)
-#plt.plot(tt2, uu)
+# Slinrev = TransitionProblem(model_linear, a=Ta, b=Tb, xa=xb, xb=xa, ua=ua, ub=ub, use_chains=False)
 
 
-sim = Simulator(ff, Tb, xa, uspline.f)
-tt, xx, uu = sim.simulate()
-uu = np.atleast_2d(uu)
+# tt, xx2, uu2 = aux.siumlate_with_input(S, u_values2, n_parts=10)
+# tt, xx, uu = aux.siumlate_with_input(S, u_values, n_parts=10)
+
+## tt, xx, uu = aux.siumlate_with_input(Slin, uul, n_parts=10)
+if 0:
+    tt, xx, uu = aux.siumlate_with_input(Slin, uul, n_parts=50)
+    xx = xx + x_ref
+
+tt, xx, uu = aux.siumlate_with_input(S, uul, n_parts=50)
+
+
+
+xx2 = []
+tmp2 = 0
+dt = tt[1] - tt[0]
+
+#
+# A = np.array([[0, 1], [0, 0]])
+# B = np.array([[0], [1]])
+
+def rhs_z(x, t, t_end):
+    res = np.dot(aux.expm(A*(t_end-t)), B)*u_func(t) * u_scale
+    # res = np.dot(aux.expm(A*(t_end-t)), B)*1
+    # print t
+    return res.reshape(-1)
+
+X0 = np.zeros(A.shape[0])
+
+def z_term(t_end):
+    z_ode = aux.scipy.integrate.odeint(rhs_z, X0, [0, t_end], args=(t_end, ))
+    return z_ode[-1, :]
+
+# x_start_lin = xb - xa
+x_start_lin = xa - x_ref
+for t in tt:
+    tmp = np.dot(aux.expm(A*t), x_start_lin)
+    # tmp2 += np.dot(aux.expm(A*(Tb-t)), B)*u_func(t)*dt
+    xx2.append(tmp + z_term(t) + x_ref)
+xx2 = np.array(xx2)
+
+
+# 3rd variant:
+
+import scipy.signal as sg
+
+system = (A, B, np.eye(A.shape[0]), np.zeros((A.shape[0], 1)))
+_, _, xx3 = sg.lsim(system, uul, tt1)
+xx3 += x_ref
 
 data = list(xx.T) + list(uu.T)
+data2 = list(xx2.T) + list(uu.T)
+data3 = list(xx3.T) + [uul]
 
 mm = 1./25.4  # mm to inch
 scale = 8
 fs = [75*mm*scale, 35*mm*scale]
 rows = np.round((len(data) + 0)/2.0 + .25)  # round up
+IPS()
 
-if 0:
+
+if 1:
     plt.figure(figsize=fs)
 
     for i in xrange(len(data)):
         plt.subplot(rows, 2, i+1)
         plt.plot(tt, data[i], 'b', lw=3, label='sim')
+        plt.plot(tt, data2[i], 'r', lw=3, label='sim')
+        plt.plot(tt1, data3[i], 'g', lw=1, label='sim')
         plt.grid(1)
 
     # plt.savefig("ivp.pdf")
@@ -149,9 +225,9 @@ else:
 
     refsol = aux.Container(tt=tt, xx=xx, uu=uu, n_raise_spline_parts=0)
 
-    xb = xx[-1, :]
+    xb = xx2[-1, :]*1.0
 
-    S2 = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xx[0, :], xb=xb, ua=uu[0, :],
+    S2 = TransitionProblem(model_linear, a=Ta, b=Tb, xa=xx[0, :], xb=xb, ua=uu[0, :],
                            ub=uu[-1, :], use_chains=False, refsol=refsol, ierr=None, maxIt=3,
                            eps=1e-1, sol_steps=100, reltol=1e-3, accIt=1)
 
