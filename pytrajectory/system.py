@@ -18,8 +18,6 @@ import interfaceserver
 import matplotlib.pyplot as plt
 
 
-
-
 # DEBUGGING
 from ipHelp import IPS
 
@@ -291,9 +289,10 @@ class TransitionProblem(object):
         assert tt[0] == self.a
         assert tt[-1] == self.b
 
-        assert np.allclose(xx[0, :], self.dyn_sys.xa)
+        if not np.allclose(xx[0, :], self.dyn_sys.xa):
+            logging.warn("boundary values and reference solution not consistent at Ta")
         if not np.allclose(xx[-1, :], self.dyn_sys.xb):
-            logging.warn("boundary values and reference solution not consistent")
+            logging.warn("boundary values and reference solution not consistent at Tb")
 
     def solve(self, tcpport=None):
         """
@@ -324,6 +323,9 @@ class TransitionProblem(object):
             assert isinstance(tcpport, int)
             interfaceserver.listen_for_connections(tcpport)
 
+
+        # refsol visualization
+
         if self.refsol is not None:
             self.check_refsol_consistency()
             auxiliary.make_refsol_callable(self.refsol)
@@ -331,7 +333,7 @@ class TransitionProblem(object):
             for i in range(self.refsol.n_raise_spline_parts):
                 self.eqs.trajectories._raise_spline_parts()
 
-            if 1:
+            if 0:
                 # dbg visualization
 
                 C = self.eqs.trajectories.init_splines(export=True)
@@ -544,7 +546,7 @@ class TransitionProblem(object):
             # drift part of the vf
             ff = self.eqs._ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0).T[:, :-1]
 
-            if 0:
+            if 1:
                 plt.figure(figsize=fs)
                 for i in xrange(len(data)):
                     plt.subplot(rows, 2, i+1)
@@ -585,10 +587,13 @@ class TransitionProblem(object):
                 logging.debug('Continue minimization after external interrupt')
                 continue
 
-            if slvr.cond_num_steps and slvr.solve_count < self._parameters['accIt']:
-                msg = 'Continue minimization (not yet reached tolerance nor limit of attempts)'
-                logging.debug(msg)
-                continue
+            if slvr.cond_num_steps:
+                if slvr.solve_count < self._parameters['accIt']:
+                    msg = 'Continue minimization (not yet reached tolerance nor limit of attempts)'
+                    logging.debug(msg)
+                    continue
+                else:
+                    break
 
             if slvr.cond_rel_tol and slvr.solve_count < self._parameters['accIt']:
                 # we are in a local minimum
@@ -609,7 +614,8 @@ class TransitionProblem(object):
             if slvr.cond_abs_tol or slvr.cond_rel_tol:
                 break
             else:
-                raise ValueError("unexpected state")
+                # IPS()
+                logging.warn("unexpected state in mainloop of outer iteration -> break loop")
 
             #
             # # any of the following  conditions ends the loop
@@ -847,7 +853,16 @@ class DynamicalSystem(object):
         # (will be used as keys in various dictionaries)
         self.states = tuple(['x{}'.format(i+1) for i in xrange(self.n_states)])
         self.inputs = tuple(['u{}'.format(j+1) for j in xrange(self.n_inputs)])
-        
+
+        self.xxs = sp.symbols(self.states)
+        self.uus = sp.symbols(self.inputs)
+
+        # with (penalty-) constraints
+        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus))
+
+        # without (penalty-) constraints
+        self.f_sym_matrix = self.f_sym_full_matrix[:self.n_states, :]
+
         # init dictionary for boundary values
         self.boundary_values = self._get_boundary_dict_from_lists(xa, xb, ua, ub)
         self.xa = xa
@@ -867,6 +882,22 @@ class DynamicalSystem(object):
         else:
             f_sym.has_constraint_penalties = False
             self.n_pconstraints = 0
+
+        # create vectorfields f and g (symbolically and as numerical function)
+
+        ff = self.f_sym_matrix.subs(zip(self.uus, [0]*self.n_inputs))
+        gg = self.f_sym_matrix.jacobian(self.uus)
+        if gg.atoms(sp.Symbol).intersection(self.uus):
+            logging.warn("System is not input affine. -> VF g has no meaning.")
+
+        # vf_f and vf_g are not really neccessary, just for scientific playing
+        self.vf_f = auxiliary.sym2num_vectorfield(f_sym=ff, x_sym=self.states,
+                                                   u_sym=self.inputs, vectorized=False,
+                                                   cse=False, evalconstr=None)
+
+        self.vf_g = auxiliary.sym2num_vectorfield(f_sym=gg, x_sym=self.states,
+                                                   u_sym=self.inputs, vectorized=False,
+                                                   cse=False, evalconstr=None)
 
         # create a numeric counterpart for the vector field
         # for faster evaluation

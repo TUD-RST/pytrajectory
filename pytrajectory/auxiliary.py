@@ -3,7 +3,7 @@ import numpy as np
 import sympy as sp
 from sympy.utilities.lambdify import _get_namespace
 import time
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, UnivariateSpline
 import scipy.integrate
 from scipy.linalg import expm
 from collections import OrderedDict
@@ -54,7 +54,7 @@ class IntegChain(object):
     lower : str
         Lower end of the integrator chain
     """
-    
+
     def __init__(self, lst):
         # check if elements are sympy.Symbol's or already strings
         elements = []
@@ -66,31 +66,31 @@ class IntegChain(object):
             else:
                 raise TypeError("Integrator chain elements should either be \
                                  sympy.Symbol's or string objects!")
-                                 
+
         self._elements = tuple(elements)
-    
+
     def __len__(self):
         return len(self._elements)
-    
+
     def __getitem__(self, key):
         return self._elements[key]
-    
+
     def __contains__(self, item):
         return (item in self._elements)
-    
+
     def __str__(self):
         s = ''
         for elem in self._elements:#[::-1]:
             s += ' -> ' + elem
         return s[4:]
-    
+
     @property
     def elements(self):
         '''
         Return an ordered list of the integrator chain's elements.
         '''
         return self._elements
-    
+
     @property
     def upper(self):
         '''
@@ -98,7 +98,7 @@ class IntegChain(object):
         of which all others are derivatives of.
         '''
         return self._elements[0]
-    
+
     @property
     def lower(self):
         '''
@@ -190,11 +190,11 @@ def find_integrator_chains(dyn_sys):
         ic = IntegChain(lst)
         chains.append(ic)
         logging.debug("--> found: " + str(ic))
-    
+
     # now we determine the equations that have to be solved by collocation
     # (--> lower ends of integrator chains)
     eqind = []
-    
+
     if chains:
         # iterate over all integrator chains
         for ic in chains:
@@ -204,7 +204,7 @@ def find_integrator_chains(dyn_sys):
                 idx = dyn_sys.states.index(ic.lower)
                 eqind.append(idx)
         eqind.sort()
-        
+
         # if every integrator chain ended with input variable
         if not eqind:
             eqind = range(dyn_sys.n_states)
@@ -212,7 +212,7 @@ def find_integrator_chains(dyn_sys):
         # if integrator chains should not be used
         # then every equation has to be solved by collocation
         eqind = range(dyn_sys.n_states)
-    
+
     return chains, eqind
 
 
@@ -274,7 +274,7 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False, evalco
             msg = "expected a callable for usage with the flag evalconstr"
             raise ValueError(msg)
         F_sym = f_sym
-    
+
     sym_type = type(F_sym)
 
     # first we determine the dimension of the symbolic expression
@@ -300,13 +300,13 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False, evalco
         F_sym = sp.Matrix(F_sym)
 
         # if there are elements which are constant numbers we have to use some
-        # trick to achieve the vectorization (as far as the developers know ;-) ) 
+        # trick to achieve the vectorization (as far as the developers know ;-) )
         for i in xrange(F_sym.shape[0]):
             for j in xrange(F_sym.shape[1]):
                 if F_sym[i,j].is_Number:
-                    # we add an expression which evaluates to zero, but enables us 
+                    # we add an expression which evaluates to zero, but enables us
                     # to put an array into the matrix where there is now a single number
-                    # 
+                    #
                     # we just take an arbitrary input, multiply it with 0 and add it
                     # to the current element (constant)
                     zero_expr = sp.Mul(0.0, sp.Symbol(x_sym[0]), evaluate=False)
@@ -334,14 +334,14 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False, evalco
     else:
         _f_num = sp.lambdify(x_sym + u_sym, F_sym,
                              modules=[{'ImmutableMatrix': np.array}, 'numpy'])
-    
+
     # create a wrapper as the actual function due to the behaviour
     # of lambdify()
     if vectorized:
         stack = np.vstack
     else:
         stack = np.hstack
-    
+
     if sym_dim == 1:
         def f_num(x, u):
             xu = stack((x, u))
@@ -350,7 +350,7 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False, evalco
         def f_num(x, u):
             xu = stack((x, u))
             return _f_num(*xu)
-        
+
     return f_num
 
 
@@ -397,19 +397,19 @@ def make_cse_eval_function(input_args, replacement_pairs, ret_filter=None, names
 def eval_replacements_fnc(args):
     {unpack_args} = args
     {eval_pairs}
-    
+
     return {replacements}
     '''
 
     # first we create the string needed to unpack the input arguments
     unpack_args_str = ','.join(str(a) for a in input_args)
-    
+
     # then we create the string that successively evaluates the replacement pairs
     eval_pairs_str = ''
     for pair in replacement_pairs:
         eval_pairs_str += '{symbol} = {expression}; '.format(symbol=str(pair[0]),
                                                            expression=str(pair[1]))
-    
+
     # next we create the string that defines which replacements to return
     if ret_filter is not None:
         replacements_str = ','.join(str(r) for r in ret_filter)
@@ -439,12 +439,12 @@ def cse_lambdify(args, expr, **kwargs):
     """
     Wrapper for sympy.lambdify which makes use of common subexpressions.
     """
-    
+
     # Note:
     # This was expected to speed up the evaluation of the created functions.
     # However performance gain is only at ca. 5%
-    
-    
+
+
     # check input expression
     if type(expr) == str:
         raise TypeError('Not implemented for string input expression!')
@@ -454,14 +454,14 @@ def cse_lambdify(args, expr, **kwargs):
         check_expression(expr)
     except TypeError as err:
         raise NotImplementedError("Only sympy expressions are allowed, yet")
-    
+
     # get sequence of symbols from input arguments
     if type(args) == str:
         args = sp.symbols(args, seq=True)
     elif hasattr(args, '__iter__'):
         # this may kill assumptions
         args = [sp.Symbol(str(a)) for a in args]
-        
+
     if not hasattr(args, '__iter__'):
         args = (args,)
 
@@ -474,7 +474,7 @@ def cse_lambdify(args, expr, **kwargs):
     if not cse_pairs:
         # if not, use standard lambdify
         return sp.lambdify(args, expr, **kwargs)
-    
+
     # now we are looking for those arguments that are part of the reduced expression(s)
     shortcuts = zip(*cse_pairs)[0]
     atoms = sp.Set(red_exprs).atoms()
@@ -489,13 +489,13 @@ def cse_lambdify(args, expr, **kwargs):
         kwargs['dummify'] = True
 
     reduced_exprs_fnc = sp.lambdify(args=cse_args, expr=cse_expr, **kwargs)
-    
+
     # get the function that evaluates the replacement pairs
     modules = kwargs.get('modules')
 
     if modules is None:
         modules = ['math', 'numpy', 'sympy']
-    
+
     namespaces = []
     if isinstance(modules, (dict, str)) or not hasattr(modules, '__iter__'):
         namespaces.append(modules)
@@ -505,7 +505,7 @@ def cse_lambdify(args, expr, **kwargs):
     nspace = {}
     for m in namespaces[::-1]:
         nspace.update(_get_namespace(m))
-    
+
     eval_pairs_fnc = make_cse_eval_function(input_args=args,
                                             replacement_pairs=cse_pairs,
                                             ret_filter=cse_args,
@@ -517,7 +517,7 @@ def cse_lambdify(args, expr, **kwargs):
         return reduced_exprs_fnc(*cse_args_evaluated)
 
     return cse_fnc
-    
+
 
 def saturation_functions(y_fnc, dy_fnc, y0, y1):
     """
@@ -553,22 +553,22 @@ def saturation_functions(y_fnc, dy_fnc, y0, y1):
         A callable for the first derivative of a saturation function applied
         to a calculated solution for an unconstrained state variable.
     """
-    
+
     # Calculate the parameter m such that the slope of the saturation function
     # at t = 0 becomes 1
     m = 4.0/(y1-y0)
-    
+
     # this is the saturation function
     def psi_y(t):
         y = y_fnc(t)
         return y1 - (y1-y0)/(1.0+np.exp(m*y))
-    
+
     # and this its first derivative
     def dpsi_dy(t):
         y = y_fnc(t)
         dy = dy_fnc(t)
         return dy * (4.0*np.exp(m*y))/(1.0+np.exp(m*y))**2
-    
+
     return psi_y, dpsi_dy
 
 
@@ -627,24 +627,24 @@ def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, npts=500, return_error_ar
     numpy.ndarray
         An array with all errors calculated on the interval.
     """
-    
+
     # get some test points to calculate the error at
     tt = np.linspace(I[0], I[1], npts, endpoint=True)
-    
+
     error = []
     for t in tt:
         x = x_fnc(t)
         u = u_fnc(t)
-        
+
         ff = ff_fnc(x, u)
         dx = dx_fnc(t)
-        
+
         error.append(ff - dx)
-    
+
     error = np.array(error).squeeze()
-    
+
     max_con_err = error.max()
-    
+
     if return_error_array:
         return max_con_err, error
     else:
@@ -683,7 +683,7 @@ def vector_eval(func, argarr):
 
 if __name__ == '__main__':
     from sympy import sin, cos, exp
-    
+
     x, y, z = sp.symbols('x, y, z')
 
     F = [(x+y) * (y-z),
@@ -691,7 +691,7 @@ if __name__ == '__main__':
          sp.exp(sp.sin(-y-x) + sp.cos(-y+z))]
 
     MF = sp.Matrix(F)
-    
+
     f = cse_lambdify(args=(x,y,z), expr=MF,
                      modules=[{'ImmutableMatrix' : np.array}, 'numpy'])
 
@@ -701,16 +701,17 @@ if __name__ == '__main__':
                             [np.exp(-np.sin(3.0) + np.cos(1.0))]])
 
 
-def new_spline(Tend, n_parts, targetvalues, tag,):
+def new_spline(Tend, n_parts, targetvalues, tag, bv=None):
     """
     :param Tend:
     :param n_parts:
     :param targetvalues:    pair of arrays or callable
     :param tag:
+    :param bv:              None or dict of boundary values (like {0: [0, 7], 1: [0, 0]})
     :return:                Spline object
     """
 
-    s = Spline(0, Tend, n=n_parts, bv=None, tag=tag, nodes_type="equidistant",
+    s = Spline(0, Tend, n=n_parts, bv=bv, tag=tag, nodes_type="equidistant",
                  use_std_approach="use_std_approach")
 
     s.make_steady()
@@ -718,6 +719,7 @@ def new_spline(Tend, n_parts, targetvalues, tag,):
     assert np.ndim(targetvalues[1]) == 1
     s.interpolate(targetvalues, set_coeffs=True)
     return s
+
 
 def siumlate_with_input(tp, inputseq, n_parts ):
     """
@@ -856,3 +858,31 @@ def make_refsol_callable(refsol):
     for uarr in u_list:
         assert len(tt) == len(uarr)
         refsol.uufncs.append(interp1d(tt, uarr))
+
+
+def random_refsol_xx(tt, xa, xb, n_points, x_lower, x_upper, seed=0):
+    """
+    generates some random spline curves respecting boundaray conditions and limits
+
+    :param tt:
+    :param xa:
+    :param xb:
+    :return:
+    """
+
+    nt = len(tt)
+    nx = len(xa)
+    assert nx == len(xb) == len(x_upper) == len(x_lower)
+    res = np.zeros((nt, nx))
+
+    np.random.seed(seed)
+
+    for i, (va, vb, bl, bu) in enumerate(zip(xa, xb, x_lower, x_upper)):
+        assert bl < bu
+        rr = np.random.random(n_points)*(bu - bl) + bl
+        rr = np.r_[va, rr, vb]
+        tt_tmp = np.linspace(tt[0], tt[-1], len(rr))
+        spln = UnivariateSpline(tt_tmp, rr, s=abs(bl)/10)
+        res[:, i] = spln(tt)
+
+    return res
