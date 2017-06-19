@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 
 # IMPORTS
 import numpy as np
@@ -67,10 +68,12 @@ class TransitionProblem(object):
         tol           1e-5            Tolerance for the solver of the equation system
         dt_sim        1e-2            Sample time for integration (initial value problem)
         reltol        2e-5            Rel. tolerance (for LM A. to be confident with local minimum)
-        accIt         5               How often try to escape local minimum without increasing
+        localEsc      0               How often try to escape local minimum without increasing
                                       number of spline parts
         use_chains    True            Whether or not to use integrator chains
         sol_steps     100             Maximum number of iteration steps for the eqs solver
+        accIt         5               How often resume the iteration after sol_steps limit
+                                      (just have a look, in case the ivp is already satisfied)
         first_guess   None            to initiate free parameters (might be useful: {'seed': value})
         refsol        Container       optional data (C.tt, C.xx, C.uu) for the reference trajectory
         ============= =============   ============================================================
@@ -100,6 +103,7 @@ class TransitionProblem(object):
         self._parameters['ierr'] = kwargs.get('ierr', 1e-1)
         self._parameters['dt_sim'] = kwargs.get('dt_sim', 0.01)
         self._parameters['accIt'] = kwargs.get('accIt', 5)
+        self._parameters['localEsc'] = kwargs.get('localEsc', 0)
         self._parameters['reltol'] = kwargs.get('reltol', 2e-5)
 
         self.refsol = kwargs.get('refsol', None)  # this serves to reproduce a given trajectory
@@ -552,7 +556,7 @@ class TransitionProblem(object):
                     plt.subplot(rows, 2, i+1)
                     plt.plot(tt, data[i], 'k', lw=3, label='sim')
                     plt.plot(tt, old_spline_values[i], label='old')
-                    plt.plot(tt, new_spline_values[i], label='new')
+                    plt.plot(tt, new_spline_values[i], 'r-', label='new')
                     ax = plt.axis()
                     plt.vlines(s.nodes, -10, 10, color="0.85")
                     plt.axis(ax)
@@ -595,7 +599,7 @@ class TransitionProblem(object):
                 else:
                     break
 
-            if slvr.cond_rel_tol and slvr.solve_count < self._parameters['accIt']:
+            if slvr.cond_rel_tol and slvr.solve_count < self._parameters['localEsc']:
                 # we are in a local minimum
                 # > try to jump out by randomly changing the solution
                 if self.eqs.trajectories.n_parts_x >= 40:
