@@ -28,7 +28,7 @@ class Solver:
         The function for the jacobian matrix of the eqs
 
     x0: numpy.ndarray
-        The start value for the sover
+        The start value for the solver
 
     tol : float
         The (absolute) tolerance of the solver
@@ -38,43 +38,28 @@ class Solver:
 
     method : str
         The solver to use
+    par : np.array
     """
 
+    # typical call: Solver(F=G, DF=DG, x0=self.guess, ...)
     # noinspection PyPep8Naming
     def __init__(self, masterobject, F, DF, x0, tol=1e-5, reltol=2e-5, maxIt=50,
-                 method='leven', mu=1e-4):
+                 method='leven', par = np.array([0.0]), mu=1e-4):
 
         self.masterobject = masterobject
 
         self.F = F
         self.DF = DF
-        self.x0 = x0
+        self.x0 = x0  ##:: x0=self.guess initial: array([ 0.1,  0.1,  0.1, ...,  0.1,  0.1,  z0])
         self.tol = tol
         self.reltol = reltol
         self.maxIt = maxIt
         self.method = method
-        
-        self.solve_count = 0
-        
-        # this is LM specific
-        self.mu = mu
-        self.res = 1
-        self.res_old = -1
-        self.res_list = []
-        self.mu_list = []
-        self.ntries_list = []
-
-        # this is for the weight
-        self.W = None
-
-        self.cond_abs_tol = False
-        self.cond_rel_tol = False
-        self.cond_num_steps = False
-        self.cond_external_interrupt = False
-        self.avg_LM_time = None
-        
+        # self.itemindex = itemindex # (TODO: obsolete?)
         self.sol = None
+        self.par = par
     
+
     def solve(self):
         """
         This is just a wrapper to call the chosen algorithm for solving the
@@ -94,7 +79,8 @@ class Solver:
             logging.warning("Wrong solver, returning initial value.")
             return self.x0
         else:
-            return self.sol
+            # TODO: include par into sol??
+            return self.sol, self.par
 
     def set_weights(self, mode=None):
         """
@@ -124,6 +110,7 @@ class Solver:
 
         self.W = scp.sparse.csr_matrix(np.diag(values))
 
+
     def leven(self):
         """
         This method is an implementation of the Levenberg-Marquardt-Method
@@ -132,11 +119,13 @@ class Solver:
         For more information see: :ref:`levenberg_marquardt`
         """
         i = 0
-        x = self.x0
-        
-        eye = scp.sparse.identity(len(self.x0))
+        x = self.x0  ##:: guess_value
+        res = 1  ##:: residuum
+        res_alt = -1
 
-        # this is interesting for debugging
+        eye = scp.sparse.identity(len(self.x0)) ##:: diagonal matrix, value: 1.0, danwei
+
+        # this is interesting for debugging:
         n_spln_prts = self.masterobject.eqs.trajectories.n_parts_x
 
         self.mu = 1e-4
@@ -155,7 +144,7 @@ class Solver:
 
         Fx = self.W.dot(self.F(x))
 
-        # for particle swarm (dbg)
+        # for particle swarm approach (dbg, obsolete)
         def nF(z):
             return norm(self.F(z))
         
@@ -178,11 +167,11 @@ class Solver:
             break_inner_loop = False
             count_inner = 0
             while not break_inner_loop:
-                A = DFx.T.dot(DFx) + self.mu**2*eye
+                A = DFx.T.dot(DFx) + self.mu**2*eye  ##:: left side of equation, J'J+mu^2*I, Matrix.T=inv(Matrix)
 
-                b = DFx.T.dot(Fx)
+                b = DFx.T.dot(Fx) ##:: right side of equation, J'f, (f=Fx)
                     
-                s = -scp.sparse.linalg.spsolve(A, b)
+                s = -scp.sparse.linalg.spsolve(A, b)  ##:: h
 
                 xs = x + np.array(s).flatten()
                 
@@ -197,8 +186,9 @@ class Solver:
                 normFx = norm(Fx)
                 normFxs = norm(Fxs)
 
-                # R1 = (normFx**2 - normFxs**2)
-                # R2 = (normFx**2 - (norm(Fx+DFx.dot(s)))**2)
+                # obsolete:
+                # R1 = (normFx**2 - normFxs**2) ##:: F(x)^2-F(x+h)^2, F(x)=f
+                # R2 = (normFx**2 - (norm(Fx+DFx.dot(s)))**2) # F(x)^2-(F(x)+F'(x)h)^2
 
                 R1 = (normFx - normFxs)
                 R2 = (normFx - (norm(Fx+DFx.dot(s))))
@@ -229,7 +219,7 @@ class Solver:
                     logging.warn("rho = nan (should not happen)")
                     IPS()
                     raise NanError()
-               
+
                 if rho < 0:
                     logging.warn("rho < 0 (should not happen)")
 
@@ -238,15 +228,15 @@ class Solver:
                     IPS()
 
                 if self.mu > 1:
-                    # for breakpoint (dbg)
+                    # just for breakpoint (dbg)
                     pass
                 
                 # if the system more or less behaves linearly 
                 break_inner_loop = rho > b0
                 count_inner += 1
-            
-            Fx = Fxs
-            x = xs
+
+            Fx = Fxs  # F(x+h) -> Fx_new
+            x = xs  # x+h -> x_new
             
             # store for possible future usage
             self.x0 = xs
@@ -311,7 +301,6 @@ class Solver:
 
         # LM Algorithm finished
         T_LM = time.time() - T_start
-        
         self.avg_LM_time = T_LM / i
         
         # Note: if self.cond_num_steps == True, the LM-Algorithm was stopped
@@ -319,8 +308,12 @@ class Solver:
         # -> it might be worth to continue 
 
         self.sol = x
+        
+        # TODO: not so good style (redundancy) because `par` is already a part of sol
+        self.par = np.array(self.sol[-len(self.par):]) # self.itemindex
 
     def log_break_reasons(self, flag):
+    # TODO: write docstring
         if not flag:
             return
 

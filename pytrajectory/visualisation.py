@@ -5,6 +5,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from matplotlib.gridspec import GridSpec
+import os
+
 from IPython import embed as IPS
 
 
@@ -145,6 +147,7 @@ class Animation():
         
         self.axes['ax_img'].set_frame_on(True)
         self.axes['ax_img'].set_aspect('equal')
+        # self.axes['ax_img'].set_axis_bgcolor('w')
         self.axes['ax_img'].set_facecolor('w')
         
         self.nframes = int(round(24*(self.t[-1] - self.t[0])))

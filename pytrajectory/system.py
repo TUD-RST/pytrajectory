@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 
-# IMPORTS
 import numpy as np
 import sympy as sp
+from scipy import sparse
 import pickle
 import copy
 import time
 import inspect
 from collections import OrderedDict
 
+from trajectories import Trajectory
 from collocation import CollocationSystem
 from simulation import Simulator
+from solver import Solver
 import auxiliary
 import visualisation
 from log import logging
@@ -23,6 +25,7 @@ import matplotlib.pyplot as plt
 from ipHelp import IPS
 
 
+# Note: This class is the former `ControlSystem` class
 class TransitionProblem(object):
     """
     Base class of the PyTrajectory project containing all information to model a transition problem
@@ -109,7 +112,7 @@ class TransitionProblem(object):
         self.refsol = kwargs.get('refsol', None)  # this serves to reproduce a given trajectory
 
         # create an object for the dynamical system
-        self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub)
+        self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub, **kwargs)
 
         # 2017-05-09 14:41:14
         # Note: there are two kinds of constraints handling:
@@ -134,7 +137,9 @@ class TransitionProblem(object):
         # We didn't really do anything yet, so this should be false
         self.reached_accuracy = False
 
-        self.sim_data = None
+        # empty objects to store the simulation results later
+        self.sim_data = None  # all results
+        # convenience:
         self.sim_data_xx = None
         self.sim_data_uu = None
         self.sim_data_tt = None
@@ -167,7 +172,10 @@ class TransitionProblem(object):
 
             self.eqs.trajectories._parameters[param] = value
 
-        elif param in {'tol', 'method', 'coll_type', 'sol_steps'}:
+        elif param in {'tol', 'method', 'coll_type', 'sol_steps', 'k'}:
+            # TODO: unify interface for additional free parameter
+            if param == 'k':
+                param = 'z_par'
             self.eqs._parameters[param] = value
 
         else:
@@ -196,7 +204,8 @@ class TransitionProblem(object):
         # (as sympy matrix toenable replacement method)
         x = sp.symbols(self.dyn_sys.states)
         u = sp.symbols(self.dyn_sys.inputs)
-        ff_mat = sp.Matrix(self.dyn_sys.f_sym(x, u))
+        par = sp.symbols(self.dyn_sys.par)
+        ff_mat = sp.Matrix(self.dyn_sys.f_sym(x, u, par))
 
         # get neccessary information form the dynamical system
         a = self.dyn_sys.a
@@ -286,8 +295,9 @@ class TransitionProblem(object):
             # put created compositions into dictionaries of solution functions
             self.eqs.trajectories.x_fnc[xk] = psi_y
             self.eqs.trajectories.dx_fnc[xk] = dpsi_dy
-            
+
     def check_refsol_consistency(self):
+        """"Check if the reference solution provided by the user is consistent with boundary conditions"""
         assert isinstance(self.refsol, auxiliary.Container)
         tt, xx, uu = self.refsol.tt, self.refsol.xx, self.refsol.uu
         assert tt[0] == self.a
@@ -334,6 +344,8 @@ class TransitionProblem(object):
             self.check_refsol_consistency()
             auxiliary.make_refsol_callable(self.refsol)
 
+            # the reference solution specifies how often spline parts should
+            # be raised
             for i in range(self.refsol.n_raise_spline_parts):
                 self.eqs.trajectories._raise_spline_parts()
 
@@ -402,13 +414,14 @@ class TransitionProblem(object):
             elif self.nIt >= 3:
                 logging.info("{}th Iteration: {} spline parts".format(self.nIt+1, self.eqs.trajectories.n_parts_x))
 
+            print('k = {}'.format(self.par[0]))
             # start next iteration step
             try:        
                 self._iterate()
             except auxiliary.NanError:
                 logging.warn("NanError")
                 return None, None
-            
+
             # increment iteration number
             self.nIt += 1
 
@@ -423,7 +436,9 @@ class TransitionProblem(object):
         if interfaceserver.running:
             interfaceserver.stop_listening()
 
-        return self.eqs.trajectories.x, self.eqs.trajectories.u
+        return self.eqs.trajectories.x, self.eqs.trajectories.u, self.par
+        ##:: self.eqs.trajectories.x, self.eqs.trajectories.u are functions,
+        ##:: variable is t.  x(t), u(t) (value of x and u at t moment, not all the values (not a list with values for all the time))
 
     def get_spline_values(self, sol, plot=False):
         """
@@ -433,6 +448,7 @@ class TransitionProblem(object):
 
         :return: tuple of arrays (t, x(t), u(t)) or None (if plot == True)
         """
+        # TODO: add support for additional free parameter
 
         self.eqs.trajectories.set_coeffs(sol)
 
@@ -482,19 +498,22 @@ class TransitionProblem(object):
         # Get an initial value (guess)
         self.eqs.get_guess()
 
-        
         # Build the collocation equations system
         C = self.eqs.build()
         G, DG = C.G, C.DG
-        
+
         old_res = 1e20
         old_sol = None
 
         # Solve the collocation equation system
+        sol, par = self.eqs.solve(G, DG) ##:: len(sol)=free-parameter, type(sol)=<type 'numpy.ndarray'>
+        self.par = par
 
         new_solver = True
         while True:
-            sol = self.eqs.solve(G, DG, new_solver=new_solver)
+            sol, par = self.eqs.solve(G, DG, new_solver=new_solver)
+            # TODO: is this neccessary here? probably yes, for the simulation below
+            self.par = par
             # in the following iterations we want to use the same solver
             # object (we just had an intermediate look, whether the solution
             # of the initial value problem is already sufficient accurate.)
@@ -505,7 +524,9 @@ class TransitionProblem(object):
             self.eqs.trajectories.set_coeffs(sol)
 
             # Solve the resulting initial value problem
-            self.simulate()
+            # TODO: do not pass `par` as a separate call parameter
+            # value shoud be taken from self.par or (better) self.sol
+            self.simulate(par)
 
             # dbg: create new splines (to interpolate the obtained result)
             C = self.eqs.trajectories.init_splines(export=True)
@@ -636,7 +657,8 @@ class TransitionProblem(object):
             # else:
             #     logging.debug('New attempt\n\n')
 
-    def simulate(self):
+# TODO: get rid of `par` here. take the values from self (see remark above)
+    def simulate(self, par):
         """
         This method is used to solve the resulting initial value problem
         after the computation of a solution for the input trajectories.
@@ -646,7 +668,10 @@ class TransitionProblem(object):
 
         # calulate simulation time
         T = self.dyn_sys.b - self.dyn_sys.a
-        
+
+        ##:ck: obsolete comment?
+        # Todo T = par[0] * T
+
         # get list of start values
         start = []
 
@@ -654,22 +679,24 @@ class TransitionProblem(object):
             sys = self._dyn_sys_orig
         else:
             sys = self.dyn_sys
-            
-        x_vars = sys.states
-        start_dict = dict([(k, v[0]) for k, v in sys.boundary_values.items() if k in x_vars])
+
+        x_vars = sys.states  ##:: ('x1', 'x2', 'x3', 'x4')
+        start_dict = dict([(k, v[0]) for k, v in sys.boundary_values.items() if k in x_vars])  ##:: {'x2': start value of x2, 'x3': 1.256, 'x1': 0.0, 'x4': 0.0}
         ff = sys.f_num_simulation
-        
+
         for x in x_vars:
             start.append(start_dict[x])
-        
         # create simulation object
-        S = Simulator(ff, T, start, self.eqs.trajectories.u, dt=self._parameters['dt_sim'])
-        
+        S = Simulator(ff, T, start, self.eqs.trajectories.u, z_par = self.par, dt=self._parameters['dt_sim'])
+
         logging.debug("start: %s"%str(start))
         
         # forward simulation
         self.sim_data = S.simulate()
-        self.sim_data_tt, self.sim_data_xx, self.sim_data_uu = self.sim_data
+        ##:: S.simulate() is a method,
+        # returns a list [np.array(self.t), np.array(self.xt), np.array(self.ut)]
+        # self.sim_data is a `self.variable?` (initialized with None in __init__(...))
+        self.sim_data.append(par)
     
     def check_accuracy(self):
         """
@@ -688,7 +715,8 @@ class TransitionProblem(object):
         a = self.sim_data[0][0]
         b = self.sim_data[0][-1]
         xt = self.sim_data[1]
-        
+        par_k = self.par[0]
+
         # get boundary values at right border of the interval
         if self.constraints:
             bv = self._dyn_sys_orig.boundary_values
@@ -696,8 +724,8 @@ class TransitionProblem(object):
         else:
             bv = self.dyn_sys.boundary_values
             x_sym = self.dyn_sys.states
-            
-        xb = dict([(k, v[1]) for k, v in bv.items() if k in x_sym])
+
+        xb = dict([(k, v[1]) for k, v in bv.items() if k in x_sym])  ##:: end boundary value
         
         # what is the error
         logging.debug(40*"-")
@@ -705,7 +733,7 @@ class TransitionProblem(object):
 
         err = np.empty(xt.shape[1])
         for i, xx in enumerate(x_sym):
-            err[i] = abs(xb[xx] - xt[-1][i])
+            err[i] = abs(xb[xx] - xt[-1][i]) ##:: error (x1, x2) at end time
             logging.debug(str(xx)+" : %f     %f    %f"%(xt[-1][i], xb[xx], err[i]))
         
         logging.debug(40*"-")
@@ -715,16 +743,17 @@ class TransitionProblem(object):
         eps = self._parameters['eps']
         if ierr:
             # calculate maximum consistency error on the whole interval
+
             maxH = auxiliary.consistency_error((a,b),
                                                self.eqs.trajectories.x, self.eqs.trajectories.u,
                                                self.eqs.trajectories.dx,
                                                self.dyn_sys.f_num_simulation)
             
-            reached_accuracy = (maxH < ierr) and (max(err) < eps)
+            reached_accuracy = (maxH < ierr) and (max(err) < eps) and (par_k > 0.0)
             logging.debug('maxH = %f'%maxH)
         else:
             # just check if tolerance for the boundary values is satisfied
-            reached_accuracy = max(err) < eps
+            reached_accuracy = (max(err) < eps) and (par_k > 0.0)
         
         if reached_accuracy:
             logging.info("  --> reached desired accuracy: "+str(reached_accuracy))
@@ -804,6 +833,7 @@ class TransitionProblem(object):
     def b(self):
         return self.dyn_sys.b
 
+    # convencience access to linspace of time values (e.g. for debug-plotting)
     @property
     def tt(self):
         return self.dyn_sys.tt
@@ -835,7 +865,8 @@ class DynamicalSystem(object):
         The initial and final conditions for the input variables
     """
 
-    def __init__(self, f_sym, a=0., b=1., xa=None, xb=None, ua=None, ub=None):
+    # TODO: improve interface w.r.t additional free parameters
+    def __init__(self, f_sym, a=0., b=1., xa=None, xb=None, ua=None, ub=None, **kwargs):
 
         if xa is None:
             xa = []
@@ -850,6 +881,9 @@ class DynamicalSystem(object):
         self.b = b
         self.tt = np.linspace(a, b, 1000)
 
+        # TODO: see remark above
+        self.z_par = kwargs.get('k', [1.0])
+        self.n_par = self.z_par.__len__()
         # analyse the given system
         self.n_states, self.n_inputs = self._determine_system_dimensions(n=len(xa))
 
@@ -857,6 +891,13 @@ class DynamicalSystem(object):
         # (will be used as keys in various dictionaries)
         self.states = tuple(['x{}'.format(i+1) for i in xrange(self.n_states)])
         self.inputs = tuple(['u{}'.format(j+1) for j in xrange(self.n_inputs)])
+        
+        # TODO_ck: what does this mean??
+        # Todo_yx: if self.par is a list,then the following 2 sentences
+        # self.par = []
+        # self.par.append(tuple('z_par')) ##:: [('z_par',)]
+
+        self.par = tuple(['z_par_{}'.format(k+1) for k in xrange(self.n_par)]) # z_par_1, z_par_2,
 
         self.xxs = sp.symbols(self.states)
         self.uus = sp.symbols(self.inputs)
@@ -905,19 +946,21 @@ class DynamicalSystem(object):
 
         # create a numeric counterpart for the vector field
         # for faster evaluation
+                                                   
         self.f_num = auxiliary.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-                                                   u_sym=self.inputs, vectorized=False,
-                                                   cse=False, evalconstr=True)
+                                                   u_sym=self.inputs, p_sym=self.par,
+                                                   vectorized=False, cse=False, evalconstr=True)
 
         # to handle penalty contraints it is necessary to distinguish between
         # the extended vectorfield (state equations + constraints) and
         # the basic vectorfiled (only state equations)
         # for simulation, only the the basic vf shall be used
         self.f_num_simulation = auxiliary.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-                                                   u_sym=self.inputs, vectorized=False,
-                                                   cse=False, evalconstr=False)
+                                                   u_sym=self.inputs, p_sym=self.par,
+                                                   vectorized=False, cse=False, evalconstr=False)
 
     def _determine_system_dimensions(self, n):
+        # TODO comment on additional free parameters in the docstring
         """
         Determines the number of state and input variables.
 
@@ -941,12 +984,14 @@ class DynamicalSystem(object):
         found_n_inputs = False
         x = np.ones(n_states)
 
+        # TODO: where is this needed (??)
+        par=[1]
         j = 0
         while not found_n_inputs:
             u = np.ones(j)
 
             try:
-                self.f_sym(x, u)
+                self.f_sym(x, u, par)
                 # if no ValueError is raised j is the dimension of the inputs
                 n_inputs = j
                 found_n_inputs = True
@@ -955,6 +1000,7 @@ class DynamicalSystem(object):
                 # (that means the dimensions don't match)
                 j += 1
         
+        # TODO: give a log message w.r.t. additional free parameters
         logging.debug("--> state: {}".format(n_states))
         logging.debug("--> input : {}".format(n_inputs))
 
@@ -977,7 +1023,7 @@ class DynamicalSystem(object):
 
         # add state boundary values
         for i, x in enumerate(self.states):
-            boundary_values[x] = (xa[i], xb[i])
+            boundary_values[x] = (xa[i], xb[i])  ##:: bv = {'x1':(xa[0],xb[0]),...}
 
         # add input boundary values
         for j, u in enumerate(self.inputs):
@@ -985,6 +1031,7 @@ class DynamicalSystem(object):
 
         return boundary_values
 
+    # TODO: handle additional free parameters (if needed). Or at least raise NotImplementedError
     def get_linearization(self, xref, uref=None):
         """
         return A, B matrices of the Jacobian Linearization

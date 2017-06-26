@@ -133,15 +133,11 @@ def find_integrator_chains(dyn_sys):
     logging.debug("Looking for integrator chains")
 
     # create symbolic variables to find integrator chains
-    state_sym = sp.symbols(dyn_sys.states)
-    input_sym = sp.symbols(dyn_sys.inputs)
-    f = dyn_sys.f_sym(state_sym, input_sym)
-
-    # take care of constraints (with penalty terms)
-    if dyn_sys.f_sym.has_constraint_penalties:
-        assert dyn_sys.n_states < len(f)
-    else:
-        assert dyn_sys.n_states == len(f)
+    state_sym = sp.symbols(dyn_sys.states) # e.g. (x1, x2, x3, x4)
+    input_sym = sp.symbols(dyn_sys.inputs) # e.g. (u1,)
+    par_sym = sp.symbols(list(dyn_sys.par))
+    f = dyn_sys.f_sym(state_sym, input_sym, par_sym)
+    assert dyn_sys.n_states == len(f)
 
     chaindict = {}
     for i in xrange(len(f)):
@@ -157,7 +153,7 @@ def find_integrator_chains(dyn_sys):
             if f[i] == uu:
                 chaindict[uu] = state_sym[i]
 
-    # chaindict looks like this:  {u_1 : x_2, x_4 : x_3, x_2 : x_1}
+    # chaindict looks like this:  {x2: x1, u1: x2, x4: x3}
     # where x_4 = d/dt x_3 and so on
 
     # find upper ends of integrator chains
@@ -165,14 +161,14 @@ def find_integrator_chains(dyn_sys):
     for vv in chaindict.values():
         if (not chaindict.has_key(vv)):
             uppers.append(vv)
-
+    # uppers=[x1, x3]
     # create ordered lists that temporarily represent the integrator chains
     tmpchains = []
 
     # therefore we flip the dictionary to walk through its keys
     # (former values)
-    dictchain = {v:k for k,v in chaindict.items()}
-
+    dictchain = {v:k for k,v in chaindict.items()} # chaindict.items()=[(u1, x2), (x4, x3), (x2, x1)]
+    # {x1: x2, x2: u1, x3: x4}
     for var in uppers:
         tmpchain = []
         vv = var
@@ -183,12 +179,12 @@ def find_integrator_chains(dyn_sys):
             tmpchain.append(vv)
 
         tmpchains.append(tmpchain)
-
+        # e.g. [[x1,x2,u1],[x3,x4]]
     # create an integrator chain object for every temporary chain
     chains = []
     for lst in tmpchains:
         ic = IntegChain(lst)
-        chains.append(ic)
+        chains.append(ic) # [class ic_1, class ic_2]
         logging.debug("--> found: " + str(ic))
 
     # now we determine the equations that have to be solved by collocation
@@ -203,7 +199,7 @@ def find_integrator_chains(dyn_sys):
             if ic.lower.startswith('x'):
                 idx = dyn_sys.states.index(ic.lower)
                 eqind.append(idx)
-        eqind.sort()
+        eqind.sort() ## e.g. only has x4, therfore eqind=[3], means in this chain, we only need to calculate x4
 
         # if every integrator chain ended with input variable
         if not eqind:
@@ -216,7 +212,7 @@ def find_integrator_chains(dyn_sys):
     return chains, eqind
 
 
-def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False, evalconstr=None):
+def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False, evalconstr=None):
     """
     This function takes a callable vector field of a dynamical system that is to be evaluated with
     symbols for the state and input variables and returns a corresponding function that can be
@@ -234,6 +230,8 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False, evalco
     u_sym : iterable
         The symbols for the input variables of the control system.
 
+    p_sym : np.array
+    
     vectorized : bool
         Whether or not to return a vectorized function.
 
@@ -255,19 +253,20 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False, evalco
     if callable(f_sym):
 
         # ensure data type of arguments
-        if all(isinstance(s, str) for s in x_sym + u_sym):
+        if all(isinstance(s, str) for s in x_sym + u_sym + p_sym):
             x_sym = sp.symbols(x_sym)
             u_sym = sp.symbols(u_sym)
+            p_sym = sp.symbols(p_sym)
 
-        if not all(isinstance(s, sp.Symbol) for s in x_sym + u_sym):
-            msg = "unexpected types in {}".format(x_sym + u_sym)
+        if not all(isinstance(s, sp.Symbol) for s in x_sym + u_sym + p_sym):
+            msg = "unexpected types in {}".format(x_sym + u_sym + p_sym)
             raise TypeError(msg)
 
         if f_sym.has_constraint_penalties:
             assert evalconstr is not None
-            F_sym = f_sym(x_sym, u_sym, evalconstr)
+            F_sym = f_sym(x_sym, u_sym, p_sym, evalconstr)
         else:
-            F_sym = f_sym(x_sym, u_sym)
+            F_sym = f_sym(x_sym, u_sym, p_sym)
     else:
         # f_sym was not a callable
         if evalconstr is not None:
@@ -329,7 +328,7 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False, evalco
 
     # now we can create the numeric function
     if cse:
-        _f_num = cse_lambdify(x_sym + u_sym, F_sym,
+        _f_num = cse_lambdify(x_sym + u_sym + p_sym, F_sym,
                               modules=[{'ImmutableMatrix': np.array}, 'numpy'])
     else:
         _f_num = sp.lambdify(x_sym + u_sym, F_sym,
@@ -343,12 +342,12 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, vectorized=False, cse=False, evalco
         stack = np.hstack
 
     if sym_dim == 1:
-        def f_num(x, u):
-            xu = stack((x, u))
+        def f_num(x, u, p):
+            xu = stack((x, u, p))
             return np.array(_f_num(*xu))
     else:
-        def f_num(x, u):
-            xu = stack((x, u))
+        def f_num(x, u, p):
+            xu = stack((x, u, p))
             return _f_num(*xu)
 
     return f_num
@@ -589,7 +588,7 @@ def penalty_expression(x, xmin, xmax):
     return res
 
 
-def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, npts=500, return_error_array=False):
+def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, par, npts=500, return_error_array=False):
     """
     Calculates an error that shows how "well" the spline functions comply with the system
     dynamic given by the vector field.
@@ -612,6 +611,8 @@ def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, npts=500, return_error_ar
     ff_fnc : callable
         A function for the vectorfield of the control system.
 
+    par: np.array
+    
     npts : int
         Number of point to determine the error at.
 
@@ -636,7 +637,7 @@ def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, npts=500, return_error_ar
         x = x_fnc(t)
         u = u_fnc(t)
 
-        ff = ff_fnc(x, u)
+        ff = ff_fnc(x, u, par)
         dx = dx_fnc(t)
 
         error.append(ff - dx)

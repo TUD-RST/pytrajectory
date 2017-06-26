@@ -81,15 +81,15 @@ class Spline(object):
         # dictionary with boundary values
         #   key: order of the spline's derivative to which the values belong
         #   values: the boundary values the derivative should satisfy
-        self._boundary_values = bv
+        self._boundary_values = bv  ##:: every time only one: e.g. bv={0:(0.0,0.2*pi)}
 
         # create array of symbolic coefficients
-        self._coeffs = sp.symarray('c'+tag, (self.n, 4))
+        self._coeffs = sp.symarray('c'+tag, (self.n, 4))  ##:: e.g.: array([[cxi_0_0, cxi_0_1, cxi_0_2, cxi_0_3],...,[cxi_9_0, cxi_9_1, cxi_9_2, cxi_9_3]])
         self._coeffs_sym = self._coeffs.copy()
 
         # calculate nodes of the spline
         self.nodes = get_spline_nodes(self.a, self.b, self.n+1, nodes_type='equidistant')
-        self._nodes_type = 'equidistant' #nodes_type
+        self._nodes_type = 'equidistant'
 
         # size of each polynomial part
         self._h = (self.b - self.a) / float(self.n)
@@ -101,13 +101,14 @@ class Spline(object):
         for i in xrange(self.n):
             # create polynomials, e.g. for cubic spline:
             #   P_i(t)= c_i_3*t^3 + c_i_2*t^2 + c_i_1*t + c_i_0
-            # poly1d expects coeffs in decreasing order ->  [::-1]
 
+            # poly1d expects coeffs in decreasing order ->  [::-1]
             self._P[i] = np.poly1d(self._coeffs[i][::-1])
+            ## note:  here _P is only for one state/input-component!!
 
         # initialise array for provisionally evaluation of the spline
         # if there are no values for its free parameters
-        #
+
         # they show how the spline coefficients depend on the free coefficients
         self._dep_array = None  #np.array([])
         self._dep_array_abs = None  #np.array([])
@@ -122,7 +123,7 @@ class Spline(object):
         self._prov_flag = True
 
         # the free parameters of the spline
-        self._indep_coeffs = None #np.array([])
+        self._indep_coeffs = None
 
     def __getitem__(self, key):
         return self._P[key]
@@ -139,7 +140,7 @@ class Spline(object):
                    use_std_approach=not self._use_std_approach)
 
         # solve smoothness conditions to get dependence arrays
-        S.make_steady()
+        S.make_steady()  # TODO: rename to make_smooth_c2
 
         # copy the attributes of the spline
         self._dep_array = S._dep_array
@@ -218,13 +219,14 @@ class Spline(object):
     def boundary_values(self, value):
         self._boundary_values = value
 
+    # TODO: rename to make_smooth_c2
     def make_steady(self):
         """
         Please see :py:func:`pytrajectory.splines.make_steady`
         """
         make_steady(S=self)
         self._indep_coeffs_sym = self._indep_coeffs.copy()
-
+    ##:: array([cx1_0_0, cx1_1_0, cx1_2_0, ..., cx1_8_0, cx1_9_0, cx1_0_2])
     def differentiate(self, d=1, new_tag=''):
         """
         Returns the `d`-th derivative of this spline function object.
@@ -255,7 +257,7 @@ class Spline(object):
         ----------
 
         points : float
-            The points to evaluate the provisionally spline at.
+            The points at which we evaluate the provisionally spline.
 
         d : int
             The derivation order.
@@ -287,7 +289,7 @@ class Spline(object):
         elif d == 3:
             tt = np.array([0.0, 0.0, 0.0, 6.0])
 
-        dep_vec = np.dot(tt, self._dep_array[i])
+        dep_vec = np.dot(tt, self._dep_array[i])  ##:: actually it is Sx1 (or Sx2 or Su) described in indenpent elements.
         dep_vec_abs = np.dot(tt, self._dep_array_abs[i])
 
         return dep_vec, dep_vec_abs
@@ -307,13 +309,14 @@ class Spline(object):
             Array with coefficients of the polynomial spline parts.
         """
 
+        # decide what to do
         if coeffs is None and free_coeffs is None:
             msg = "Probably unintended call to set_coefficients without meaningfull arguments."
             raise ValueError(msg)
 
         elif coeffs is not None and free_coeffs is None:
             # set all the coefficients for the spline's polynomial parts
-            #
+
             # first a little check
             if not (self.n == coeffs.shape[0]):
                 logging.error('Dimension mismatch in number of spline parts ({}) and \
@@ -608,7 +611,7 @@ def differentiate(spline_fnc):
     else:
         raise NotImplementedError()
 
-
+# TODO: rename to make_smooth_c2
 def make_steady(S):
     """
     This method sets up and solves equations that satisfy boundary conditions and
@@ -629,12 +632,13 @@ def make_steady(S):
         return
 
     # get spline coefficients and interval size
-    coeffs = S._coeffs
+    coeffs = S._coeffs  ##:: =self._coeffs=array([[cxi_0_0,...,cxi_0_3],...,[cxi_9_0,...,cxi_9_3]])
+    h = S._h  # TODO: do we need this?
 
     # nu represents degree of boundary conditions
-    nu = -1
+    nu = -1  ##:: equations about boundary conditions at the begin and end of the spline
     for k, v in S._boundary_values.items():
-        if all(item is not None for item in v):
+        if all(item is not None for item in v):  ##:: Note: 0 != None.
             nu += 1
 
     # now we determine the free parameters of the spline function
@@ -672,14 +676,14 @@ def make_steady(S):
         a = coeffs[:-3, -1]
 
     # `b` is, what is not in `a`
-    coeffs_set = set(coeffs.ravel())
+    coeffs_set = set(coeffs.ravel())  ##:: ravel: bian ping hua
     a_set = set(a)
     assert len(a_set) == len(a)
 
-    b_set = coeffs_set - a_set
+    b_set = coeffs_set - a_set  ##:: bu ji
     # ensure lexical sorting
     a = np.array(sorted(a, key=lambda cc: cc.name))
-    b = sorted(list(b_set), key=lambda cc: cc.name)
+    b = sorted(list(b_set), key=lambda cc: cc.name)  ##:: type(b) = list
     # just for debugging
     c = sorted(list(coeffs_set), key=lambda cc: cc.name)
 
@@ -692,7 +696,8 @@ def make_steady(S):
 
     # get matrix and right hand site of the equation system
     # that ensures smoothness and compliance with the boundary values
-    M, r = get_smoothness_matrix(S, N1, N2)
+    M, r = get_smoothness_matrix(S, N1, N2) ##:: see the docs:
+    # http://pytrajectory.readthedocs.io/en/master/guide/background.html#candidate-functions
 
     # get A and B matrix such that
     #
@@ -700,7 +705,11 @@ def make_steady(S):
     # A*a + B*b = r
     #         b = B^(-1)*(r-A*a)
     #
-    # we need B^(-1)*r [absolute part -> tmp1] and B^(-1)*A [coefficients of a -> tmp2]
+    # we need B^(-1)*r [absolute part -> tmp1] and B^(-1)*A [coefficients of a -> tmp2, because of (B^(-1)*A*a)]
+
+    # a_mat = sparse.lil_matrix((N2,N2-N1)) # size(a_mat)=(40,11)
+    # b_mat = sparse.lil_matrix((N2,N1)) # size(b_mat)=(40,29)
+
 
     # matrices to select the relevant columns from M, i.e. A, B corresponding to a, b
     a_select = sparse.lil_matrix((N2, N2-N1))
@@ -708,7 +717,7 @@ def make_steady(S):
 
     # coeff names are like cx1_<i>_<k>  i: piece number, k: order
     for i, aa in enumerate(a):
-        tmp = aa.name.split('_')[-2:]
+        tmp = aa.name.split('_')[-2:] # aa= cx1_0_0, aa.name='cx1_0_0', tmp=['0','0']
         j = int(tmp[0])
         k = int(tmp[1])
         a_select[4*j+k, i] = 1
