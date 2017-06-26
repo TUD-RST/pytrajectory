@@ -9,7 +9,7 @@ from log import logging, Timer
 from trajectories import Trajectory
 from solver import Solver
 
-from auxiliary import sym2num_vectorfield, Container, NanError
+from auxiliary import sym2num_vectorfield, Container, NanError, reshape_wrapper
 
 from ipHelp import IPS
 
@@ -187,7 +187,11 @@ class CollocationSystem(object):
             X = np.array(X).reshape((n_states, -1),
                                  order='F')  ##:: X = array([[S1(0), S1(0.5), S1(1)],[S2(0),S2(0.5),S2(1)]])
             U = np.array(U).reshape((n_inputs, -1), order='F')
-            P = np.array(P).reshape((n_par, -1), order='F') ##:: P = array([[k1,k1,k1],[k2,k2,k2]])
+
+            # TODO: this should be tested with systems with additional free parameters
+            if not n_par == 0:
+                assert P.size % self.n_cpts == 0
+            P = np.array(P).reshape((n_par, n_cpts), order='F')  ##:: P = array([[k1,k1,k1],[k2,k2,k2]])
 
             return X, U, P
 
@@ -205,7 +209,6 @@ class CollocationSystem(object):
             ##for debugging symbolic display
             # symbeq = True
             # c = np.hstack(sorted(self.trajectories.indep_vars.values(), key=lambda arr: arr[0].name))
-
 
             # we can only multiply dense arrays with "symbolic arrays" (dtype=object)
             sparseflag = symbeq ##!! not
@@ -236,7 +239,7 @@ class CollocationSystem(object):
 
                 # original line. split up for separation of penalty terms and better readability
                 # F0 = ff_vec(X, U, P).ravel(order='F').take(take_indices, axis=0)[:,None] ##:: F now numeric
-                
+
                 F0 = ff_vec(X, U, P)  # shape: (ns + np)  x  nc
                 # ns: number of states
                 # np: number of penalty constraints
@@ -416,7 +419,7 @@ class CollocationSystem(object):
         self.all_free_parameters = []  # this means free coeffs for X, U (and additional parameters P?)
     
         # iterate over spline quantities (OrderedDict)
-        for k, v in self.trajectories.indep_coeffs.items():
+        for k, v in self.trajectories.indep_vars.items():
             # increase j by the number of indep coeffs on which it depends
             j += len(v)
             indic[k] = (i, j)
@@ -616,7 +619,6 @@ class CollocationSystem(object):
                 # TODO: handle free parameters
                 guess = self.interpolate_refsol()
             
-            
             else:
                 # first_guess and refsol are None
                 # user neither defines initial value of free coefficients nor reference solution
@@ -636,9 +638,6 @@ class CollocationSystem(object):
                 ##!! guess = np.hstack((guess,p[0])
 
             # TODO: Check inendation levels (mistake is probable)
-
-
-
 
         else:
             # old_splines do exist
@@ -700,13 +699,13 @@ class CollocationSystem(object):
         :return:    guess (vector of values for free parameters)
         """
         fnc_list = self.masterobject.refsol.xxfncs + self.masterobject.refsol.uufncs
-        assert isinstance(self.trajectories.indep_coeffs, OrderedDict)
+        assert isinstance(self.trajectories.indep_vars, OrderedDict)
 
         guess = np.empty(0)
 
-        # assume that both fnc_list and indep_coeffs.items() are sorted like
-        # [x1, ... xn, u1, ..., un]
-        for fnc, (k, v) in zip(fnc_list, self.trajectories.indep_coeffs.items()):
+        # assume that both fnc_list and indep_vars.items() are sorted like
+        # [x_1, ... x_n, u_1, ..., u_m, p_1, ..., p_k]
+        for fnc, (k, v) in zip(fnc_list, self.trajectories.indep_vars.items()):
             logging.debug("Get guess from refsol for spline {}".format(k))
             s_new = self.trajectories.splines[k]
             free_coeffs_guess = s_new.interpolate(fnc)
@@ -854,6 +853,8 @@ def _build_sol_from_free_coeffs(splines):
     Concatenates the values of the independent coeffs
     of all splines in given dict to build pseudo solution.
     """
+
+    # TODO: handle additional free parameters in this function
 
     sol = np.empty(0)
     assert isinstance(splines, OrderedDict)

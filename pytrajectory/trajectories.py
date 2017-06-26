@@ -49,7 +49,7 @@ class Trajectory(object):
         
         # This will be the free parameters of the control problem
         # (list of all independent spline coefficients)
-        self.indep_coeffs = None
+        self.indep_vars = None
 
         # This will hold a deep copy of self.splines
         self._old_splines = None
@@ -67,9 +67,9 @@ class Trajectory(object):
 
     @property
     def n_parts_u(self):
-        '''
+        """
         Number of polynomial spline parts for input variables.
-        '''
+        """
         return self._parameters['n_parts_u']
 
     def _raise_spline_parts(self, k=None):
@@ -106,7 +106,7 @@ class Trajectory(object):
         return arr
     
     def u(self, t):
-        '''
+        """
         Returns the state of the input variables.
         
         Parameters
@@ -114,7 +114,7 @@ class Trajectory(object):
         
         t : float
             The time point in (a,b) to evaluate the input variables at.
-        '''
+        """
         
         if not self.sys.a <= t <= self.sys.b:
             #logging.warning("Time point 't' has to be in (a,b)")
@@ -265,7 +265,7 @@ class Trajectory(object):
         ##:: because key of dict(splines) is only 'upper' (splines[upper]), ##:: splines{'x1': class Spline, 'x3': class Spline}
         for ss in splines.keys():
             ##:: indep_coeffs[x1] = array([cx1_0_0, cx1_1_0, cx1_2_0, ..., cx1_14_0, cx1_15_0, cx1_16_0])
-            indep_vars[ss] = splines[ss]._indep_vars
+            indep_vars[ss] = splines[ss]._indep_coeffs
             
         for pp in xrange(self.sys.n_par):
             indep_vars['z_par_{}'.format(pp + 1)] = np.array([sp.symbols('k{}'.format(pp))])

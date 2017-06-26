@@ -505,15 +505,11 @@ class TransitionProblem(object):
         old_res = 1e20
         old_sol = None
 
-        # Solve the collocation equation system
-        sol, par = self.eqs.solve(G, DG) ##:: len(sol)=free-parameter, type(sol)=<type 'numpy.ndarray'>
-        self.par = par
-
         new_solver = True
         while True:
-            sol, par = self.eqs.solve(G, DG, new_solver=new_solver)
+            sol = self.eqs.solve(G, DG, new_solver=new_solver)
             # TODO: is this neccessary here? probably yes, for the simulation below
-            self.par = par
+            
             # in the following iterations we want to use the same solver
             # object (we just had an intermediate look, whether the solution
             # of the initial value problem is already sufficient accurate.)
@@ -687,7 +683,8 @@ class TransitionProblem(object):
         for x in x_vars:
             start.append(start_dict[x])
         # create simulation object
-        S = Simulator(ff, T, start, self.eqs.trajectories.u, z_par = self.par, dt=self._parameters['dt_sim'])
+        IPS()
+        S = Simulator(ff, T, start, self.eqs.trajectories.u, z_par=self.par, dt=self._parameters['dt_sim'])
 
         logging.debug("start: %s"%str(start))
         
@@ -881,37 +878,11 @@ class DynamicalSystem(object):
         self.b = b
         self.tt = np.linspace(a, b, 1000)
 
-        # TODO: see remark above
+        # TODO: see remark above; The following should be more general!!
         self.z_par = kwargs.get('k', [1.0])
-        self.n_par = self.z_par.__len__()
+
         # analyse the given system
-        self.n_states, self.n_inputs = self._determine_system_dimensions(n=len(xa))
-
-        # set names of the state and input variables
-        # (will be used as keys in various dictionaries)
-        self.states = tuple(['x{}'.format(i+1) for i in xrange(self.n_states)])
-        self.inputs = tuple(['u{}'.format(j+1) for j in xrange(self.n_inputs)])
-        
-        # TODO_ck: what does this mean??
-        # Todo_yx: if self.par is a list,then the following 2 sentences
-        # self.par = []
-        # self.par.append(tuple('z_par')) ##:: [('z_par',)]
-
-        self.par = tuple(['z_par_{}'.format(k+1) for k in xrange(self.n_par)]) # z_par_1, z_par_2,
-
-        self.xxs = sp.symbols(self.states)
-        self.uus = sp.symbols(self.inputs)
-
-        # with (penalty-) constraints
-        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus))
-
-        # without (penalty-) constraints
-        self.f_sym_matrix = self.f_sym_full_matrix[:self.n_states, :]
-
-        # init dictionary for boundary values
-        self.boundary_values = self._get_boundary_dict_from_lists(xa, xb, ua, ub)
-        self.xa = xa
-        self.xb = xb
+        self.n_states, self.n_inputs, self.n_par = self._determine_system_dimensions(n=len(xa))
 
         # collect some information about penalty constraints
         if 'evalconstr' in inspect.getargspec(f_sym).args:
@@ -928,6 +899,49 @@ class DynamicalSystem(object):
             f_sym.has_constraint_penalties = False
             self.n_pconstraints = 0
 
+        # handle the case where f_sym does not depend on additional free parameters
+        if self.n_par == 0:
+            if f_sym.has_constraint_penalties:
+                def f_sym_wrapper(xx, uu, pp, evalconstr=True):
+                    # ignore pp
+                    return f_sym(xx, uu, evalconstr)
+                self.f_sym = f_sym_wrapper
+
+            else:
+                def f_sym_wrapper(xx, uu, pp):
+                    # ignore pp
+                    return f_sym(xx, uu)
+
+            self.f_sym = f_sym_wrapper
+            f_sym_wrapper.has_constraint_penalties = f_sym.has_constraint_penalties
+
+        # set names of the state and input variables
+        # (will be used as keys in various dictionaries)
+        self.states = tuple(['x{}'.format(i+1) for i in xrange(self.n_states)])
+        self.inputs = tuple(['u{}'.format(j+1) for j in xrange(self.n_inputs)])
+        
+        # TODO_ck: what does this mean??
+        # Todo_yx: if self.par is a list,then the following 2 sentences
+        # self.par = []
+        # self.par.append(tuple('z_par')) ##:: [('z_par',)]
+
+        self.par = tuple(['z_par_{}'.format(k+1) for k in xrange(self.n_par)]) # z_par_1, z_par_2,
+
+        self.xxs = sp.symbols(self.states)
+        self.uus = sp.symbols(self.inputs)
+        self.pps = sp.symbols(self.par)
+
+        # with (penalty-) constraints
+        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, self.pps))
+
+        # without (penalty-) constraints
+        self.f_sym_matrix = self.f_sym_full_matrix[:self.n_states, :]
+
+        # init dictionary for boundary values
+        self.boundary_values = self._get_boundary_dict_from_lists(xa, xb, ua, ub)
+        self.xa = xa
+        self.xb = xb
+
         # create vectorfields f and g (symbolically and as numerical function)
 
         ff = self.f_sym_matrix.subs(zip(self.uus, [0]*self.n_inputs))
@@ -937,16 +951,17 @@ class DynamicalSystem(object):
 
         # vf_f and vf_g are not really neccessary, just for scientific playing
         self.vf_f = auxiliary.sym2num_vectorfield(f_sym=ff, x_sym=self.states,
-                                                   u_sym=self.inputs, vectorized=False,
-                                                   cse=False, evalconstr=None)
+                                                  u_sym=self.inputs, p_sym=self.par,
+                                                  vectorized=False, cse=False, evalconstr=None)
 
         self.vf_g = auxiliary.sym2num_vectorfield(f_sym=gg, x_sym=self.states,
-                                                   u_sym=self.inputs, vectorized=False,
-                                                   cse=False, evalconstr=None)
+                                                  u_sym=self.inputs, p_sym=self.par,
+                                                  vectorized=False, cse=False, evalconstr=None)
 
         # create a numeric counterpart for the vector field
         # for faster evaluation
-                                                   
+
+        # IPS()
         self.f_num = auxiliary.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
                                                    u_sym=self.inputs, p_sym=self.par,
                                                    vectorized=False, cse=False, evalconstr=True)
@@ -955,6 +970,7 @@ class DynamicalSystem(object):
         # the extended vectorfield (state equations + constraints) and
         # the basic vectorfiled (only state equations)
         # for simulation, only the the basic vf shall be used
+
         self.f_num_simulation = auxiliary.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
                                                    u_sym=self.inputs, p_sym=self.par,
                                                    vectorized=False, cse=False, evalconstr=False)
@@ -962,7 +978,8 @@ class DynamicalSystem(object):
     def _determine_system_dimensions(self, n):
         # TODO comment on additional free parameters in the docstring
         """
-        Determines the number of state and input variables.
+        Determines the number of state and input variables and whether the system depends on
+        additional free parameters
 
         Parameters
         ----------
@@ -977,25 +994,43 @@ class DynamicalSystem(object):
         # the number of system variables can be determined via the length
         # of the boundary value lists
         n_states = n
-        
+
+        # determine whether the function depends on addinional free parameters (3rd arg)
+        args = inspect.getargspec(self.f_sym).args
+
+        if len(args) == 2:
+            # no additional free parameters
+            afp_flag = False
+        elif len(args) == 3:
+            # additional free parameters are present
+            afp_flag = True
+        else:
+            msg = "unexpected number of arguments takten by f_sym(...): %s" % str(args)
+            raise ValueError(msg)
+
         # now we want to determine the input dimension
         # therefore we iteratively increase the inputs dimension and try to call
         # the vectorfield-function
         found_n_inputs = False
         x = np.ones(n_states)
 
-        # TODO: where is this needed (??)
-        par=[1]
+        if afp_flag:
+            # TODO: handle the case where more than 1 scalar additional free parameter is expected
+            par_arg = [[1]]
+            n_par = 1
+        else:
+            par_arg = []
+            n_par = 0
         j = 0
         while not found_n_inputs:
             u = np.ones(j)
 
             try:
-                self.f_sym(x, u, par)
+                self.f_sym(x, u, *par_arg)
                 # if no ValueError is raised j is the dimension of the inputs
                 n_inputs = j
                 found_n_inputs = True
-            except (TypeError, ValueError):
+            except ValueError:
                 # unpacking error inside f_sym
                 # (that means the dimensions don't match)
                 j += 1
@@ -1004,7 +1039,7 @@ class DynamicalSystem(object):
         logging.debug("--> state: {}".format(n_states))
         logging.debug("--> input : {}".format(n_inputs))
 
-        return n_states, n_inputs
+        return n_states, n_inputs, n_par
 
     def _get_boundary_dict_from_lists(self, xa, xb, ua, ub):
         """

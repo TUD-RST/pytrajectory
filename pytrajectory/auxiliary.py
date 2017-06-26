@@ -262,11 +262,15 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
             msg = "unexpected types in {}".format(x_sym + u_sym + p_sym)
             raise TypeError(msg)
 
+        # construct the arguments
+        args = [x_sym, u_sym, p_sym]
         if f_sym.has_constraint_penalties:
             assert evalconstr is not None
-            F_sym = f_sym(x_sym, u_sym, p_sym, evalconstr)
-        else:
-            F_sym = f_sym(x_sym, u_sym, p_sym)
+            args.append(evalconstr)
+
+        # get the the symbolic expression by evaluation
+        F_sym = f_sym(*args)
+
     else:
         # f_sym was not a callable
         if evalconstr is not None:
@@ -331,7 +335,7 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
         _f_num = cse_lambdify(x_sym + u_sym + p_sym, F_sym,
                               modules=[{'ImmutableMatrix': np.array}, 'numpy'])
     else:
-        _f_num = sp.lambdify(x_sym + u_sym, F_sym,
+        _f_num = sp.lambdify(x_sym + u_sym + p_sym, F_sym,
                              modules=[{'ImmutableMatrix': np.array}, 'numpy'])
 
     # create a wrapper as the actual function due to the behaviour
@@ -887,3 +891,29 @@ def random_refsol_xx(tt, xa, xb, n_points, x_lower, x_upper, seed=0):
         res[:, i] = spln(tt)
 
     return res
+
+
+def reshape_wrapper(arr, dim=None, **kwargs):
+    """
+    This functions is a wrapper to np-reshape that has better handling of zero-sized arrays
+
+    :param arr:
+    :param dim:
+    :return: reshaped array
+    """
+
+    if dim is None:
+        return arr
+    if not len(dim) == 2:
+        raise NotImplementedError()
+    d1, d2 = dim
+    if not d1*d2 == 0:
+        return arr.reshape(dim, **kwargs)
+    else:
+        # one axis has length 0
+        # numpy can not do reshape((0, -1))
+        if d1 == -1:
+            return np.zeros((1, 0))
+        else:
+            return np.zeros((0, 1))
+

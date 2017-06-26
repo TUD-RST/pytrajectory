@@ -44,7 +44,7 @@ class Solver:
     # typical call: Solver(F=G, DF=DG, x0=self.guess, ...)
     # noinspection PyPep8Naming
     def __init__(self, masterobject, F, DF, x0, tol=1e-5, reltol=2e-5, maxIt=50,
-                 method='leven', par = np.array([0.0]), mu=1e-4):
+                 method='leven', par=None, mu=1e-4):
 
         self.masterobject = masterobject
 
@@ -56,9 +56,35 @@ class Solver:
         self.maxIt = maxIt
         self.method = method
         # self.itemindex = itemindex # (TODO: obsolete?)
+
         self.sol = None
-        self.par = par
-    
+
+        self.solve_count = 0
+
+        # this is LM specific
+        self.mu = mu
+        self.res = 1
+        self.res_old = -1
+        self.res_list = []
+        self.mu_list = []
+        self.ntries_list = []
+
+        # this is for the weight
+        self.W = None
+
+        self.cond_abs_tol = False
+        self.cond_rel_tol = False
+        self.cond_num_steps = False
+        self.cond_external_interrupt = False
+        self.avg_LM_time = None
+
+        # TODO: remove obsolete argument
+        if par is None:
+            raise DeprecationWarning()
+            # default values of apropriate size
+        #     par = np.ones(self.masterobject.dynsys.n_par)
+        # self.par = par
+        self.sol = None
 
     def solve(self):
         """
@@ -80,7 +106,7 @@ class Solver:
             return self.x0
         else:
             # TODO: include par into sol??
-            return self.sol, self.par
+            return self.sol
 
     def set_weights(self, mode=None):
         """
@@ -310,7 +336,8 @@ class Solver:
         self.sol = x
         
         # TODO: not so good style (redundancy) because `par` is already a part of sol
-        self.par = np.array(self.sol[-len(self.par):]) # self.itemindex
+        # this line does not work in case of len(par) == 0
+        # self.par = np.array(self.sol[-len(self.par):]) # self.itemindex
 
     def log_break_reasons(self, flag):
     # TODO: write docstring
