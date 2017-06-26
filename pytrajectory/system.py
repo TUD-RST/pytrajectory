@@ -111,6 +111,8 @@ class TransitionProblem(object):
 
         self.refsol = kwargs.get('refsol', None)  # this serves to reproduce a given trajectory
 
+        self.tmp_sol = None  # place to store the result of the server
+
         # create an object for the dynamical system
         self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub, **kwargs)
 
@@ -414,7 +416,7 @@ class TransitionProblem(object):
             elif self.nIt >= 3:
                 logging.info("{}th Iteration: {} spline parts".format(self.nIt+1, self.eqs.trajectories.n_parts_x))
 
-            print('k = {}'.format(self.par[0]))
+            print('par = {}'.format(self.get_par_values()))
             # start next iteration step
             try:        
                 self._iterate()
@@ -436,7 +438,7 @@ class TransitionProblem(object):
         if interfaceserver.running:
             interfaceserver.stop_listening()
 
-        return self.eqs.trajectories.x, self.eqs.trajectories.u, self.par
+        return self.eqs.trajectories.x, self.eqs.trajectories.u, self.get_par_values()
         ##:: self.eqs.trajectories.x, self.eqs.trajectories.u are functions,
         ##:: variable is t.  x(t), u(t) (value of x and u at t moment, not all the values (not a list with values for all the time))
 
@@ -507,9 +509,8 @@ class TransitionProblem(object):
 
         new_solver = True
         while True:
-            sol = self.eqs.solve(G, DG, new_solver=new_solver)
-            # TODO: is this neccessary here? probably yes, for the simulation below
-            
+            self.tmp_sol = self.eqs.solve(G, DG, new_solver=new_solver)
+
             # in the following iterations we want to use the same solver
             # object (we just had an intermediate look, whether the solution
             # of the initial value problem is already sufficient accurate.)
@@ -517,12 +518,10 @@ class TransitionProblem(object):
             new_solver = False
 
             # Set the found solution
-            self.eqs.trajectories.set_coeffs(sol)
+            self.eqs.trajectories.set_coeffs(self.tmp_sol)
 
             # Solve the resulting initial value problem
-            # TODO: do not pass `par` as a separate call parameter
-            # value shoud be taken from self.par or (better) self.sol
-            self.simulate(par)
+            self.simulate()
 
             # dbg: create new splines (to interpolate the obtained result)
             C = self.eqs.trajectories.init_splines(export=True)
@@ -560,12 +559,20 @@ class TransitionProblem(object):
             fs = [75*mm*scale, 35*mm*scale]
             rows = np.round((len(data) + 2)/2.0 + .25)  # round up
 
+            par = self.get_par_values()
+
+            # this is needed for vectorized evaluation
+            n_tt = len(self.sim_data_tt)
+            assert par.ndim == 1
+            par = par.reshape(self.dyn_sys.n_par, 1)
+            par = par.repeat(n_tt, axis=1)
+
             # input part of the vectorfiled
-            gg = self.eqs._Df_vectorized(self.sim_data_xx.T, self.sim_data_uu.T).transpose(2, 0, 1)
+            gg = self.eqs._Df_vectorized(self.sim_data_xx.T, self.sim_data_uu.T, par).transpose(2, 0, 1)
             gg = gg[:, :-1, -1]
 
             # drift part of the vf
-            ff = self.eqs._ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0).T[:, :-1]
+            ff = self.eqs._ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0, par).T[:, :-1]
 
             if 1:
                 plt.figure(figsize=fs)
@@ -653,8 +660,7 @@ class TransitionProblem(object):
             # else:
             #     logging.debug('New attempt\n\n')
 
-# TODO: get rid of `par` here. take the values from self (see remark above)
-    def simulate(self, par):
+    def simulate(self):
         """
         This method is used to solve the resulting initial value problem
         after the computation of a solution for the input trajectories.
@@ -682,19 +688,23 @@ class TransitionProblem(object):
 
         for x in x_vars:
             start.append(start_dict[x])
+
+        par = self.get_par_values()
         # create simulation object
-        IPS()
-        S = Simulator(ff, T, start, self.eqs.trajectories.u, z_par=self.par, dt=self._parameters['dt_sim'])
+        S = Simulator(ff, T, start, self.eqs.trajectories.u, z_par=par, dt=self._parameters['dt_sim'])
 
         logging.debug("start: %s"%str(start))
         
         # forward simulation
         self.sim_data = S.simulate()
+
         ##:: S.simulate() is a method,
         # returns a list [np.array(self.t), np.array(self.xt), np.array(self.ut)]
         # self.sim_data is a `self.variable?` (initialized with None in __init__(...))
-        self.sim_data.append(par)
-    
+
+        # convenient access
+        self.sim_data_tt, self.sim_data_xx, self.sim_data_uu = self.sim_data
+
     def check_accuracy(self):
         """
         Checks whether the desired accuracy for the boundary values was reached.
@@ -712,7 +722,10 @@ class TransitionProblem(object):
         a = self.sim_data[0][0]
         b = self.sim_data[0][-1]
         xt = self.sim_data[1]
-        par_k = self.par[0]
+
+        # TODO: remove obsolete line
+        # additional free parameters do not have any influence on accuracy
+        # par = self.get_par_values()
 
         # get boundary values at right border of the interval
         if self.constraints:
@@ -744,13 +757,14 @@ class TransitionProblem(object):
             maxH = auxiliary.consistency_error((a,b),
                                                self.eqs.trajectories.x, self.eqs.trajectories.u,
                                                self.eqs.trajectories.dx,
-                                               self.dyn_sys.f_num_simulation)
+                                               self.dyn_sys.f_num_simulation,
+                                               par=self.get_par_values())
             
-            reached_accuracy = (maxH < ierr) and (max(err) < eps) and (par_k > 0.0)
+            reached_accuracy = (maxH < ierr) and (max(err) < eps)
             logging.debug('maxH = %f'%maxH)
         else:
             # just check if tolerance for the boundary values is satisfied
-            reached_accuracy = (max(err) < eps) and (par_k > 0.0)
+            reached_accuracy = (max(err) < eps)
         
         if reached_accuracy:
             logging.info("  --> reached desired accuracy: "+str(reached_accuracy))
@@ -758,7 +772,17 @@ class TransitionProblem(object):
             logging.debug("  --> reached desired accuracy: "+str(reached_accuracy))
         
         self.reached_accuracy = reached_accuracy
-    
+
+    def get_par_values(self):
+        """
+        extract the values of additional free parameters from last solution (self.tmp_sol)
+        """
+
+        assert self.tmp_sol is not None
+        N = len(self.tmp_sol)
+        start_idx = N - self.dyn_sys.n_par
+        return self.tmp_sol[start_idx:]
+
     def plot(self):
         """
         Plot the calculated trajectories and show interval error functions.

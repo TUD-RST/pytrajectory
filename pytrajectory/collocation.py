@@ -748,9 +748,8 @@ class CollocationSystem(object):
 
         # solve the equation system
         
-        # TODO !! par should be part of sol (or at least should be stored in self)
-        self.sol, par = self.solver.solve()
-        return self.sol, par
+        self.sol = self.solver.solve()
+        return self.sol
 
     def save(self):
         """

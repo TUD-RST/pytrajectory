@@ -310,7 +310,7 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
                     # we add an expression which evaluates to zero, but enables us
                     # to put an array into the matrix where there is now a single number
                     #
-                    # we just take an arbitrary input, multiply it with 0 and add it
+                    # we just take an arbitrary state, multiply it with 0 and add it
                     # to the current element (constant)
                     zero_expr = sp.Mul(0.0, sp.Symbol(x_sym[0]), evaluate=False)
                     F_sym[i,j] = sp.Add(F_sym[i,j], zero_expr, evaluate=False)

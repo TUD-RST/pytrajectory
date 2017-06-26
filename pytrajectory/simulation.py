@@ -68,7 +68,6 @@ class Simulator(object):
         """
         u = self.u(t)
         p = self.pt
-        IPS()
         dx = self.ff(x, u, p)
         
         return dx
