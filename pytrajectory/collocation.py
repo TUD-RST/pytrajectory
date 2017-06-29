@@ -43,8 +43,14 @@ class CollocationSystem(object):
         self._parameters['method'] = kwargs.get('method', 'leven')
         self._parameters['coll_type'] = kwargs.get('coll_type', 'equidistant')
         
-        # TODO: maybe this should be implemented more elegantly
-        self._parameters['z_par'] = kwargs.get('k', [1.0]) # introduce the free parameters
+        tmp_par = kwargs.get('k', [1.0]*self.sys.n_par)
+        if len(tmp_par) > self.sys.n_par:
+            logging.warning("Ignoring superfluous default values for afp.")
+            tmp_par = tmp_par[:self.sys.n_par]
+        elif len(tmp_par) < self.sys.n_par:
+            raise ValueError("Insufficient number of default values for afp.")
+        self._parameters['z_par'] = tmp_par
+
         
         ##!! self.n_par = self._parameters['z_par'].__len__()
         
@@ -570,6 +576,16 @@ class CollocationSystem(object):
         
         return dep_vec_k, dep_vec_abs_k
 
+    @property
+    def _afp_index(self):
+        """
+        :return: the index from which the additional free parameters begin
+
+        Background:  guess[-self.sys.n_par:] does not work in case of zero parameters
+        """
+        n = len(self.trajectories.indep_var_list)
+        return n - self.sys.n_par
+
     def get_guess(self):
         """
         This method is used to determine a starting value (guess) for the
@@ -590,7 +606,8 @@ class CollocationSystem(object):
             # we are at the first iteration (no old splines exist)
             if self._first_guess is not None:
                 # user defines initial value of free coefficients
-                assert self.masterobject.refsol is None  # together, `guess` and `refsol` make no sense
+                # together, `guess` and `refsol` make no sense
+                assert self.masterobject.refsol is None
 
                 guess = np.empty(0)
 
@@ -613,7 +630,7 @@ class CollocationSystem(object):
                         free_vars_guess = 0.1 * np.ones(len(v))
 
                     guess = np.hstack((guess, free_vars_guess))
-                    guess[-self.sys.n_par:] = self._parameters['z_par']
+                    guess[self._afp_index:] = self._parameters['z_par']
                     
             elif self.masterobject.refsol is not None:
                 # TODO: handle free parameters
@@ -628,16 +645,16 @@ class CollocationSystem(object):
                 ##:: (5 x 11): free_coeffs_all = array([cx3_0_0, cx3_1_0, ..., cx3_8_0, cx1_0_0, ..., cx1_14_0, cx1_15_0, cx1_16_0, k]
                 guess = 0.1 * np.ones(free_vars_all.size) ##:: init. guess = 0.1
                 ##!! itemindex = np.argwhere(free_coeffs_all == sp.symbols('k'))
-                # Todo: change guess to guess[-n_par:]
-                guess[-self.sys.n_par:] = self._parameters['z_par']
+                guess[self._afp_index:] = self._parameters['z_par']
                 #guess[-1] = self._parameters['z_par'] # in 1st round, the last element of guess is the value of z_par
-
 
                 ##!! self.itemindex = itemindex[0][0]
                 ##!! p = np.array([2.5])
                 ##!! guess = np.hstack((guess,p[0])
 
-            # TODO: Check inendation levels (mistake is probable)
+
+            # End of case discrimination between first_guess and refsol and None of these
+            # TODO: Check indentation levels (mistake is probable)
 
         else:
             # old_splines do exist
@@ -677,6 +694,7 @@ class CollocationSystem(object):
                             free_coeffs_guess = s_new.interpolate(s_old.f, m0=df0, mn=dfn)
                         except TypeError as e:
                             IPS()
+                            raise e
                         guess = np.hstack((guess, free_coeffs_guess))
 
                     elif (spline_type == 'p' ):#  if self.sys.par is not the last one, then add (and guess_add_finish == False) here.

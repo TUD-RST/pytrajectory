@@ -285,6 +285,15 @@ class Trajectory(object):
                                     x_fnc=x_fnc, u_fnc=u_fnc, dx_fnc=dx_fnc)
             return C
 
+    @property
+    def indep_var_list(self):
+        """
+        :return: a list of all independent variables (ordering as in the OrderedDict)
+        """
+        assert isinstance(self.indep_vars, OrderedDict)
+        return list(np.concatenate(self.indep_vars.values()))
+
+
     def set_coeffs(self, sol):
         """
         Set found numerical values for the independent parameters of each spline.
