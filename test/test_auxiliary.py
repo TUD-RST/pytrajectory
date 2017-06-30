@@ -106,3 +106,28 @@ class TestCseLambdify(object):
         f = pytrajectory.auxiliary.cse_lambdify(args=(x, y), expr=expr, modules='numpy')
 
         assert f(0., 0.) == 1.
+
+    def test_sym2num(self):
+        x, u, p = sp.symbols('x, u, p')
+        f1 = [x, u, p]
+        f2 = [x, u, 0*p]
+
+
+        fnc1 = pytrajectory.auxiliary.sym2num_vectorfield(f_sym=f1, x_sym=[x], u_sym=[u], p_sym=[p], vectorized=True, cse=True)
+        fnc2 = pytrajectory.auxiliary.sym2num_vectorfield(f_sym=f2, x_sym=[x], u_sym=[u], p_sym=[p], vectorized=True, cse=True)
+
+        N = 4
+        xx = np.zeros((1, N)) + 1
+        uu = np.zeros((1, N)) + 0.2
+        pp = np.zeros((1, N)) + 0.03
+
+        res1 = fnc1(xx, uu, pp)
+        res2 = fnc2(xx, uu, pp)
+
+        assert res1.shape == (3, N)
+        assert res2.shape == (3, N)
+
+
+
+if __name__ == "__main__":
+    print("\n"*2 + r"   please run py.test %filename.py"+ "\n")
