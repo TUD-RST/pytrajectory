@@ -136,7 +136,8 @@ def find_integrator_chains(dyn_sys):
     state_sym = sp.symbols(dyn_sys.states) # e.g. (x1, x2, x3, x4)
     input_sym = sp.symbols(dyn_sys.inputs) # e.g. (u1,)
     par_sym = sp.symbols(list(dyn_sys.par))
-    f = dyn_sys.f_sym(state_sym, input_sym, par_sym)
+    # f = dyn_sys.f_sym(state_sym, input_sym, par_sym)
+    f = dyn_sys.f_sym_matrix
     assert dyn_sys.n_states == len(f)
 
     chaindict = {}

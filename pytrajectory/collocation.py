@@ -253,6 +253,7 @@ class CollocationSystem(object):
 
                 # now, this 2d array should be rearranged to a flattened vector
                 # the constraint-values should be handled separately (they are not part of ff(x)-xdot)
+                IPS()
                 F1 = F0[:n_states, :]
                 C = F0[n_states:, :]
 

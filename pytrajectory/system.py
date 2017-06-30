@@ -74,7 +74,7 @@ class TransitionProblem(object):
         localEsc      0               How often try to escape local minimum without increasing
                                       number of spline parts
         use_chains    True            Whether or not to use integrator chains
-        sol_steps     100             Maximum number of iteration steps for the eqs solver
+        sol_steps     50             Maximum number of iteration steps for the eqs solver
         accIt         5               How often resume the iteration after sol_steps limit
                                       (just have a look, in case the ivp is already satisfied)
         first_guess   None            to initiate free parameters (might be useful: {'seed': value})
@@ -557,7 +557,7 @@ class TransitionProblem(object):
             mm = 1./25.4  # mm to inch
             scale = 8
             fs = [75*mm*scale, 35*mm*scale]
-            rows = np.round((len(data) + 2)/2.0 + .25)  # round up
+            rows = np.round((len(data) + 1)/2.0 + .25)  # round up
 
             par = self.get_par_values()
 
@@ -574,6 +574,8 @@ class TransitionProblem(object):
             # drift part of the vf
             ff = self.eqs._ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0, par).T[:, :-1]
 
+            labels = self.dyn_sys.states + self.dyn_sys.inputs
+
             if 1:
                 plt.figure(figsize=fs)
                 for i in xrange(len(data)):
@@ -585,19 +587,20 @@ class TransitionProblem(object):
                     plt.vlines(s.nodes, -10, 10, color="0.85")
                     plt.axis(ax)
                     plt.grid(1)
+                    plt.ylabel(labels[i])
                 plt.legend(loc='best')
 
-                plt.subplot(rows, 2, i + 2)
-                plt.title("vf: f")
-                plt.plot(tt, ff)
-
-                plt.subplot(rows, 2, i + 3)
-                plt.title("vf: g")
-                plt.plot(tt, gg)
+                # plt.subplot(rows, 2, i + 2)
+                # plt.title("vf: f")
+                # plt.plot(tt, ff)
+                #
+                # plt.subplot(rows, 2, i + 3)
+                # plt.title("vf: g")
+                # plt.plot(tt, gg)
 
                 fname =  auxiliary.datefname(ext="pdf")
-                plt.savefig(fname)
-                logging.debug(fname + " written.")
+                # plt.savefig(fname)
+                # logging.debug(fname + " written.")
 
                 plt.show()
                 # IPS()
@@ -912,8 +915,12 @@ class DynamicalSystem(object):
         if 'evalconstr' in inspect.getargspec(f_sym).args:
             f_sym.has_constraint_penalties = True
 
+            args = [xa, [0]*self.n_inputs]
+            if self.n_par > 0:
+                args.append([1]*self.n_par)
+
             # number of returned values - number of states
-            nc = len(f_sym(xa, [0]*self.n_inputs, evalconstr=True)) - self.n_states
+            nc = len(f_sym(*args, evalconstr=True)) - self.n_states
             if nc < 1:
                 msg = "No constraint equations found, but signature of f_sym indicates such."
                 raise ValueError(msg)
@@ -1022,10 +1029,15 @@ class DynamicalSystem(object):
         # determine whether the function depends on addinional free parameters (3rd arg)
         args = inspect.getargspec(self.f_sym).args
 
-        if len(args) == 2:
+        if 'evalconstr' in args:
+            min_arg_num = 3
+        else:
+            min_arg_num = 2
+
+        if len(args) == min_arg_num:
             # no additional free parameters
             afp_flag = False
-        elif len(args) == 3:
+        elif len(args) == min_arg_num + 1:
             # additional free parameters are present
             afp_flag = True
         else:

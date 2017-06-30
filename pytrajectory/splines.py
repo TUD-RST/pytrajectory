@@ -498,7 +498,7 @@ class Spline(object):
         # -> allow extrapolation for small excess
         if tt[-1] < self.nodes[-1]:
             dt = tt[1] - tt[0]
-            assert self.nodes[-1] - tt[-1] < dt/100
+            assert self.nodes[-1] - tt[-1] < dt/10
 
         return interp1d(tt, xx, fill_value="extrapolate")
 

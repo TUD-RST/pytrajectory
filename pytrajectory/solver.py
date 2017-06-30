@@ -278,7 +278,7 @@ class Solver:
             if i > 1 and self.res > self.res_old:
                 logging.warn("res_old > res  (should not happen)")
 
-            logging.debug("sp=%d  nIt=%d    res=%f" % (n_spln_prts, i, self.res))
+            logging.debug("sp=%d  nIt=%d   k=%f  res=%f" % (n_spln_prts, i, xs[-1], self.res))
             
             self.cond_abs_tol = self.res <= self.tol
             if self.res > 1:
