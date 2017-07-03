@@ -595,7 +595,8 @@ def penalty_expression(x, xmin, xmax):
     :return:
     """
     m = 5
-    xmid = (xmax - xmin)/2
+    xmid = xmin + (xmax - xmin)/2
+    # first term: parabola -> 0,                            second term: 0 -> parabola
     res = (x-xmid)**2/(1 + sp.exp(m*(x - xmin))) + (x-xmid)**2/(1 + sp.exp(m*(xmax - x)))
     # sp.plot(res, (x, xmin-xmid, xmax+xmid))
     return res
