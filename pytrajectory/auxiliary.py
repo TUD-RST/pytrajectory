@@ -296,6 +296,11 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
         raise TypeError(str(sym_type))
 
     if vectorized:
+
+        # TODO: Check and clean up
+        # All this code seems to be obsolete
+        # we now use explicit broadcasting of the result (see below)
+
         # in order to make the numeric function vectorized
         # we have to check if the symbolic expression contains
         # constant numbers as a single expression
@@ -348,12 +353,14 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
 
     if sym_dim == 1:
         def f_num(x, u, p):
-            xu = stack((x, u, p))
-            return np.array(_f_num(*xu))
+            xup = stack((x, u, p))
+            raw = _f_num(*xup)  # list of arrays of potentially different length (1 or n)
+            return np.array(np.broadcast_arrays(*raw))
     else:
         def f_num(x, u, p):
-            xu = stack((x, u, p))
-            return _f_num(*xu)
+            xup = stack((x, u, p))
+            raw = _f_num(*xup)  # list of arrays of potentially different length (1 or n)
+            return np.array(np.broadcast_arrays(*raw))
 
     return f_num
 
@@ -374,6 +381,7 @@ def check_expression(expr):
     else:
         if not isinstance(expr, sp.Basic) and not isinstance(expr, sp.Matrix):
             raise TypeError("Not a sympy expression!")
+
 
 def make_cse_eval_function(input_args, replacement_pairs, ret_filter=None, namespace=None):
     """

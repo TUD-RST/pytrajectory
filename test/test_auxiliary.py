@@ -130,4 +130,4 @@ class TestCseLambdify(object):
 
 
 if __name__ == "__main__":
-    print("\n"*2 + r"   please run py.test %filename.py"+ "\n")
+    print("\n"*2 + r"   please run py.test -s %filename.py"+ "\n")

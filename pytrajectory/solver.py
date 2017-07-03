@@ -243,7 +243,7 @@ class Solver:
                     # this should might be caused by large values for xs
                     # but it should have been catched above
                     logging.warn("rho = nan (should not happen)")
-                    IPS()
+                    # IPS()
                     raise NanError()
 
                 if rho < 0:
@@ -340,7 +340,7 @@ class Solver:
         # self.par = np.array(self.sol[-len(self.par):]) # self.itemindex
 
     def log_break_reasons(self, flag):
-    # TODO: write docstring
+        # TODO: write docstring
         if not flag:
             return
 

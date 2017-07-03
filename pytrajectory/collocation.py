@@ -253,7 +253,6 @@ class CollocationSystem(object):
 
                 # now, this 2d array should be rearranged to a flattened vector
                 # the constraint-values should be handled separately (they are not part of ff(x)-xdot)
-                IPS()
                 F1 = F0[:n_states, :]
                 C = F0[n_states:, :]
 
@@ -262,8 +261,6 @@ class CollocationSystem(object):
                 # first index changing fastest, and the last index changing slowest.
                 F = F1.ravel(order='F').take(take_indices, axis=0)[:, None]
 
-                
-                
                 # calculate xdot:
                 dX = MC.Mdx.dot(c)[:,None] + MC.Mdx_abs
                 # dX has shape (ns*nc) x 1
@@ -694,7 +691,7 @@ class CollocationSystem(object):
                         try:
                             free_coeffs_guess = s_new.interpolate(s_old.f, m0=df0, mn=dfn)
                         except TypeError as e:
-                            IPS()
+                            # IPS()
                             raise e
                         guess = np.hstack((guess, free_coeffs_guess))
 
