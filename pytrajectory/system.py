@@ -77,6 +77,8 @@ class TransitionProblem(object):
         sol_steps     50             Maximum number of iteration steps for the eqs solver
         accIt         5               How often resume the iteration after sol_steps limit
                                       (just have a look, in case the ivp is already satisfied)
+        show_ir       False           Show intermediate result. Plot splines and simulation result
+                                      after each IVP-solution (usefull for development)
         first_guess   None            to initiate free parameters (might be useful: {'seed': value})
         refsol        Container       optional data (C.tt, C.xx, C.uu) for the reference trajectory
         ============= =============   ============================================================
@@ -108,6 +110,7 @@ class TransitionProblem(object):
         self._parameters['accIt'] = kwargs.get('accIt', 5)
         self._parameters['localEsc'] = kwargs.get('localEsc', 0)
         self._parameters['reltol'] = kwargs.get('reltol', 2e-5)
+        self._parameters['show_ir'] = kwargs.get('show_ir', False)
 
         self.refsol = kwargs.get('refsol', None)  # this serves to reproduce a given trajectory
 
@@ -438,7 +441,17 @@ class TransitionProblem(object):
         if interfaceserver.running:
             interfaceserver.stop_listening()
 
-        return self.eqs.trajectories.x, self.eqs.trajectories.u, self.get_par_values()
+        return self.return_solution()
+
+    def return_solution(self):
+        """
+
+        :return: 2 or 3 elements (depending on the presence of additional free parameters)
+        """
+        if self.dyn_sys.n_par == 0:
+            return self.eqs.trajectories.x, self.eqs.trajectories.u
+        else:
+            return self.eqs.trajectories.x, self.eqs.trajectories.u, self.get_par_values()
         ##:: self.eqs.trajectories.x, self.eqs.trajectories.u are functions,
         ##:: variable is t.  x(t), u(t) (value of x and u at t moment, not all the values (not a list with values for all the time))
 
@@ -576,7 +589,7 @@ class TransitionProblem(object):
 
             labels = self.dyn_sys.states + self.dyn_sys.inputs
 
-            if 1:
+            if self._parameters['show_ir']:
                 plt.figure(figsize=fs)
                 for i in xrange(len(data)):
                     plt.subplot(rows, 2, i+1)
@@ -945,7 +958,6 @@ class DynamicalSystem(object):
 
             self.f_sym = f_sym_wrapper
             f_sym_wrapper.has_constraint_penalties = f_sym.has_constraint_penalties
-
         # set names of the state and input variables
         # (will be used as keys in various dictionaries)
         self.states = tuple(['x{}'.format(i+1) for i in xrange(self.n_states)])
@@ -1060,6 +1072,12 @@ class DynamicalSystem(object):
         j = 0
         while not found_n_inputs:
             u = np.ones(j)
+
+            if j > 100:
+                msg = "More than 100 input components are not supported. " \
+                      "Probalbly this is an error caused by the algorithm for determining" \
+                      "the input dimension"
+                raise ValueError(msg)
 
             try:
                 self.f_sym(x, u, *par_arg)

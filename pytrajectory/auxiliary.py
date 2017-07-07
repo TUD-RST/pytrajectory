@@ -15,7 +15,6 @@ from log import logging, Timer
 from ipHelp import IPS
 
 
-
 class NanError(ValueError):
     pass
 
@@ -584,7 +583,7 @@ def saturation_functions(y_fnc, dy_fnc, y0, y1):
     return psi_y, dpsi_dy
 
 
-def penalty_expression(x, xmin, xmax):
+def penalty_expression(x, xmin, xmax, m=5, scale=1):
     """
     return a quadratic parabola (vertex in the middle between xmin and xmax)
     which is almost zero between xmin and xmax (exponentially faded).
@@ -592,12 +591,22 @@ def penalty_expression(x, xmin, xmax):
     :param x:
     :param xmin:
     :param xmax:
+    :param m:       slope at the (smooth) saltus
+    :param scale:   scaling factor of result
     :return:
     """
-    m = 5
+
+    if not isinstance(x, (sp.Symbol, float, int, np.number)):
+        msg = "unexpected type for variable in penalty expression: %s" % type(x)
+        raise TypeError(msg)
+
+    if xmin == xmax:
+        logging.warning("penalty expression: xmin == xmax == %s" % xmin)
+
     xmid = xmin + (xmax - xmin)/2
     # first term: parabola -> 0,                            second term: 0 -> parabola
     res = (x-xmid)**2/(1 + sp.exp(m*(x - xmin))) + (x-xmid)**2/(1 + sp.exp(m*(xmax - x)))
+    res*=scale
     # sp.plot(res, (x, xmin-xmid, xmax+xmid))
     return res
 
