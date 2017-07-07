@@ -7,26 +7,28 @@ from matplotlib import animation
 from matplotlib.gridspec import GridSpec
 import os
 
+from IPython import embed as IPS
+
 
 def plot_simulation(sim_data, H=[], fname=None):
-    '''
+    """
     This method provides graphics for each system variable, manipulated
     variable and error function and plots the solution of the simulation.
-    
+
     Parameters
     ----------
-    
+
     sim_data : tuple
         Contains collocation points, and simulation results of system and input variables.
-    
+
     H : dict
         Dictionary of the callable error functions
-    
+
     fname : str
         If not None, plot will be saved as <fname>.png
-    '''
+    """
     
-    1/0 # this function seems to be obsolete
+    1/0  # this function seems to be obsolete
     
     t, xt, ut = sim_data
     n = xt.shape[1]
@@ -99,28 +101,28 @@ def plot_simulation(sim_data, H=[], fname=None):
 
 
 class Animation():
-    '''
+    """
     Provides animation capabilities.
-    
+
     Given a callable function that draws an image of the system state and smiulation data
     this class provides a method to created an animated representation of the system.
-    
-    
+
+
     Parameters
     ----------
-    
+
     drawfnc : callable
         Function that returns an image of the current system state according to :attr:`simdata`
-    
+
     simdata : numpy.ndarray
         Array that contains simulation data (time, system states, input states)
-    
+
     plotsys : list
         List of tuples with indices and labels of system variables that will be plotted along the picture
-    
+
     plotinputs : list
         List of tuples with indices and labels of input variables that will be plotted along the picture
-    '''
+    """
     
     def __init__(self, drawfnc, simdata, plotsys=[], plotinputs=[], rcParams=None):
         
@@ -134,6 +136,9 @@ class Animation():
         self.t = simdata[0]
         self.xt = simdata[1]
         self.ut = simdata[2]
+
+        if np.ndim(self.ut) == 1:
+            self.ut = self.ut.reshape(-1, 1)  # one column
         
         self.plotsys = plotsys
         self.plotinputs = plotinputs
@@ -142,45 +147,45 @@ class Animation():
         
         self.axes['ax_img'].set_frame_on(True)
         self.axes['ax_img'].set_aspect('equal')
-        self.axes['ax_img'].set_axis_bgcolor('w')
+        # self.axes['ax_img'].set_axis_bgcolor('w')
+        self.axes['ax_img'].set_facecolor('w')
         
         self.nframes = int(round(24*(self.t[-1] - self.t[0])))
         
         self.draw = drawfnc
         
         # set axis limits and labels of system curves
-        #xlim = (0.0, self.t[-1] - self.t[0])
         xlim = (self.t[0], self.t[-1])
         for i, idxlabel in enumerate(self.plotsys):
             idx, label = idxlabel
             
             try:
-                ylim = (min(self.xt[:,idx]), max(self.xt[:,idx]))
+                ylim = (min(self.xt[:, idx]), max(self.xt[:, idx]))
             except:
                 ylim = (min(self.xt), max(self.xt))
             
-            self.set_limits(ax='ax_x%d'%i, xlim=xlim, ylim=ylim)
-            self.set_label(ax='ax_x%d'%i, label=label)
+            self.set_limits(ax='ax_x%d' % i, xlim=xlim, ylim=ylim)
+            self.set_label(ax='ax_x%d' % i, label=label)
             
         # set axis limits and labels of input curves
         for i, idxlabel in enumerate(self.plotinputs):
             idx, label = idxlabel
             
             try:
-                ylim = (min(self.ut[:,idx]), max(self.ut[:,idx]))
+                ylim = (min(self.ut[:, idx]), max(self.ut[:, idx]))
             except:
                 ylim = (min(self.ut), max(self.ut))
             
-            self.set_limits(ax='ax_u%d'%i, xlim=xlim, ylim=ylim)
-            self.set_label(ax='ax_u%d'%i, label=label)
+            self.set_limits(ax='ax_u%d' % i, xlim=xlim, ylim=ylim)
+            self.set_label(ax='ax_u%d' % i, label=label)
         
         # enable LaTeX text rendering --> slow
         plt.rc('text', usetex=True)
     
     class Image():
-        '''
+        """
         This is just a container for the drawn system.
-        '''
+        """
         def __init__(self):
             self.patches = []
             self.lines = []
@@ -238,17 +243,17 @@ class Animation():
         self.axes[ax].set_ylabel(label, rotation='horizontal', horizontalalignment='right')
         
     def show(self, t=0.0, xlim=None, ylim=None, axes_callback=None, save_fname=None, show=True):
-        '''
+        """
         Plots one frame of the system animation.
-        
+
         Parameters
         ----------
-        
+
         t : float
             The time for which to plot the system
-        '''
+        """
         
-        # determine index of sim_data values correponding to given time
+        # determine index of sim_data values corresponding to given time
         if t <= self.t[0]:
             i = 0
         elif t >= self.t[-1]:
@@ -274,7 +279,7 @@ class Animation():
             image.reset()
         
         # call the provided drawfnc
-        image = self.draw(self.xt[i,:], image=image)
+        image = self.draw(self.xt[i, :], image=image)
         
         for p in image.patches:
             ax_img.add_patch(p)
@@ -293,16 +298,19 @@ class Animation():
             try:
                 curve.set_data(self.t[:i], self.xt[:i, self.plotsys[k][0]])
             except:
+                assert False  # TODO: this should not happen (unclear index handling)
                 curve.set_data(self.t[:i], self.xt[:i])
             self.axes['ax_x%d'%k].add_line(curve)
         
         # update input curves
         for k, curve in enumerate(self.inputcurves):
             try:
-                curve.set_data(self.t[:i], self.ut[:i,self.plotinputs[k][0]])
-            except:
+                curve.set_data(self.t[:i], self.ut[:i, self.plotinputs[k][0]])
+            except Exception as e:
+                assert False  # TODO: this should not happen (unclear index handling)
+                # TODO: better exception handling
                 curve.set_data(self.t[:i], self.ut[:i])
-            self.axes['ax_u%d'%k].add_line(curve)
+            self.axes['ax_u%d' % k].add_line(curve)
         
         
         if axes_callback:
@@ -318,9 +326,9 @@ class Animation():
             plt.show()
     
     def animate(self):
-        '''
+        """
         Starts the animation of the system.
-        '''
+        """
         t = self.t
         xt = self.xt
         ut = self.ut
@@ -333,26 +341,30 @@ class Animation():
         
         # add so many frames that they fill the `pause`
         add_frames = int(fps * pause_time)
+
+        if len(ut.shape) == 1:
+            ut = ut.reshape(-1, 1)
         
         for i in xrange(add_frames):
             t = np.hstack((t[0],t,t[-1]))
             xt = np.vstack((xt[0],xt,xt[-1]))
             ut = np.vstack((ut[0],ut,ut[-1]))
         
-        
-        #tt = np.linspace(0,len(t)-1,self.nframes,endpoint=True)
-        tt = np.linspace(0,xt.shape[0]-1,self.nframes,endpoint=True)
-        tt = np.hstack(([tt[0]]*add_frames,tt,[tt[-1]]*add_frames))
+        # array of indices corresponding to the shown frames
+        f_idcs = np.linspace(0,xt.shape[0]-1, self.nframes,endpoint=True)
+        f_idcs = np.hstack(([f_idcs[0]]*add_frames, f_idcs, [f_idcs[-1]]*add_frames))
+        # convert the floats to integer
+        f_idcs = np.int32(f_idcs)
         
         self.T = t[-1] - t[0] + 2 * pause_time
         
         # raise number of frames
         self.nframes += 2 * add_frames
         
-        
-        def _animate(frame):
-            i = tt[frame]
-            print "frame = {f}, t = {t}, x = {x}, u = {u}".format(f=frame, t=t[i], x=xt[i,:], u=ut[i,:])
+        def _animate(frame_nbr):
+            idx = f_idcs[frame_nbr]
+            out = "frame = {f}, t = {t}, x = {x}, u = {u}"
+            print out.format(f=frame_nbr, t=t[idx], x=xt[idx, :], u=ut[idx, :])
             
             # draw picture
             image = self.image
@@ -369,7 +381,7 @@ class Animation():
                     l.remove()
                 image.reset()
             
-            image = self.draw(xt[i,:], image=image)
+            image = self.draw(xt[idx,:], image=image)
             
             for p in image.patches:
                 ax_img.add_patch(p)
@@ -383,17 +395,17 @@ class Animation():
             # update system curves
             for k, curve in enumerate(self.syscurves):
                 try:
-                    curve.set_data(t[:i], xt[:i, self.plotsys[k][0]])
+                    curve.set_data(t[:idx], xt[:idx, self.plotsys[k][0]])
                 except:
-                    curve.set_data(t[:i], xt[:i])
+                    curve.set_data(t[:idx], xt[:idx])
                 self.axes['ax_x%d'%k].add_line(curve)
             
             # update input curves
             for k, curve in enumerate(self.inputcurves):
                 try:
-                    curve.set_data(t[:i], ut[:i,self.plotinputs[k][0]])
+                    curve.set_data(t[:idx], ut[:idx,self.plotinputs[k][0]])
                 except:
-                    curve.set_data(t[:i], ut[:i])
+                    curve.set_data(t[:idx], ut[:idx])
                 self.axes['ax_u%d'%k].add_line(curve)
             
             plt.draw()
@@ -403,9 +415,9 @@ class Animation():
     
     
     def save(self, fname, fps=None, dpi=200):
-        '''
+        """
         Saves the animation as a video file or animated gif.
-        '''
+        """
 
         if not fps:
             fps = self.nframes/(float(self.T))  # add pause_time here?

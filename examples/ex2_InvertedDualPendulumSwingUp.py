@@ -1,7 +1,7 @@
 # swing up of the inverted dual pendulum with partial linearization
 
 # import trajectory class and necessary dependencies
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 from sympy import cos, sin
 import numpy as np
 
@@ -35,7 +35,7 @@ ua = [0.0]
 ub = [0.0]
 
 # create trajectory object
-S = ControlSystem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=ua, ub=ub)
+S = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=ua, ub=ub)
 
 # alter some method parameters to increase performance
 S.set_param('su', 10)

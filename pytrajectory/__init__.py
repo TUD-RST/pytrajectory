@@ -1,18 +1,20 @@
-'''
+"""
 PyTrajectory
 ============
 
-PyTrajectory is a Python library for the determination of the feed forward control 
+PyTrajectory is a Python library for the determination of the feed forward control
 to achieve a transition between desired states of a nonlinear control system.
-'''
+"""
 
-from system import ControlSystem
+from system import TransitionProblem, ControlSystem
 from trajectories import Trajectory
 from splines import Spline
 from solver import Solver
 from simulation import Simulator
 from visualisation import Animation
 from log import logging
+from auxiliary import penalty_expression
+import auxiliary as aux
 
 # current version
 __version__ = '1.3.1'

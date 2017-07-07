@@ -1,21 +1,23 @@
-'''
+"""
 This example of the inverted pendulum demonstrates the basic usage of
 PyTrajectory as well as its visualisation capabilities.
-'''
+"""
 
 # import all we need for solving the problem
 from pytrajectory import TransitionProblem
+from pytrajectory import penalty_expression as pe
 import numpy as np
-from sympy import cos, sin
 from numpy import pi
+from sympy import cos, sin, symbols, plot
 
 # the next imports are necessary for the visualisatoin of the system
 import sys
 import matplotlib as mpl
 from pytrajectory.visualisation import Animation
 
+
 # first, we define the function that returns the vectorfield
-def f(x,u):
+def f(x, u, evalconstr=True):
     x1, x2, x3, x4 = x  # system variables
     u1, = u             # input variable
     
@@ -27,8 +29,21 @@ def f(x,u):
                     u1,
                     x4,
             (1/l)*(g*sin(x3)+u1*cos(x3))]
+
+    # append equations for the constraints
+    if 1 and evalconstr:
+        res = pe(x1, -10, 10)
+        res += pe(x2, -10, 10)
+        res += pe(x3, -10, 10)
+        res += pe(x4, -10, 10)
+        res += pe(u1, -30, 20)
+        ff.append(res)
     
     return ff
+
+
+x = symbols("x")
+# plot(pe(x, 0, 10), (x, -20, 20))
 
 # then we specify all boundary conditions
 a = 0.0

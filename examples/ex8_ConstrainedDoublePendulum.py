@@ -1,7 +1,7 @@
 # constrained double pendulum
 
 # import all we need for solving the problem
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 import numpy as np
 import sympy as sp
 from sympy import cos, sin, Matrix
@@ -196,9 +196,9 @@ con = {0 : [-1.0, 1.0],
        1 : [-2.0, 2.0]}
 
 # now we create our Trajectory object and alter some method parameters via the keyword arguments
-S = ControlSystem(f, a, b, xa, xb, ua, ub, constraints=con,
-                  eps=2e-1, su=20, kx=2, use_chains=False,
-                  use_std_approach=False)
+S = TransitionProblem(f, a, b, xa, xb, ua, ub, constraints=con,
+                      eps=2e-1, su=20, kx=2, use_chains=False,
+                      use_std_approach=False)
 
 # time to run the iteration
 x, u = S.solve()

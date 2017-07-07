@@ -1,9 +1,9 @@
 # IMPORTS
 
 import os
-import sys
 import inspect
 import pytest
+from IPython import embed as IPS
 
 import pytrajectory
 
@@ -29,10 +29,10 @@ class TestExamples(object):
     with open(os.path.join(examples_dir, 'ex0_InvertedPendulumSwingUp.py')) as f:
         f.close()
         test_example_path_failed = False
-    
+
     def assert_reached_accuracy(self, loc):
         for value in loc.values():
-            if isinstance(value, pytrajectory.system.ControlSystem):
+            if isinstance(value, pytrajectory.system.TransitionProblem):
                 assert value.reached_accuracy
 
     @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
