@@ -24,6 +24,12 @@ class Container(object):
     """
     Simple and flexible data structure to store all kinds of objects
     """
+
+    # prevent pycharm from complaining (in a special usecase of this class)
+    tt = None
+    xx = None
+    uu = None
+
     def __init__(self, **kwargs):
         for key, value in kwargs.iteritems():
             self.__setattr__(str(key), value)

@@ -221,9 +221,10 @@ class TransitionProblem(object):
         
         # handle the constraints by projecting the constrained state variables
         # on new unconstrained variables using saturation functions
-        for k, v in self.constraints.items():
+        for xk, v in self.constraints.items():
             # check if boundary values are within saturation limits
-            xk = self.dyn_sys.states[k]
+            assert xk in self.dyn_sys.states
+            idx = self.dyn_sys.states.index(xk)
             xa, xb = self.dyn_sys.boundary_values[xk]
             
             if not ( v[0] < xa < v[1] ) or not ( v[0] < xb < v[1] ):
@@ -237,7 +238,7 @@ class TransitionProblem(object):
             m = 4.0/(v[1] - v[0])
             psi = v[1] - (v[1]-v[0])/(1. + sp.exp(m * yk))
             
-            #dpsi = ((v[1]-v[0])*m*sp.exp(m*yk))/(1.0+sp.exp(m*yk))**2
+            # dpsi = ((v[1]-v[0])*m*sp.exp(m*yk))/(1.0+sp.exp(m*yk))**2
             dpsi = (4. * sp.exp(m * yk))/(1. + sp.exp(m * yk))**2
             
             # replace constrained variables in vectorfield with saturation expression
@@ -249,8 +250,7 @@ class TransitionProblem(object):
             #
             #      d/dt x(t) = (d/dy psi(y(t))) * d/dt y(t)
             # <==> d/dt y(t) = d/dt x(t) / (d/dy psi(y(t)))
-            ff_mat[k] /= dpsi
-            
+            ff_mat[idx] /= dpsi
             # update boundary values for new unconstrained variable
             boundary_values[xk] = ( (1./m) * np.log((xa - v[0]) / (v[1] - xa)),
                                     (1./m) * np.log((xb - v[0]) / (v[1] - xb)) )
@@ -287,11 +287,12 @@ class TransitionProblem(object):
         dx_fnc = copy.deepcopy(self.eqs.trajectories.dx_fnc)
         
         # iterate over all constraints
-        for k, v in self.constraints.items():
+        for xk, v in self.constraints.items():
             # get symbols of original constrained variable x_k, the introduced unconstrained variable y_k
             # and the saturation limits y0, y1
-            xk = self._dyn_sys_orig.states[k]
-            yk = self.dyn_sys.states[k]
+
+            idx = self._dyn_sys_orig.states.index(xk)
+            yk = self.dyn_sys.states[idx]
             y0, y1 = v
             
             # get the calculated solution function for the unconstrained variable and its derivative
@@ -327,7 +328,7 @@ class TransitionProblem(object):
         Parameters
         ----------
 
-        param : tcpport:  port for interaction with the solution process
+        tcpport:  port for interaction with the solution process
                           default: None (no interaction)
 
         Returns

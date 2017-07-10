@@ -23,7 +23,7 @@ xa = [0.0, 0.0]
 xb = [1.0, 0.0]
 
 # constraints dictionary
-con = {1: [-0.1, 0.65]}
+con = {'x2': [-0.1, 0.65]}
 
 # create the trajectory object
 S = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, constraints=con, use_chains=False)
