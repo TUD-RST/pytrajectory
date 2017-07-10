@@ -613,7 +613,7 @@ def penalty_expression(x, xmin, xmax, m=5, scale=1):
     xmid = xmin + (xmax - xmin)/2
     # first term: parabola -> 0,                            second term: 0 -> parabola
     res = (x-xmid)**2/(1 + sp.exp(m*(x - xmin))) + (x-xmid)**2/(1 + sp.exp(m*(xmax - x)))
-    res*=scale
+    res *= scale
     # sp.plot(res, (x, xmin-xmid, xmax+xmid))
     return res
 
@@ -747,7 +747,7 @@ if __name__ == '__main__':
                             [np.exp(-np.sin(3.0) + np.cos(1.0))]])
 
 
-def new_spline(Tend, n_parts, targetvalues, tag, bv=None):
+def new_spline(Tend, n_parts, targetvalues, tag, bv=None, use_std_approach=True):
     """
     :param Tend:
     :param n_parts:
@@ -758,7 +758,7 @@ def new_spline(Tend, n_parts, targetvalues, tag, bv=None):
     """
 
     s = Spline(0, Tend, n=n_parts, bv=bv, tag=tag, nodes_type="equidistant",
-                 use_std_approach="use_std_approach")
+                 use_std_approach=use_std_approach)
 
     s.make_steady()
     assert np.ndim(targetvalues[0]) == 1
@@ -817,6 +817,7 @@ def ddot(*args):
     return reduce(np.dot, args, 1)
 
 
+# noinspection PyPep8Naming
 def calc_linear_bvp_solution(A, B, T, xa, xb, xref=None):
     """
     calculate the textbook solution to the linear bvp
@@ -841,6 +842,7 @@ def calc_linear_bvp_solution(A, B, T, xa, xb, xref=None):
 
     G = calc_gramian(A, B, T)
     Ginv = np.linalg.inv(G)
+
     def input_fnc(t):
         e = expm(A*(T-t))
         term2 = ddot(expm(A*T), xa)
@@ -875,6 +877,7 @@ def copy_splines(splinedict):
     return res
 
 
+# noinspection PyPep8Naming
 def make_refsol_by_simulation(tp, u_values, plot_u=False, plot_x_idx=0):
     """
     Create a "reference solution" by Simulating the system with a given input signal
@@ -910,8 +913,6 @@ def make_refsol_by_simulation(tp, u_values, plot_u=False, plot_x_idx=0):
         plt.plot(tt2, uu)
         plot_flag = True
 
-    n = None
-
     assert isinstance(plot_x_idx, (int, str))
 
     if plot_x_idx is "all" or plot_x_idx is True:
@@ -931,7 +932,6 @@ def make_refsol_by_simulation(tp, u_values, plot_u=False, plot_x_idx=0):
     if plot_flag:
         plt.show()
         raise SystemExit
-
 
     return refsol
 
@@ -973,10 +973,14 @@ def random_refsol_xx(tt, xa, xb, n_points, x_lower, x_upper, seed=0):
     This "solution" will in general not be compatible with the system dynamics.
      It might serve as (random) initial guess.
 
-
     :param tt:
     :param xa:
     :param xb:
+    :param n_points:
+    :param x_lower:
+    :param x_upper:
+    :param seed:
+
     :return:
     """
 
@@ -1021,4 +1025,3 @@ def reshape_wrapper(arr, dim=None, **kwargs):
             return np.zeros((1, 0))
         else:
             return np.zeros((0, 1))
-
