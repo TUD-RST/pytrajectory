@@ -142,6 +142,8 @@ class TransitionProblem(object):
         # We didn't really do anything yet, so this should be false
         self.reached_accuracy = False
 
+        self.nIt = None
+
         # empty objects to store the simulation results later
         self.sim_data = None  # all results
         # convenience:
@@ -835,6 +837,10 @@ class TransitionProblem(object):
         """
         Save data using the python module :py:mod:`pickle`.
         """
+
+        if self.nIt is None:
+            msg = "No Iteration has taken place. Cannot save."
+            raise ValueError(msg)
 
         save = dict.fromkeys(['sys', 'eqs', 'traj'])
 
