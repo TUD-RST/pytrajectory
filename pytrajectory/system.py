@@ -221,39 +221,49 @@ class TransitionProblem(object):
         
         # handle the constraints by projecting the constrained state variables
         # on new unconstrained variables using saturation functions
-        for xk, v in self.constraints.items():
+        allvars = self.dyn_sys.states + self.dyn_sys.inputs
+        for vname, limits in self.constraints.items():
             # check if boundary values are within saturation limits
-            assert xk in self.dyn_sys.states
-            idx = self.dyn_sys.states.index(xk)
-            xa, xb = self.dyn_sys.boundary_values[xk]
-            
-            if not ( v[0] < xa < v[1] ) or not ( v[0] < xb < v[1] ):
-                logging.error('Boundary values have to be strictly within the saturation limits!')
-                logging.info('Please have a look at the documentation, \
-                              especially the example of the constrained double intgrator.')
-                raise ValueError('Boundary values have to be strictly within the saturation limits!')
-            
+            assert vname in allvars
+            idx = allvars.index(vname)
+            va, vb = self.dyn_sys.boundary_values[vname]
+
+            if None not in (va, vb):
+                # this is the usual case
+                if not ( limits[0] < va < limits[1] ) or not ( limits[0] < vb < limits[1] ):
+                    errmsg = "Boundary values must be strictly within the saturation limits!"
+                    logging.error(errmsg)
+                    logging.info("See docs, (e.g., example of constrained double intgrator.")
+                    raise ValueError(errmsg)
+            else:
+                # only one free boundary is not yet supported
+                # python keyword `is` does not work here
+                assert (va, vb) == (None, None)
+
             # calculate saturation function expression and its derivative
-            yk = sp.Symbol(xk)
-            m = 4.0/(v[1] - v[0])
-            psi = v[1] - (v[1]-v[0])/(1. + sp.exp(m * yk))
+            yk = sp.Symbol(vname)
+            m = 4.0/(limits[1] - limits[0])
+            psi = limits[1] - (limits[1]-limits[0])/(1. + sp.exp(m * yk))
             
             # dpsi = ((v[1]-v[0])*m*sp.exp(m*yk))/(1.0+sp.exp(m*yk))**2
             dpsi = (4. * sp.exp(m * yk))/(1. + sp.exp(m * yk))**2
             
             # replace constrained variables in vectorfield with saturation expression
             # x(t) = psi(y(t))
-            ff_mat = ff_mat.replace(sp.Symbol(xk), psi)
+            ff_mat = ff_mat.replace(sp.Symbol(vname), psi)
             
             # update vectorfield to represent differential equation for new
             # unconstrained state variable
             #
             #      d/dt x(t) = (d/dy psi(y(t))) * d/dt y(t)
             # <==> d/dt y(t) = d/dt x(t) / (d/dy psi(y(t)))
-            ff_mat[idx] /= dpsi
+            # when vk is a component of the state
+            if idx < self.dyn_sys.n_states:
+                ff_mat[idx] /= dpsi
             # update boundary values for new unconstrained variable
-            boundary_values[xk] = ( (1./m) * np.log((xa - v[0]) / (v[1] - xa)),
-                                    (1./m) * np.log((xb - v[0]) / (v[1] - xb)) )
+            if None not in (va, vb):
+                boundary_values[vname] = ( (1./m) * np.log((va - limits[0]) / (limits[1] - va)),
+                                         (1./m) * np.log((vb - limits[0]) / (limits[1] - vb)) )
         
         # create a callable function for the new symbolic vectorfield
         ff = np.asarray(ff_mat).flatten().tolist()
@@ -283,28 +293,49 @@ class TransitionProblem(object):
         
         # get a copy of the current function dictionaries
         # (containing functions for unconstrained variables y_i)
-        x_fnc = copy.deepcopy(self.eqs.trajectories.x_fnc)
-        dx_fnc = copy.deepcopy(self.eqs.trajectories.dx_fnc)
-        
+
+        # x_fnc = copy.deepcopy(self.eqs.trajectories.x_fnc)
+        # dx_fnc = copy.deepcopy(self.eqs.trajectories.dx_fnc)
+
+        all_fncs = copy.deepcopy(self.eqs.trajectories.x_fnc)
+        all_fncs.update(copy.deepcopy(self.eqs.trajectories.u_fnc))
+
+        def dummy_fnc(*args):
+            msg = "This function shall not be called. Derivative of input is not provided."
+            raise ValueError(msg)
+
+        all_fncs_d = copy.deepcopy(self.eqs.trajectories.dx_fnc)
+        du_fncs = OrderedDict((u_name, dummy_fnc) for u_name in self.dyn_sys.inputs)
+        all_fncs_d.update(du_fncs)
+
         # iterate over all constraints
-        for xk, v in self.constraints.items():
-            # get symbols of original constrained variable x_k, the introduced unconstrained variable y_k
+        allvars = self.dyn_sys.states + self.dyn_sys.inputs
+        for vk, limits in self.constraints.items():
+
+            # TODO: is this still valid?
+            # get symbols of original constrained variable x_k,
+            # the introduced unconstrained variable y_k
             # and the saturation limits y0, y1
 
-            idx = self._dyn_sys_orig.states.index(xk)
-            yk = self.dyn_sys.states[idx]
-            y0, y1 = v
+            idx = allvars.index(vk)
+            y0, y1 = limits
             
             # get the calculated solution function for the unconstrained variable and its derivative
-            y_fnc = x_fnc[yk]
-            dy_fnc = dx_fnc[yk]
+            y_fnc = all_fncs[vk]
+            dy_fnc = all_fncs_d[vk]
             
             # create the compositions
             psi_y, dpsi_dy = auxiliary.saturation_functions(y_fnc, dy_fnc, y0, y1)
-            
-            # put created compositions into dictionaries of solution functions
-            self.eqs.trajectories.x_fnc[xk] = psi_y
-            self.eqs.trajectories.dx_fnc[xk] = dpsi_dy
+
+            n = self.dyn_sys.n_states
+
+            if idx < n:
+                # put created compositions into dictionaries of solution functions
+                self.eqs.trajectories.x_fnc[idx] = psi_y
+                self.eqs.trajectories.dx_fnc[idx] = dpsi_dy
+            else:
+                assert idx < n + self.dyn_sys.n_inputs
+                self.eqs.trajectories.u_fnc[idx - n] = psi_y
 
     def check_refsol_consistency(self):
         """"Check if the reference solution provided by the user is consistent with boundary conditions"""
