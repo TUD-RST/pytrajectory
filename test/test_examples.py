@@ -24,16 +24,26 @@ class TestExamples(object):
         f.close()
         test_example_path_failed = False
 
+    reason = "Cannot get example scripts!"
+
     @staticmethod
     def assert_reached_accuracy(loc):
         for value in loc.values():
             if isinstance(value, pytrajectory.system.TransitionProblem):
                 assert value.reached_accuracy
 
-    @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
+    @pytest.mark.skipif(test_example_path_failed, reason=reason)
     def test_duble_integrator_pure(self):
 
         script = os.path.join(self.examples_dir, 'di_pure.py')
+        d = dict(locals(), **globals())
+        execfile(script, d, d)
+        self.assert_reached_accuracy(locals())
+
+    @pytest.mark.skipif(test_example_path_failed, reason=reason)
+    def test_duble_integrator_constraint_x1_projective(self):
+
+        script = os.path.join(self.examples_dir, 'di_contraint_x1_projective.py')
         d = dict(locals(), **globals())
         execfile(script, d, d)
         self.assert_reached_accuracy(locals())

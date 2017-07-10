@@ -938,7 +938,7 @@ class DynamicalSystem(object):
             ub = [None]*self.n_inputs
 
         # handle the case where f_sym does not depend on additional free parameters
-        if self.n_par == 0:
+        if self.n_pos_args == 2:
             if f_sym.has_constraint_penalties:
                 def f_sym_wrapper(xx, uu, pp, evalconstr=True):
                     # ignore pp
