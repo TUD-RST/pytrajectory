@@ -618,6 +618,21 @@ def penalty_expression(x, xmin, xmax, m=5, scale=1):
     return res
 
 
+def unconstrain(var, vmin, vmax):
+    """
+    :param var:     symbol (unconstrained variable)
+    :param vmin:
+    :param vmax:
+
+    :return: m, psi, dpsi (psi is a function which fulfills  vmin < psi(x) < vmax for all real x)
+    """
+    m = 4.0/(vmax - vmin)
+    psi = vmax - (vmax - vmin)/(1. + sp.exp(m*var))
+    dpsi = (4.*sp.exp(m*var))/(1. + sp.exp(m*var)) ** 2
+
+    return m, psi, dpsi
+
+
 def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, par, npts=500, return_error_array=False):
     """
     Calculates an error that shows how "well" the spline functions comply with the system

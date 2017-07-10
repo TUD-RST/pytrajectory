@@ -242,12 +242,9 @@ class TransitionProblem(object):
 
             # calculate saturation function expression and its derivative
             yk = sp.Symbol(vname)
-            m = 4.0/(limits[1] - limits[0])
-            psi = limits[1] - (limits[1]-limits[0])/(1. + sp.exp(m * yk))
-            
-            # dpsi = ((v[1]-v[0])*m*sp.exp(m*yk))/(1.0+sp.exp(m*yk))**2
-            dpsi = (4. * sp.exp(m * yk))/(1. + sp.exp(m * yk))**2
-            
+
+            m, psi, dpsi = auxiliary.unconstrain(yk, *limits)
+
             # replace constrained variables in vectorfield with saturation expression
             # x(t) = psi(y(t))
             ff_mat = ff_mat.replace(sp.Symbol(vname), psi)
