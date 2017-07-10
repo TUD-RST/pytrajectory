@@ -1,4 +1,11 @@
-# IMPORTS
+# -*- coding: utf-8 -*-
+
+"""
+This file is used to test the official pytrajectory examples.
+
+"""
+
+
 
 import os
 import inspect
