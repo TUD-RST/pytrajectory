@@ -7,6 +7,7 @@ from scipy.interpolate import interp1d, UnivariateSpline
 import scipy.integrate
 from scipy.linalg import expm
 from collections import OrderedDict
+from matplotlib import pyplot as plt
 
 from pytrajectory.splines import Spline
 from pytrajectory.simulation import Simulator
@@ -853,6 +854,67 @@ def copy_splines(splinedict):
     return res
 
 
+def make_refsol_by_simulation(tp, u_values, plot_u=False, plot_x_idx=0):
+    """
+    Create a "reference solution" by Simulating the system with a given input signal
+
+    :param tp:          TransitionProblem object (contains system dynamics and boundary values)
+    :param u_values:    Sequence of values for the input, will be interpolated by a spline
+    :param plot_u:      Flag whether or not plot the input
+    :param plot_x_idx:  Index up to which the state should be plotted
+                        (default = 0 -> don't plot x)
+
+    :return:            Container with tt, xx, uu and raise_spline_parts
+    """
+
+    Ta, Tb = tp.a, tp.b
+    tt1 = np.linspace(Ta, Tb, len(u_values))
+
+    uspline = new_spline(Tb, n_parts=10, targetvalues=(tt1, u_values), tag='u1')
+
+    x_start = tp.dyn_sys.xa
+    ff = tp.eqs.sys.f_num_simulation
+    sim = Simulator(ff, Tb, x_start, uspline.f)
+    tt, xx, uu = sim.simulate()
+    uu = np.atleast_2d(uu)
+
+    refsol = Container(tt=tt, xx=xx, uu=uu, n_raise_spline_parts=0)
+
+    plot_flag = False
+
+    if plot_u:
+        # this serves for designing the input signal
+        tt2 = np.linspace(Ta, Tb, 1000)
+        uu = vector_eval(uspline.f, tt2)
+        plt.plot(tt2, uu)
+        plot_flag = True
+
+    n = None
+
+    assert isinstance(plot_x_idx, (int, str))
+
+    if plot_x_idx is "all" or plot_x_idx is True:
+        # all is the only allowed string value
+        # type bool is derived from int but we want True to behave like "all" not like 1
+        plot_x_idx = xx.shape[1]
+
+    assert isinstance(plot_x_idx, int)
+    if plot_x_idx > 0:
+        assert plot_x_idx <= xx.shape[1]
+        n = plot_x_idx
+        plt.figure()
+        plt.plot(tt, xx[:, :n])
+        plt.grid(1)
+        plot_flag = True
+
+    if plot_flag:
+        plt.show()
+        raise SystemExit
+
+
+    return refsol
+
+
 def make_refsol_callable(refsol):
     """
     Assuming refsol is a container for a reference solution, this function creates interpolating
@@ -886,7 +948,10 @@ def make_refsol_callable(refsol):
 
 def random_refsol_xx(tt, xa, xb, n_points, x_lower, x_upper, seed=0):
     """
-    generates some random spline curves respecting boundaray conditions and limits
+    Generates some random spline curves respecting boundaray conditions and limits.
+    This "solution" will in general not be compatible with the system dynamics.
+     It might serve as (random) initial guess.
+
 
     :param tt:
     :param xa:

@@ -12,7 +12,7 @@ import control.matlab as controlm
 # sys.path.append('/Volumes/work/workspaces/PYTHON/mymodules')
 import symbtools as st
 
-from pytrajectory import TransitionProblem, penalty_expression
+from pytrajectory import TransitionProblem, penalty_expression, aux
 from numpy import pi
 
 
@@ -22,11 +22,11 @@ Dieses Skript demonstriert ein paar neue Features von pytrajectory.
 
 - penalty_constraints
 - plot intermediate results
-- (reference-solution) (noch nicht fertig)
+- (reference-solution)
 
 
 Wegen eines pickle-Fehlers habe ich hier noch das alte Modell geladen.
-Siehe Quell-Code.
+Siehe Quellcode.
 
 
 OK?
@@ -60,9 +60,10 @@ q3dd_fnc = sp.lambdify([q1, q2, q3, q4, q1d, q2d, q3d, q4d, a], q3dd_expr, 'symp
 q4dd_fnc = sp.lambdify([q1, q2, q3, q4, q1d, q2d, q3d, q4d, a], q4dd_expr, 'sympy')
 
 
-# nicht lineares partiell linarisiertes Modell
-
 limit = .7
+
+
+# nicht lineares partiell linarisiertes Modell
 def model_rhs(state, u, evalconstr=True):
     x1, x2, x3, x4, x5, x6, x7, x8 = state # q1, q2, q3, q4, q1d, q2d, q3d, q4d
     stell, = u
@@ -80,7 +81,7 @@ def model_rhs(state, u, evalconstr=True):
     if evalconstr:
         # penalty expression:
         pe = penalty_expression(x1, -10, 10)  # egal
-        pe += penalty_expression(stell, -limit, limit)  # Eingangsbeschränkung
+        # pe += penalty_expression(stell, -limit, limit)  # Eingangsbeschränkung
         res.append(pe)
 
     return np.array(res)
@@ -103,7 +104,8 @@ ua = 0.0
 ub = 0.0
 
 xa = [pi, pi, pi, 0.0, 0.0, 0.0, 0.0, 0.0]
-xb = [pi, pi, pi, 1.0, 0.0, 0.0, 0.0, 0.0]
+# xb = [pi, pi, pi, 1.0, 0.0, 0.0, 0.0, 0.0]
+xb = [0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0]
 
 
 # S = ControlSystem(model_rhs, Ta, Tb, xa, xb, ua, ub)
@@ -120,41 +122,27 @@ S = TransitionProblem(model_rhs, Ta, Tb, xa, xb, ua, ub, constraints=None,
                       sol_steps=200,
                       show_ir=True)
 
+
+
+# create a reference solution via simulation
+
+u_values = [0, 3, -4, -4, 7, -3]
+# refsol = aux.make_refsol_by_simulation(S, u_values=u_values, plot_u=True, plot_x_idx=4)
+refsol = aux.make_refsol_by_simulation(S, u_values=u_values)
+
+S = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb, ua=0, ub=0, use_chains=False,
+                       use_std_approach=False,  refsol=refsol, ierr=None, maxIt=3,
+                       eps=1e-1, sol_steps=100, reltol=1e-3, accIt=1, show_ir=True)
+
 # dt_sim=0.004
 # time to run the iteration
 x, u = S.solve()
-print "successed!"
-
-
-# N = 100
-# for i in range(1, N):
-#     print i, "------"
-#     first_guess = {'seed' : i}
-#     S = ControlSystem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb, ua=ua, ub=ub, use_chains=False, first_guess=first_guess, ierr=None, maxIt=5, eps=5e-2, sol_steps=30)
-
-#     # run iteration
-#     S.solve()
-#     if S.reached_accuracy:
-#         print "success", i
-#         break
-#         #IPS()
-#     else:
-#         print "fail"
-
-# IPS()
-
-# pdict = {}
-# pdict['x_f'] = x
-# pdict['u_f'] = u
-
-# fname = "model_trajectory2_7.pcl"
-# with open(fname, "wb") as pfile:
-#     pickle.dump(pdict, pfile)
-#     print fname, "written"
+if S.reached_accuracy:
+    print "successed!"
+else:
+    print "Not successed!"
 
 S.save(fname='pickles/model_trajectory' + str(Tb) + '.pcl')
-# IPS()
-# raise SystemExit
 
 import sys
 import matplotlib as mpl
