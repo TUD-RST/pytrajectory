@@ -90,10 +90,6 @@ class TransitionProblem(object):
             xa = []
         if xb is None:
             xb = []
-        if ua is None:
-            ua = []
-        if ub is None:
-            ub = []
 
         # convenience for single input case:
         if np.isscalar(ua):
@@ -270,7 +266,7 @@ class TransitionProblem(object):
         ua = [boundary_values[u][0] for u in self.dyn_sys.inputs]
         ub = [boundary_values[u][1] for u in self.dyn_sys.inputs]
 
-        self.dyn_sys = DynamicalSystem(f_sym , a, b, xa, xb, ua, ub)
+        self.dyn_sys = DynamicalSystem(f_sym, a, b, xa, xb, ua, ub)
 
     def constrain(self):
         """
@@ -912,13 +908,10 @@ class DynamicalSystem(object):
     def __init__(self, f_sym, a=0., b=1., xa=None, xb=None, ua=None, ub=None, **kwargs):
 
         if xa is None:
-            xa = []
+            msg = "Initial value required."
+            raise ValueError(msg)
         if xb is None:
             xb = []
-        if ua is None:
-            ua = []
-        if ub is None:
-            ub = []
         self.f_sym = f_sym
         self.a = a
         self.b = b
@@ -929,6 +922,11 @@ class DynamicalSystem(object):
 
         # analyse the given system
         self.n_states, self.n_inputs, self.n_par = self._determine_system_dimensions(n=len(xa))
+
+        if ua is None:
+            ua = [None]*self.n_inputs
+        if ub is None:
+            ub = [None]*self.n_inputs
 
         # collect some information about penalty constraints
         if 'evalconstr' in inspect.getargspec(f_sym).args:
