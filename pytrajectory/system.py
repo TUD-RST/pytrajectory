@@ -197,6 +197,10 @@ class TransitionProblem(object):
             The box constraints for the state variables
         """
 
+        if self.dyn_sys.f_sym.has_constraint_penalties:
+            msg = "Combination of both types of constraints not yet supported."
+            raise NotImplementedError(msg)
+
         # save constraints
         self.constraints = constraints
 
@@ -253,12 +257,14 @@ class TransitionProblem(object):
         
         # create a callable function for the new symbolic vectorfield
         ff = np.asarray(ff_mat).flatten().tolist()
-        xu = self.dyn_sys.states + self.dyn_sys.inputs
-        _f_sym = sp.lambdify(xu, ff, modules='sympy')
+        xup = self.dyn_sys.states + self.dyn_sys.inputs + self.dyn_sys.par
+        _f_sym = sp.lambdify(xup, ff, modules='sympy')
 
-        def f_sym(x, u):
-            xu = np.hstack((x,u))
-            return _f_sym(*xu)
+        def f_sym(x, u, p):
+            xup = np.hstack((x, u, p))
+            return _f_sym(*xup)
+
+        f_sym.n_par = self.dyn_sys.n_par
 
         # create a new unconstrained system
         xa = [boundary_values[x][0] for x in self.dyn_sys.states]
@@ -915,37 +921,21 @@ class DynamicalSystem(object):
         self.f_sym = f_sym
         self.a = a
         self.b = b
+        self.xa = xa
+        self.xb = xb
         self.tt = np.linspace(a, b, 1000)
 
         # TODO: see remark above; The following should be more general!!
         self.z_par = kwargs.get('k', [1.0])
 
-        # analyse the given system
-        self.n_states, self.n_inputs, self.n_par = self._determine_system_dimensions(n=len(xa))
+        self._analyze_f_sym_signature()
+        # analyse the given system  (set self.n_pos_args, n_states, n_inputs, n_par, n_pconstraints)
+        self._determine_system_dimensions()
 
         if ua is None:
             ua = [None]*self.n_inputs
         if ub is None:
             ub = [None]*self.n_inputs
-
-        # collect some information about penalty constraints
-        if 'evalconstr' in inspect.getargspec(f_sym).args:
-            f_sym.has_constraint_penalties = True
-
-            args = [xa, [0]*self.n_inputs]
-            if self.n_par > 0:
-                args.append([1]*self.n_par)
-
-            # number of returned values - number of states
-            nc = len(f_sym(*args, evalconstr=True)) - self.n_states
-            if nc < 1:
-                msg = "No constraint equations found, but signature of f_sym indicates such."
-                raise ValueError(msg)
-            self.n_pconstraints = nc
-
-        else:
-            f_sym.has_constraint_penalties = False
-            self.n_pconstraints = 0
 
         # handle the case where f_sym does not depend on additional free parameters
         if self.n_par == 0:
@@ -960,8 +950,10 @@ class DynamicalSystem(object):
                     # ignore pp
                     return f_sym(xx, uu)
 
-            self.f_sym = f_sym_wrapper
             f_sym_wrapper.has_constraint_penalties = f_sym.has_constraint_penalties
+            self.f_sym = f_sym_wrapper
+
+        self.f_sym.n_par = self.n_par
         # set names of the state and input variables
         # (will be used as keys in various dictionaries)
         self.states = tuple(['x{}'.format(i+1) for i in xrange(self.n_states)])
@@ -978,7 +970,7 @@ class DynamicalSystem(object):
         self.uus = sp.symbols(self.inputs)
         self.pps = sp.symbols(self.par)
 
-        # with (penalty-) constraints
+        # with (penalty-) constraints (if present)
         self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, self.pps))
 
         # without (penalty-) constraints
@@ -986,8 +978,6 @@ class DynamicalSystem(object):
 
         # init dictionary for boundary values
         self.boundary_values = self._get_boundary_dict_from_lists(xa, xb, ua, ub)
-        self.xa = xa
-        self.xb = xb
 
         # create vectorfields f and g (symbolically and as numerical function)
 
@@ -1022,11 +1012,53 @@ class DynamicalSystem(object):
                                                    u_sym=self.inputs, p_sym=self.par,
                                                    vectorized=False, cse=False, evalconstr=False)
 
-    def _determine_system_dimensions(self, n):
+    def _analyze_f_sym_signature(self):
+        """
+        This function analyzes the calling signature of the user_provided function f_sym
+
+        Analysis results are stored as instance variables.
+        :return:    None
+        """
+
+        argspec = inspect.getargspec(self.f_sym)
+
+        if not (argspec.varargs is None) and (argspec.keywords is None):
+            msg = "*args and/or **kwargs are not permitted in signature of f_sym"
+            raise TypeError(msg)
+
+        n_all_args = len(argspec.args)
+
+        msg = "Unexpected number of arguments in f_sym"
+        assert 2 <= n_all_args <= 4, msg
+
+        if n_all_args == 4:
+            assert argspec.args[-1] == 'evalconstr'
+            msg = "unexpected numbers or values for default arguments in f_sym"
+            assert argspec.defaults is (True,), msg
+
+            # this flag is stored as attribute of the function
+            # -> easier access, where ever the function occurs
+            self.f_sym.has_constraint_penalties = True
+        else:
+            self.f_sym.has_constraint_penalties = False
+            self.n_pconstraints = 0
+
+        if n_all_args in (3, 4):
+            # number of arguments which must be passed to f_sym
+            self.n_pos_args = 3
+        else:
+            assert n_all_args == 2
+            self.n_pos_args = 2
+
+    def _determine_system_dimensions(self):
         # TODO comment on additional free parameters in the docstring
         """
-        Determines the number of state and input variables and whether the system depends on
-        additional free parameters
+        Determines the following parameters:
+        self.n_states
+        self.n_inputs
+        self.n_par              number of additional free parameters (afp)
+        self.n_pcontraints      number of penalty-constraint-equations
+
 
         Parameters
         ----------
@@ -1040,25 +1072,35 @@ class DynamicalSystem(object):
         
         # the number of system variables can be determined via the length
         # of the boundary value lists
-        n_states = n
+        n_states = len(self.xa)
 
-        # determine whether the function depends on addinional free parameters (3rd arg)
-        args = inspect.getargspec(self.f_sym).args
+        # determine n_pconstraints
+        # if getattr(self.f_sym, 'has_constraint_penalties', False):
+        if self.f_sym.has_constraint_penalties:
+            testargs = [self.xa, [0]*self.n_inputs]
+            if self.n_par > 0:
+                testargs.append([1]*self.n_par)
 
-        if 'evalconstr' in args:
-            min_arg_num = 3
+            # number of returned values - number of states
+            n_pconstraints = len(self.f_sym(*testargs, evalconstr=True)) - self.n_states
+            if n_pconstraints < 1:
+                msg = "No constraint equations found, but signature of f_sym indicates such."
+                raise ValueError(msg)
         else:
-            min_arg_num = 2
+            n_pconstraints = 0
 
-        if len(args) == min_arg_num:
-            # no additional free parameters
-            afp_flag = False
-        elif len(args) == min_arg_num + 1:
-            # additional free parameters are present
-            afp_flag = True
+        assert self.n_pos_args in (2, 3)
+        if self.n_pos_args == 3:
+            # f_sym expects a third argument
+
+            # if there is no additional information provided assume that
+            # the present argument means 1 free parameter
+            # Note: n_par might also be 0 (due to "wrapping-generalization")
+            n_par = getattr(self.f_sym, 'n_par', 1)
+            par_arg = [[1]*n_par]
         else:
-            msg = "unexpected number of arguments takten by f_sym(...): %s" % str(args)
-            raise ValueError(msg)
+            n_par = 0
+            par_arg = []
 
         # now we want to determine the input dimension
         # therefore we iteratively increase the inputs dimension and try to call
@@ -1066,13 +1108,6 @@ class DynamicalSystem(object):
         found_n_inputs = False
         x = np.ones(n_states)
 
-        if afp_flag:
-            # TODO: handle the case where more than 1 scalar additional free parameter is expected
-            par_arg = [[1]]
-            n_par = 1
-        else:
-            par_arg = []
-            n_par = 0
         j = 0
         while not found_n_inputs:
             u = np.ones(j)
@@ -1084,20 +1119,37 @@ class DynamicalSystem(object):
                 raise ValueError(msg)
 
             try:
+                print u
                 self.f_sym(x, u, *par_arg)
                 # if no ValueError is raised j is the dimension of the inputs
                 n_inputs = j
                 found_n_inputs = True
-            except ValueError:
+            except ValueError as err:
+                if not "values to unpack" in err.message:
+                    logging.error("unexpected ValueError")
+                    raise err
                 # unpacking error inside f_sym
                 # (that means the dimensions don't match)
                 j += 1
-        
+            except TypeError as err:
+                flag = "<lambda>() takes" in err.message and \
+                       "arguments" in err.message and "given" in err.message
+                if not flag:
+                    logging.error("unexpected TypeError")
+                    raise err
+                # calling error for lambda -> dimensions do not match
+                j += 1
+
         # TODO: give a log message w.r.t. additional free parameters
         logging.debug("--> state: {}".format(n_states))
         logging.debug("--> input : {}".format(n_inputs))
 
-        return n_states, n_inputs, n_par
+        self.n_states = n_states
+        self.n_inputs = n_inputs
+        self.n_par = n_par
+        self.n_pconstraints = n_pconstraints
+
+        return
 
     def _get_boundary_dict_from_lists(self, xa, xb, ua, ub):
         """
