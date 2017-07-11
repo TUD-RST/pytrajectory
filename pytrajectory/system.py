@@ -96,7 +96,7 @@ class TransitionProblem(object):
         if np.isscalar(ua):
             ua = [ua]
         if np.isscalar(ub):
-            ub= [ub]
+            ub = [ub]
 
         # set method parameters
         self._parameters = dict()
@@ -394,7 +394,7 @@ class TransitionProblem(object):
             # create the composition (callable function)
             psi_y_fnc = auxiliary.saturation_functions(y_fnc, None, y0, y1, first_deriv=False)
 
-            u_funcs_odict[vk] = y_fnc
+            u_funcs_odict[vk] = psi_y_fnc
 
         def constrained_u(t):
 
@@ -802,6 +802,7 @@ class TransitionProblem(object):
 
         x_vars = sys.states  ##:: ('x1', 'x2', 'x3', 'x4')
         start_dict = dict([(k, v[0]) for k, v in sys.boundary_values.items() if k in x_vars])  ##:: {'x2': start value of x2, 'x3': 1.256, 'x1': 0.0, 'x4': 0.0}
+
         ff = sys.f_num_simulation
 
         for x in x_vars:

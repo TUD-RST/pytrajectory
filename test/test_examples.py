@@ -48,6 +48,14 @@ class TestExamples(object):
         execfile(script, d, d)
         self.assert_reached_accuracy(locals())
 
+    @pytest.mark.skipif(test_example_path_failed, reason=reason)
+    def test_duble_integrator_constraint_u1_projective(self):
+
+        script = os.path.join(self.examples_dir, 'di_contraint_u1_projective.py')
+        d = dict(locals(), **globals())
+        execfile(script, d, d)
+        self.assert_reached_accuracy(locals())
+
 
 if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s %filename.py"+ "\n")

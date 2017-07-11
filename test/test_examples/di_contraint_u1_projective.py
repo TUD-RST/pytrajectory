@@ -13,8 +13,6 @@ def f(x, u):
     x1, x2 = x
     u1, = u
 
-    u_expr = aux.unconstrain(u1, -1.2, 1.2)[1]
-
     ff = [x2,
           u1,
           # u_expr
@@ -33,7 +31,7 @@ con = {'u1': [-1.2, 1.2]}
 
 # create the trajectory object
 S = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=0, ub=0, constraints=con,
-                      show_ir=True,
+                      show_ir=False,
                       use_chains=False)
 
 # start
