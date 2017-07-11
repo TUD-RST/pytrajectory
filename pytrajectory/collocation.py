@@ -68,8 +68,7 @@ class CollocationSystem(object):
 
         xx, uu, pp = sp.symbols(dynsys.states), sp.symbols(dynsys.inputs), sp.symbols(dynsys.par)
         f = dynsys.f_sym(xx, uu, pp)
-        
-        
+
         # TODO_ok: check order of variables of differentiation ([x,u] vs. [u, x])
         #       because in dot products in later evaluation of `DG` with vector `c`
         #       values for u come first in `c`
@@ -81,18 +80,18 @@ class CollocationSystem(object):
         all_symbols = sp.symbols(dynsys.states + dynsys.inputs + dynsys.par) 
         Df = sp.Matrix(f).jacobian(all_symbols)
         
-        self._ff_vectorized = sym2num_vectorfield(f, dynsys.states, dynsys.inputs, dynsys.par, vectorized=True, cse=True)
-        self._Df_vectorized = sym2num_vectorfield(Df, dynsys.states, dynsys.inputs, dynsys.par, vectorized=True, cse=True)
-        self._f = f
-        self._Df = Df
+        self.ff_vectorized = sym2num_vectorfield(f, dynsys.states, dynsys.inputs, dynsys.par,
+                                                 vectorized=True, cse=True)
+        self.Df_vectorized = sym2num_vectorfield(Df, dynsys.states, dynsys.inputs, dynsys.par,
+                                                 vectorized=True, cse=True)
+        self.f = f
+        self.Df = Df
 
         self.trajectories = Trajectory(masterobject, dynsys, **kwargs)
 
         self._first_guess = kwargs.get('first_guess', None)
 
     def build(self):
-         ## C = self.eqs.build()
-         ## self.eqs = CollocationSystem(sys=self.dyn_sys, **kwargs)
         """
         This method is used to set up the equations for the collocation equation system
         and defines functions for the numerical evaluation of the system and its jacobian.
@@ -107,7 +106,6 @@ class CollocationSystem(object):
         # vector of all free coeffs
         # Note: this call also sets the variable self.all_free_parameters
         indic = self._get_index_dict()  ##:: e.g. {'x1': (0, 17), 'x2': (0, 17), 'u1': (0, 17), 'x3': (17, 26), 'x4': (17, 26)}, from 0th to 16th coeff. belong to chain (x1,x2,x3), from 17th to 25th belong to chain(x3,x4)
-
 
         # compute dependence matrices
         # Mx, Mx_abs, Mdx, Mdx_abs, Mu, Mu_abs, Mp, Mp_abs = self._build_dependence_matrices(indic)
@@ -145,7 +143,7 @@ class CollocationSystem(object):
 
         # here we determine the jacobian matrix of the derivatives of the system state functions
         # (as they depend on the free parameters in a linear fashion its just the above matrix Mdx)
-        DdX = MC.Mdx[take_indices, :] ##:: in e.g.4: the 3rd,7th,...row, <21x26 sparse matrix>
+        DdX = MC.Mdx[take_indices, :]  ##:: in e.g.4: the 3rd,7th,...row, <21x26 sparse matrix>
         # here we compute the jacobian matrix of the system/input splines as they also depend on
         # the free parameters
         DXUP = []
@@ -163,8 +161,8 @@ class CollocationSystem(object):
         DXUP = sparse.csr_matrix(DXUP)
 
         # localize vectorized functions for the control system's vector field and its jacobian
-        ff_vec = self._ff_vectorized
-        Df_vec = self._Df_vectorized
+        ff_vec = self.ff_vectorized
+        Df_vec = self.Df_vectorized
 
         # transform matrix formats for faster dot products
         # Sparse Matrix Container:
@@ -201,7 +199,6 @@ class CollocationSystem(object):
 
             return X, U, P
 
-
         # define the callable functions for the eqs
 
         def G(c, info=False, symbeq=False):
@@ -212,7 +209,7 @@ class CollocationSystem(object):
                             (for debugging)
             :return:
             """
-            ##for debugging symbolic display
+            # for debugging symbolic display
             # symbeq = True
             # c = np.hstack(sorted(self.trajectories.indep_vars.values(), key=lambda arr: arr[0].name))
 
@@ -230,7 +227,7 @@ class CollocationSystem(object):
             if symbeq:
                 # reshape flattened X again to nx times nc Matrix
                 # nx: number of states, nc: number of collocation points
-                eq_list = [] # F(w) = 0
+                eq_list = []  # F(w) = 0
                 F =  ff_vec(X, U, P).ravel(order='F').take(take_indices, axis=0)[:,None] 
                 dX = SMC.Mdx.dot(c)[:,None] + SMC.Mdx_abs
                 dX = dX.take(take_indices, axis=0)
@@ -343,7 +340,7 @@ class CollocationSystem(object):
                         u = U[:, i1]
                         # TODO: handle free parameters !!
                         args = zip(self.sys.states, x) + zip(self.sys.inputs, u)
-                        sym_res = np.float(self._Df.subs(args).evalf()[i2, i3])
+                        sym_res = np.float(self.Df.subs(args).evalf()[i2, i3])
                         if np.isnan(sym_res):
                             msg = "NaN-fallback did not work"
                             raise NanError(msg)
@@ -781,8 +778,8 @@ class CollocationSystem(object):
         save['parameters'] = self._parameters
 
         # vector field and jacobian
-        save['f'] = self._f
-        save['Df'] = self._Df
+        save['f'] = self.f
+        save['Df'] = self.Df
 
         # guess
         save['guess'] = self.guess

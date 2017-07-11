@@ -26,6 +26,7 @@ from ipHelp import IPS
 
 
 # Note: This class is the former `ControlSystem` class
+# noinspection PyPep8Naming
 class TransitionProblem(object):
     """
     Base class of the PyTrajectory project containing all information to model a transition problem
@@ -132,6 +133,7 @@ class TransitionProblem(object):
         self.reached_accuracy = False
 
         self.nIt = None
+        self.T_sol = None
 
         # empty objects to store the simulation results later
         self.sim_data = None  # all results
@@ -402,7 +404,9 @@ class TransitionProblem(object):
         return constrained_u
 
     def check_refsol_consistency(self):
-        """"Check if the reference solution provided by the user is consistent with boundary conditions"""
+        """"
+        Check if the reference solution provided by the user is consistent with boundary conditions
+        """
         assert isinstance(self.refsol, auxiliary.Container)
         tt, xx, uu = self.refsol.tt, self.refsol.xx, self.refsol.uu
         assert tt[0] == self.a
@@ -441,7 +445,6 @@ class TransitionProblem(object):
         if tcpport is not None:
             assert isinstance(tcpport, int)
             interfaceserver.listen_for_connections(tcpport)
-
 
         # refsol visualization
 
@@ -509,7 +512,6 @@ class TransitionProblem(object):
             
             # raise the number of spline parts
             self.eqs.trajectories._raise_spline_parts()
-            
 
             # TODO: this should be simpliefied
             if self.nIt == 1:
@@ -681,11 +683,11 @@ class TransitionProblem(object):
             par = par.repeat(n_tt, axis=1)
 
             # input part of the vectorfiled
-            gg = self.eqs._Df_vectorized(self.sim_data_xx.T, self.sim_data_uu.T, par).transpose(2, 0, 1)
+            gg = self.eqs.Df_vectorized(self.sim_data_xx.T, self.sim_data_uu.T, par).transpose(2, 0, 1)
             gg = gg[:, :-1, -1]
 
             # drift part of the vf
-            ff = self.eqs._ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0, par).T[:, :-1]
+            ff = self.eqs.ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0, par).T[:, :-1]
 
             labels = self.dyn_sys.states + self.dyn_sys.inputs
 
