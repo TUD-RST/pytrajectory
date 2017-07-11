@@ -4,7 +4,8 @@
 Double integrator with projective constraints on x2 ('velocity')
 """
 # imports
-from pytrajectory import TransitionProblem
+from pytrajectory import TransitionProblem, auxiliary as aux
+import sympy as sp
 
 
 # define the vectorfield
@@ -12,8 +13,12 @@ def f(x, u):
     x1, x2 = x
     u1, = u
 
+    u_expr = aux.unconstrain(u1, -1.2, 1.2)[1]
+
     ff = [x2,
-          u1]
+          u1,
+          # u_expr
+          ]
 
     return ff
 
@@ -23,7 +28,8 @@ xa = [0.0, 0.0]
 xb = [1.0, 0.0]
 
 # constraints dictionary
-con = {'u1': [-1.3, 1.3]}
+con = {}  # {'u1': [-2, 2]}
+con = {'u1': [-1.2, 1.2]}
 
 # create the trajectory object
 S = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=0, ub=0, constraints=con,

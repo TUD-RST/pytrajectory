@@ -39,7 +39,7 @@ class Trajectory(object):
         self._parameters['use_std_approach'] = kwargs.get('use_std_approach', True)
         
         self._chains, self._eqind = auxiliary.find_integrator_chains(sys)  ##:: chains=[class ic_1, class ic_2], eqind=[3] means x4,  ic_1: x1->x2->u1; ic_2: x3->x4
-        self._parameters['use_chains'] = kwargs.get('use_chains', True)
+        self._parameters['use_chains'] = masterobject.use_chains
 
         # These will become OrderedDicts later (containing spline functions)
         self.splines = None

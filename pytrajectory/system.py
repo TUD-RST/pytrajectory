@@ -115,22 +115,15 @@ class TransitionProblem(object):
         # create an object for the dynamical system
         self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub, **kwargs)
 
+        # TODO: change default behavior to False (including examples)
+        self.use_chains = kwargs.get('use_chains', True)
+
         # 2017-05-09 14:41:14
         # Note: there are two kinds of constraints handling:
         # (1) variable transformation (old, tested, also used by Graichen et al.)
         # (2) penalty term (new, currently under development)
 
-        # handle eventual system constraints (variable transformation)
-        self.constraints = constraints
-        if self.constraints is not None:
-            # transform the constrained vectorfield into an unconstrained one
-            self.unconstrain(constraints)
-
-            # we cannot make use of an integrator chain
-            # if it contains a constrained variable
-            kwargs['use_chains'] = False
-            # TODO: implement it so that just those chains are not used 
-            #       which actually contain a constrained variable
+        self._preprocess_constraints(constraints)  # (constr.-type: "variable transformation")
 
         # create an object for the collocation equation system
         self.eqs = CollocationSystem(masterobject=self, dynsys=self.dyn_sys, **kwargs)
@@ -183,8 +176,47 @@ class TransitionProblem(object):
 
         else:
             raise AttributeError("Invalid method parameter ({})".format(param))
-        
-    def unconstrain(self, constraints):
+
+    def _preprocess_constraints(self, constraints=None):
+        """
+        Preprocessing of projective constraint-data provided by the user.
+        Ensure types and ordering
+
+        :return: None
+        """
+
+        if constraints is None:
+            constraints = dict()
+
+        con_x = OrderedDict()
+        con_u = OrderedDict()
+
+        for k, v in constraints.iteritems():
+            assert isinstance(k, str)
+            if k.startswith('x'):
+                con_x[k] = v
+            elif k.startswith('u'):
+                con_u[k] = v
+            else:
+                msg = "Unexpected key for constraint: %s: %s" % (k, v)
+                raise ValueError(msg)
+
+        self.constraints = OrderedDict()
+        self.constraints.update(sorted(con_x.iteritems()))
+        self.constraints.update(sorted(con_u.iteritems()))
+
+        # now transform the constrained vectorfield into an unconstrained one
+        self.unconstrain()
+
+        if self.use_chains:
+            msg = "Currently not possible to make use of integrator chains together with " \
+                  "projective constraints."
+            logging.warn(msg)
+        self.use_chains = False
+        # Note: it should be possible that just those chains are not used
+        # which actually contain a constrained variable
+
+    def unconstrain(self):
         """
         This method is used to enable compliance with desired box constraints given by the user.
         It transforms the vectorfield by projecting the constrained state variables on
@@ -200,9 +232,6 @@ class TransitionProblem(object):
         if self.dyn_sys.f_sym.has_constraint_penalties:
             msg = "Combination of both types of constraints not yet supported."
             raise NotImplementedError(msg)
-
-        # save constraints
-        self.constraints = constraints
 
         # backup the original constrained system
         self._dyn_sys_orig = copy.deepcopy(self.dyn_sys)
@@ -222,9 +251,9 @@ class TransitionProblem(object):
         # handle the constraints by projecting the constrained state variables
         # on new unconstrained variables using saturation functions
         allvars = self.dyn_sys.states + self.dyn_sys.inputs
-        for vname, limits in self.constraints.items():
+        for vname, limits in self.constraints.iteritems():
             # check if boundary values are within saturation limits
-            assert vname in allvars
+            assert vname in allvars, "variable name `%s` not found" % vname
             idx = allvars.index(vname)
             va, vb = self.dyn_sys.boundary_values[vname]
 
@@ -305,8 +334,8 @@ class TransitionProblem(object):
         du_fncs = OrderedDict((u_name, dummy_fnc) for u_name in self.dyn_sys.inputs)
         all_fncs_d.update(du_fncs)
 
-        # iterate over all constraints
         allvars = self.dyn_sys.states + self.dyn_sys.inputs
+        # iterate over all constraints
         for vk, limits in self.constraints.items():
 
             # TODO: is this still valid?
@@ -327,12 +356,50 @@ class TransitionProblem(object):
             n = self.dyn_sys.n_states
 
             if idx < n:
-                # put created compositions into dictionaries of solution functions
+                # state component
+                # -> put created compositions into dictionaries of solution functions
                 self.eqs.trajectories.x_fnc[idx] = psi_y
                 self.eqs.trajectories.dx_fnc[idx] = dpsi_dy
             else:
+                # input component
                 assert idx < n + self.dyn_sys.n_inputs
                 self.eqs.trajectories.u_fnc[idx - n] = psi_y
+
+    def get_constrained_input_fnc(self):
+        """
+        If input-constraints have been specified, than this method maps the unconstrained
+        (auxiliary) input variable back to the constrained variable.
+
+        If no input-constraints are specified, return an identity map.
+
+        :return: function u(t)
+        """
+
+        # OrderedDict
+        u_funcs_odict = self.eqs.trajectories.u_fnc.copy()
+        # iterate over all constraints
+        for vk, limits in self.constraints.items():
+
+            if vk not in self.dyn_sys.inputs:
+                continue
+            idx = self.dyn_sys.inputs.index(vk)
+            y0, y1 = limits
+
+            # get the calculated solution function for the unconstrained variable and its derivative
+
+            y_fnc = u_funcs_odict[vk]
+
+            # create the composition (callable function)
+            psi_y_fnc = auxiliary.saturation_functions(y_fnc, None, y0, y1, first_deriv=False)
+
+            u_funcs_odict[vk] = y_fnc
+
+        def constrained_u(t):
+
+            res = [u_func(t) for u_func in u_funcs_odict.itervalues()]
+            return np.array(res)
+
+        return constrained_u
 
     def check_refsol_consistency(self):
         """"Check if the reference solution provided by the user is consistent with boundary conditions"""
@@ -740,10 +807,11 @@ class TransitionProblem(object):
 
         par = self.get_par_values()
         # create simulation object
-        S = Simulator(ff, T, start, self.eqs.trajectories.u, z_par=par, dt=self._parameters['dt_sim'])
+        u_fnc = self.get_constrained_input_fnc()
+        S = Simulator(ff, T, start, u_fnc, z_par=par, dt=self._parameters['dt_sim'])
 
-        logging.debug("start: %s"%str(start))
-        
+        logging.debug("start: %s" % str(start))
+
         # forward simulation
         self.sim_data = S.simulate()
 

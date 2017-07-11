@@ -537,7 +537,7 @@ def cse_lambdify(args, expr, **kwargs):
     return cse_fnc
 
 
-def saturation_functions(y_fnc, dy_fnc, y0, y1):
+def saturation_functions(y_fnc, dy_fnc, y0, y1, first_deriv=True):
     """
     Creates callable saturation function and its first derivative to project
     the solution found for an unconstrained state variable back on the original
@@ -560,6 +560,9 @@ def saturation_functions(y_fnc, dy_fnc, y0, y1):
     y1 : float
         Upper saturation limit.
 
+    first_deriv :
+        flag whether or not also return the first derivative
+
     Returns
     -------
 
@@ -580,6 +583,9 @@ def saturation_functions(y_fnc, dy_fnc, y0, y1):
     def psi_y(t):
         y = y_fnc(t)
         return y1 - (y1-y0)/(1.0+np.exp(m*y))
+
+    if not first_deriv:
+        return psi_y
 
     # and this its first derivative
     def dpsi_dy(t):
