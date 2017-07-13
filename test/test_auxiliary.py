@@ -1,6 +1,7 @@
 # IMPORTS
 
 import pytrajectory
+import pytrajectory.auxiliary as aux
 import pytest
 import sympy as sp
 import numpy as np
@@ -16,7 +17,7 @@ class TestCseLambdify(object):
         f = pytrajectory.auxiliary.cse_lambdify(args=(x,y), expr=e, modules='numpy')
 
         assert f(1., 1.) == 3.
-    
+
     def test_list(self):
         x, y = sp.symbols('x, y')
         ones = np.ones(10)
@@ -127,6 +128,25 @@ class TestCseLambdify(object):
         assert res1.shape == (3, N)
         assert res2.shape == (3, N)
 
+    def test_spline_interpolate(self):
+        # TODO: This test should live in a separate spline-related file
+        from pytrajectory import splines
+
+        S = splines.Spline(a=0, b=1, n=50, bv={0: (10, 20)}, use_std_approach=True)
+        S.make_steady()
+        tt = np.linspace(S.a, S.b, 100)
+        xx = np.sin(10*tt)
+        S.interpolate((tt, xx), set_coeffs=True)
+
+        xx_s = aux.vector_eval(S.f, tt)
+
+        import matplotlib.pyplot as plt
+        plt.plot(tt, xx)
+        plt.plot(tt, xx_s)
+        plt.show()
+
+        idx1, idx2 = 45, 50
+        assert np.allclose(xx[idx1:idx2], xx_s[idx1:idx2])
 
 
 if __name__ == "__main__":
