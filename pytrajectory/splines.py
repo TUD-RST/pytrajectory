@@ -373,7 +373,7 @@ class Spline(object):
         Parameters
         ----------
 
-        fnc : callable
+        fnc : callable or tuple of arrays (tt, xx)
 
         m0 : float
 

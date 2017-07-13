@@ -153,17 +153,11 @@ class Trajectory(object):
 
         export : bool
             Whether or not return the created objects
-
-        boundary_values : dict
-            Dictionary of boundary values for the state and input splines functions.
-
         """
         logging.debug("Initialise Splines")
         
         # store the old splines to calculate the guess later
         self._old_splines = copy.deepcopy(self.splines)
-        ##:: self.sys==sys, sys comes from class collocation, from ControlSystem, from DynamicSystem, has the attr boundary.value. bv = {'x2': ...}
-        # self._old_splines = copy.deepcopy(self.splines)
         self._old_splines = auxiliary.copy_splines(self.splines)
         if self._old_splines is not None and isinstance(self._old_splines['x1'].f(0), sp.Basic):
             msg = "Unexpectedly got an provisional spline for saving."
@@ -237,7 +231,10 @@ class Trajectory(object):
         # now handle the variables which are not part of any chain
         for i, xx in enumerate(self.sys.states):  ##:: ('x1',...,'xn')
             if not x_fnc.has_key(xx):
-                splines[xx] = Spline(self.sys.a, self.sys.b, n=self.n_parts_x, bv={0:bv[xx]}, tag=xx,
+
+                # TODO: What happens with higher order boundary conditions bv={1:...}?
+                splines[xx] = Spline(self.sys.a, self.sys.b, n=self.n_parts_x,
+                                     bv={0: bv[xx]}, tag=xx,
                                      nodes_type=self._parameters['nodes_type'],
                                      use_std_approach=self._parameters['use_std_approach'],
                                      masterobject=self.masterobject)
@@ -245,11 +242,11 @@ class Trajectory(object):
                 splines[xx].type = 'x'
                 x_fnc[xx] = splines[xx].f
 
-        # TODO improve comment 
-        # now begin to spline input u (if without chains)
+        # now create splines for input (if chains are not used)
         for j, uu in enumerate(self.sys.inputs):
             if not u_fnc.has_key(uu):
-                splines[uu] = Spline(self.sys.a, self.sys.b, n=self.n_parts_u, bv={0:bv[uu]}, tag=uu,
+                splines[uu] = Spline(self.sys.a, self.sys.b, n=self.n_parts_u,
+                                     bv={0: bv[uu]}, tag=uu,
                                      nodes_type=self._parameters['nodes_type'],
                                      use_std_approach=self._parameters['use_std_approach'],
                                      masterobject=self.masterobject)
@@ -262,7 +259,8 @@ class Trajectory(object):
             dx_fnc[xx] = differentiate(x_fnc[xx])
 
         indep_vars = OrderedDict()
-        ##:: because key of dict(splines) is only 'upper' (splines[upper]), ##:: splines{'x1': class Spline, 'x3': class Spline}
+        ##:: because key of dict(splines) is only 'upper' (splines[upper]),
+        ##:: splines{'x1': class Spline, 'x3': class Spline}
         for ss in splines.keys():
             ##:: indep_coeffs[x1] = array([cx1_0_0, cx1_1_0, cx1_2_0, ..., cx1_14_0, cx1_15_0, cx1_16_0])
             indep_vars[ss] = splines[ss]._indep_coeffs
@@ -273,7 +271,7 @@ class Trajectory(object):
         if not export:
             # this is the usual case
             self.indep_vars = indep_vars
-            dx_fnc[xx] = differentiate(x_fnc[xx]) ##:: dx_fnc={'x1': method Spline.df, 'x2': Spline.ddf, 'x3': Spline.df, 'x4': Spline.ddf}
+            dx_fnc[xx] = differentiate(x_fnc[xx])  ##:: dx_fnc={'x1': method Spline.df, 'x2': Spline.ddf, 'x3': Spline.df, 'x4': Spline.ddf}
 
             self.splines = splines
             self.x_fnc = x_fnc  ##:: x_fnc={'x2': <bound method Spline.f of <pytrajectory.splines.Spline object >>, 'x3': <bound method Spline.f of <pytrajectory.splines.Spline object>>, 'x1': <bound method Spline.f of <pytrajectory.splines.Spline object>>, 'x4': <bound method Spline.f of <pytrajectory.splines.Spline object>>}

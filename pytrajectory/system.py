@@ -658,6 +658,7 @@ class TransitionProblem(object):
 
                 new_params.update(sym_num_tuples)
 
+            # calculate a new "solution" (sampled simulation result
             new_sol = []
             notfound = []
             for key in self.eqs.all_free_parameters:
