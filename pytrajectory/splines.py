@@ -125,6 +125,9 @@ class Spline(object):
         # the free parameters of the spline
         self._indep_coeffs = None
 
+        # cache for a frequently used part of a block-matrix
+        self._node_eval_block = None
+
     def __getitem__(self, key):
         return self._P[key]
 
@@ -244,7 +247,7 @@ class Spline(object):
         Background: due to the smoothness conditions the polynomial
         pieces are not independent. The coefficients are related by
         a underdetermined linear equation system M*c = r.
-        Some of the coefficients can be choosen freely
+        Some of the coefficients c can be chosen freely
 
         This method yields a provisionally evaluation of the spline
         while there are no numerical values for its free parameters.
@@ -252,6 +255,8 @@ class Spline(object):
         It returns a two vectors which reflect the dependence of the
         spline's or its `d`-th derivative's coefficients on its free
         parameters (independent coefficients).
+
+        seel also: make_steady()
 
         Parameters
         ----------
@@ -389,7 +394,9 @@ class Spline(object):
         assert callable(fnc)
         points = self.nodes
 
+        # IPS()
         if 0 and not self._use_std_approach:
+            # TODO: This code seems to be obsolete since 2015-12
             assert self._steady_flag
 
             # how many independent coefficients does the spline have
@@ -411,11 +418,12 @@ class Spline(object):
             free_coeffs = np.linalg.lstsq(S_dep_mat, fnc_t - S_dep_mat_abs)[0]
 
         else:
-            # compute values
-            vv = [fnc(t) for t in self.nodes]
+            # compute values at the nodes
+            vv = np.array([fnc(t) for t in self.nodes])
 
             # create vector of step sizes
-            h = np.array([self.nodes[k+1] - self.nodes[k] for k in xrange(self.nodes.size-1)])
+            #h = np.array([self.nodes[k+1] - self.nodes[k] for k in xrange(self.nodes.size-1)])
+            h = np.diff(self.nodes)
 
             # create diagonals for the coefficient matrix of the equation system
             l = np.array([h[k+1] / (h[k] + h[k+1]) for k in xrange(self.nodes.size-2)])
@@ -425,7 +433,6 @@ class Spline(object):
             # right hand side of the equation system
             r = np.array([(3.0/h[k])*l[k]*(vv[k+1] - vv[k]) + (3.0/h[k+1])*u[k]*(vv[k+2]-vv[k+1])\
                           for k in xrange(self.nodes.size-2)])
-
             # add conditions for unique solution
 
             # boundary derivatives
@@ -441,14 +448,14 @@ class Spline(object):
 
             r = np.hstack([m0, r, mn])
 
-            data = [l,d,u]
+            data = [l, d, u]
             offsets = [-1, 0, 1]
 
             # create tridiagonal coefficient matrix
             D = sparse.dia_matrix((data, offsets), shape=(self.n+1, self.n+1))
 
             # solve the equation system
-            sol = sparse.linalg.spsolve(D.tocsr(),r)
+            sol = sparse.linalg.spsolve(D.tocsr(), r)
 
             # calculate the coefficients
             coeffs = np.zeros((self.n, 4))
@@ -478,6 +485,9 @@ class Spline(object):
         if set_coeffs:
             self.set_coefficients(free_coeffs=free_coeffs)
 
+            #!!! dbg test
+            # self.set_coefficients(coeffs=coeffs)
+
         return free_coeffs
 
     def _interpolate_array(self, value_tuple):
@@ -501,6 +511,43 @@ class Spline(object):
             assert self.nodes[-1] - tt[-1] < dt/10
 
         return interp1d(tt, xx, fill_value="extrapolate")
+
+    def get_node_eval_block(self, simple=False):
+        """
+        create a 3x8 matrix which can be right-multiplied by a suitable selection of coeffs
+         to yield the array (S[i] - S[i+1], dotS[i] - dotS[i+1], ddotS[i] - ddotS[i+1] ).
+
+         Where S[i] is the value of the i-th polynomial at the specific node
+
+        :return:
+        """
+        # old c code (with reversed meaning of coeffs)
+
+        # if S._use_std_approach:
+        #     block = np.array([[  h**3, h**2,   h, 1.0, 0.0, 0.0, 0.0, -1.0],
+        #                       [3*h**2,  2*h, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0],
+        #                       [  6*h,   2.0, 0.0, 0.0, 0.0, -2.0, 0.0, 0.0]])
+        # else:
+        #     block = np.array([[0.0, 0.0, 0.0, 1.0,   h**3, -h**2,  h, -1.0],
+        #                       [0.0, 0.0, 1.0, 0.0, -3*h**2, 2*h, -1.0, 0.0],
+        #                       [0.0, 2.0, 0.0, 0.0,   6*h,  -2.0,  0.0, 0.0]])
+
+        if self._node_eval_block is None:
+            h = self._h
+            if self._use_std_approach:
+                block = np.array([[1, h, h ** 2, h ** 3, -1, 0, 0, 0],
+                                  [0, 1.0, 2*h, 3*h ** 2, 0, -1, 0, 0],
+                                  [0, 0, 2.0, 6*h, 0, 0, -2, 0.]])
+            else:
+                block = np.array([[1.0, 0.0, 0.0, 0.0, -1.0, h, -h ** 2, h ** 3],
+                                  [0.0, 1.0, 0.0, 0.0, 0.0, -1.0, 2*h, -3*h ** 2],
+                                  [0.0, 0.0, 2.0, 0.0, 0.0, 0.0, -2.0, 6*h]])
+            self._node_eval_block = block
+
+        if simple:
+            # only return the value at the left node
+            return self._node_eval_block[0, :4]
+        return self._node_eval_block
 
     def save(self):
         save = dict()
@@ -611,6 +658,7 @@ def differentiate(spline_fnc):
     else:
         raise NotImplementedError()
 
+
 # TODO: rename to make_smooth_c2
 def make_steady(S):
     """
@@ -644,7 +692,7 @@ def make_steady(S):
     # now we determine the free parameters of the spline function
 
     # (**) Background information: The algorithm has some degrees of freedom at this point,
-    # that is the choice which of the coefficients are choosen as free parameters.
+    # that is the choice which of the coefficients are chosen as free parameters.
     # we tried to use mainly 0th order and some of first order but got worse convergence
     # behavior than in the case of mainly third order
 
@@ -710,7 +758,6 @@ def make_steady(S):
     # a_mat = sparse.lil_matrix((N2,N2-N1)) # size(a_mat)=(40,11)
     # b_mat = sparse.lil_matrix((N2,N1)) # size(b_mat)=(40,29)
 
-
     # matrices to select the relevant columns from M, i.e. A, B corresponding to a, b
     a_select = sparse.lil_matrix((N2, N2-N1))
     b_mat = sparse.lil_matrix((N2, N1))
@@ -743,7 +790,6 @@ def make_steady(S):
     tmp1 = spsolve(B, r)
     tmp2 = spsolve(B, -A)
 
-
     if sparse.issparse(tmp1):
         tmp1 = tmp1.toarray()
     if sparse.issparse(tmp2):
@@ -757,8 +803,8 @@ def make_steady(S):
         j = int(tmp[0])
         k = int(tmp[1])
 
-        dep_array[j,k,:] = tmp2[i]
-        dep_array_abs[j,k] = tmp1[i]
+        dep_array[j, k, :] = tmp2[i]
+        dep_array_abs[j, k] = tmp1[i]
 
     tmp3 = np.eye(len(a))
     for i, aa in enumerate(a):
@@ -766,7 +812,7 @@ def make_steady(S):
         j = int(tmp[0])
         k = int(tmp[1])
 
-        dep_array[j,k,:] = tmp3[i]
+        dep_array[j, k, :] = tmp3[i]
 
     S._dep_array = dep_array
     S._dep_array_abs = dep_array_abs
@@ -780,7 +826,7 @@ def make_steady(S):
 
 def get_smoothness_matrix(S, N1, N2):
     """
-    Returns the coefficient matrix and right hand site for the
+    Returns the coefficient matrix and right hand side for the
     equation system that ensures the spline's smoothness in its
     joining points and its compliance with the boundary conditions.
 
@@ -816,25 +862,7 @@ def get_smoothness_matrix(S, N1, N2):
     # build block band matrix M for smoothness conditions
     # in every joining point
 
-    # This is the old code which used c.._0 for the highest power etc.
-
-    # if S._use_std_approach:
-    #     block = np.array([[  h**3, h**2,   h, 1.0, 0.0, 0.0, 0.0, -1.0],
-    #                       [3*h**2,  2*h, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0],
-    #                       [  6*h,   2.0, 0.0, 0.0, 0.0, -2.0, 0.0, 0.0]])
-    # else:
-    #     block = np.array([[0.0, 0.0, 0.0, 1.0,   h**3, -h**2,  h, -1.0],
-    #                       [0.0, 0.0, 1.0, 0.0, -3*h**2, 2*h, -1.0, 0.0],
-    #                       [0.0, 2.0, 0.0, 0.0,   6*h,  -2.0,  0.0, 0.0]])
-
-    if S._use_std_approach:
-        block = np.array([[ 1,   h, h**2,   h**3, -1,  0,  0, 0],
-                          [ 0, 1.0,  2*h, 3*h**2,  0, -1,  0, 0],
-                          [ 0,   0,  2.0,    6*h,  0,  0, -2, 0.]])
-    else:
-        block = np.array([[1.0, 0.0, 0.0, 0.0,   -1.0, h, -h**2,    h**3],
-                          [0.0, 1.0, 0.0, 0.0,   0.0, -1.0, 2*h, -3*h**2],
-                          [0.0, 0.0, 2.0, 0.0,   0.0, 0.0, -2.0,     6*h]])
+    block = S.get_node_eval_block()
 
     # Note: This function assumes lexical ordering of the coefficients
 
