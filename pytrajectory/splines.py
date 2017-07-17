@@ -397,7 +397,7 @@ class Spline(object):
         self._prov_flag = False
 
     # noinspection PyPep8Naming
-    def new_interpolate(self, fnc, set_coeffs=False):
+    def interpolate(self, fnc, set_coeffs=False):
         """
         Determines the spline's coefficients such that it interpolates
         a given function. It respects the given boundary conditions, even if the
@@ -447,7 +447,7 @@ class Spline(object):
 
         return free_coeffs
 
-    def interpolate(self, fnc=None, m0=None, mn=None, set_coeffs=False):
+    def old_interpolate(self, fnc=None, m0=None, mn=None, set_coeffs=False):
         """
         Determines the spline's coefficients such that it interpolates
         a given function.

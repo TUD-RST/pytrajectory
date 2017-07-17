@@ -164,7 +164,7 @@ class TestCseLambdify(object):
 
         for s in slist:
             s.make_steady()
-            s.new_interpolate((tt, xx), set_coeffs=True)
+            s.interpolate((tt, xx), set_coeffs=True)
 
             # ensure that the creation of standard scipy-interpolantor works as expected
             ifnc = s._interpolate_array((tt, xx))

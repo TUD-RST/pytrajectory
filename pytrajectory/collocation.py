@@ -682,14 +682,19 @@ class CollocationSystem(object):
                         s_new = self.trajectories.splines[k]
                         s_old = self.trajectories._old_splines[k]
 
-                        df0 = s_old.df(self.sys.a)
-                        dfn = s_old.df(self.sys.b)
+                        # TODO: remove obsolete code:
+                        if 0:
+                            df0 = s_old.df(self.sys.a)
+                            dfn = s_old.df(self.sys.b)
 
-                        try:
-                            free_coeffs_guess = s_new.interpolate(s_old.f, m0=df0, mn=dfn)
-                        except TypeError as e:
-                            # IPS()
-                            raise e
+                            try:
+                                free_coeffs_guess = s_new.interpolate(s_old.f, m0=df0, mn=dfn)
+                            except TypeError as e:
+                                IPS()
+                                raise e
+                        # end of probably obsolete code
+
+                        free_coeffs_guess = s_new.interpolate(s_old.f)
                         guess = np.hstack((guess, free_coeffs_guess))
 
                     elif (spline_type == 'p' ):#  if self.sys.par is not the last one, then add (and guess_add_finish == False) here.
