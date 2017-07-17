@@ -52,7 +52,7 @@ class Trajectory(object):
         self.indep_vars = None
 
         # This will hold a deep copy of self.splines
-        self._old_splines = None
+        self.old_splines = None
 
         # variable to save the coefficients of the solution
         # TODO: be more precise in this comment (all coeffs??)
@@ -157,9 +157,11 @@ class Trajectory(object):
         logging.debug("Initialise Splines")
         
         # store the old splines to calculate the guess later
-        self._old_splines = copy.deepcopy(self.splines)
-        self._old_splines = auxiliary.copy_splines(self.splines)
-        if self._old_splines is not None and isinstance(self._old_splines['x1'].f(0), sp.Basic):
+        if not export:
+            # self.old_splines = auxiliary.copy_splines(self.splines)
+            self.old_splines = copy.deepcopy(self.splines)
+
+        if self.old_splines is not None and isinstance(self.old_splines['x1'].f(0), sp.Basic):
             msg = "Unexpectedly got an provisional spline for saving."
             # coeffs not set properly
             raise ValueError(msg)

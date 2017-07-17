@@ -699,7 +699,8 @@ class TransitionProblem(object):
         new_params = OrderedDict()
 
         tt = self.sim_data_tt
-        new_spline_values = []
+        new_spline_values = []  # this will contain the spline interpolation of sim_data
+        actual_spline_values = []
         old_spline_values = []
 
         data = list(self.sim_data_xx.T) + list(self.sim_data_uu.T)
@@ -707,23 +708,29 @@ class TransitionProblem(object):
             coeffs = s.interpolate((self.sim_data_tt, data[i]), set_coeffs=True)
             new_spline_values.append(auxiliary.vector_eval(s.f, tt))
 
-            s_old = self.eqs.trajectories.splines[key]
+            s_actual = self.eqs.trajectories.splines[key]
+            if self.eqs.trajectories.old_splines is None:
+                s_old = auxiliary.get_null_spline(self.a, self.b)
+            else:
+                s_old = self.eqs.trajectories.old_splines[key]
+            actual_spline_values.append(auxiliary.vector_eval(s_actual.f, tt))
             old_spline_values.append(auxiliary.vector_eval(s_old.f, tt))
-            sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)  # List of tuples like (cx1_0_0, 2.41)
 
+            # generate a pseudo "solution" (for dbg)
+            sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)  # List of tuples like (cx1_0_0, 2.41)
             new_params.update(sym_num_tuples)
 
         # calculate a new "solution" (sampled simulation result
-        new_sol = []
+        pseudo_sol = []
         notfound = []
         for key in self.eqs.all_free_parameters:
             value = new_params.pop(key, None)
             if value is not None:
-                new_sol.append(value)
+                pseudo_sol.append(value)
             else:
                 notfound.append(key)
 
-        # Vergleich:
+        # visual comparision:
 
         mm = 1./25.4  # mm to inch
         scale = 8
@@ -751,8 +758,9 @@ class TransitionProblem(object):
         for i in xrange(len(data)):
             plt.subplot(rows, 2, i + 1)
             plt.plot(tt, data[i], 'k', lw=3, label='sim')
-            plt.plot(tt, old_spline_values[i], label='old')
-            plt.plot(tt, new_spline_values[i], 'r-', label='new')
+            plt.plot(tt, old_spline_values[i], lw=3, label='old')
+            plt.plot(tt, actual_spline_values[i], label='actual')
+            plt.plot(tt, new_spline_values[i], 'r-', label='sim-interp')
             ax = plt.axis()
             plt.vlines(s.nodes, -10, 10, color="0.85")
             plt.axis(ax)

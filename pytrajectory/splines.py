@@ -1069,6 +1069,19 @@ def _switch_coeffs(S, all_coeffs=False, dep_arrays=None):
     return switched_coeffs
 
 
+def get_null_spline(a, b):
+    """
+    Create and return a spline which is zero everywhere between a, b
+    :param a:
+    :param b:
+    :return:
+    """
+    s = Spline(a, b, bv={0: (0, 0)})
+    s.make_steady()
+    s.interpolate(lambda t: 0, set_coeffs=True)
+    return s
+
+
 if __name__ == '__main__':
     # TODO: if this is still useful it should be exported to a unittest
     import matplotlib.pyplot as plt

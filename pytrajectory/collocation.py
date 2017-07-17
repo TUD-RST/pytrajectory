@@ -597,7 +597,7 @@ class CollocationSystem(object):
         The solution of this system is the new start value for the solver.
         """
 
-        if not self.trajectories._old_splines:
+        if not self.trajectories.old_splines:
             # we are at the first iteration (no old splines exist)
             if self._first_guess is not None:
                 # user defines initial value of free coefficients
@@ -680,7 +680,7 @@ class CollocationSystem(object):
                         logging.debug("Get new guess for spline {}".format(k))
 
                         s_new = self.trajectories.splines[k]
-                        s_old = self.trajectories._old_splines[k]
+                        s_old = self.trajectories.old_splines[k]
 
                         # TODO: remove obsolete code:
                         if 0:

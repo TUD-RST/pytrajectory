@@ -9,7 +9,7 @@ from scipy.linalg import expm
 from collections import OrderedDict
 from matplotlib import pyplot as plt
 
-from pytrajectory.splines import Spline
+from pytrajectory.splines import Spline, get_null_spline
 from pytrajectory.simulation import Simulator
 from log import logging, Timer
 
@@ -869,15 +869,16 @@ def copy_splines(splinedict):
         S = Spline(v.a, v.b, n=v.n, tag=v.tag, bv=v._boundary_values,
                    use_std_approach=v._use_std_approach)
         S.masterobject = v.masterobject
-        S._dep_array = v._dep_array
-        S._dep_array_abs = v._dep_array_abs
+        S._dep_array = v._dep_array.copy()
+        S._dep_array_abs = v._dep_array_abs.copy()
         # S._steady_flag = v._steady_flag
         if v._steady_flag:
             S.make_steady()
-        S._coeffs = v._coeffs
+        S._coeffs = v._coeffs.copy()
         S.set_coefficients(coeffs=v._coeffs)
-        S._coeffs_sym = v._coeffs_sym
+        S._coeffs_sym = v._coeffs_sym.copy()
         S._prov_flag = v._prov_flag
+        S._indep_coeffs = v._indep_coeffs.copy()
 
         res[k] = S
     return res

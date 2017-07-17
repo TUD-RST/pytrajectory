@@ -1,16 +1,12 @@
 # -*- coding: utf-8 -*-
 
 """
-This file is used to test the official pytrajectory examples.
+This file is used to test some small pytrajectory examples.
 
 """
 
-import os
-import inspect
-import pytest
-
-import pytrajectory
 from pytrajectory import TransitionProblem
+from pytrajectory import log
 
 
 # define the vectorfield
@@ -55,9 +51,11 @@ class TestExamples(object):
         assert S1.reached_accuracy
 
     def test_di_con_u1_x2_projective_integrator(self):
+        log.console_handler.setLevel(10)
         con = {'u1': [-1.3, 1.3], 'x2': [-.1, .8],}
         S1 = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=0, ub=0, constraints=con,
-                               show_ir=False,
+                               show_ir=True,
+                               accIt=0,
                                use_chains=False)
         S1.solve()
         assert S1.reached_accuracy
