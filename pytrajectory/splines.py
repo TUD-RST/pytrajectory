@@ -242,7 +242,7 @@ class Spline(object):
         """
         return differentiate(self, d, new_tag)
 
-    def get_dependence_vectors(self, points, d=0):
+    def get_dependence_vectors(self, point, d=0):
         """
         Background: due to the smoothness conditions the polynomial
         pieces are not independent. The coefficients are related by
@@ -252,26 +252,29 @@ class Spline(object):
         This method yields a provisionally evaluation of the spline
         while there are no numerical values for its free parameters.
 
-        It returns a two vectors which reflect the dependence of the
-        spline's or its `d`-th derivative's coefficients on its free
-        parameters (independent coefficients).
+        # Let t |--> S(t) denote the Spline Function
+        This method returns a two vectors D1, D2 which reflect the dependence of the
+        the value S(point) (`d`-th derivative's) on the
+        independent coefficients a.
+
+        S(point) = dot(D1, a) + D2
 
         seel also: make_steady()
 
         Parameters
         ----------
 
-        points : float
+        point : float
             The points at which we evaluate the provisionally spline.
 
         d : int
             The derivation order.
         """
 
-        if np.size(points) > 1:
+        if np.size(point) > 1:
             msg = "This function does not yet support vectorization."
             raise NotImplementedError(msg)
-        t = points
+        t = point
 
         # determine the spline part to evaluate
         i = int(np.floor(t * self.n / self.b))
@@ -297,7 +300,8 @@ class Spline(object):
         dep_vec = np.dot(tt, self._dep_array[i])  ##:: actually it is Sx1 (or Sx2 or Su) described in indenpent elements.
         dep_vec_abs = np.dot(tt, self._dep_array_abs[i])
 
-        return dep_vec, dep_vec_abs
+        D1, D2 = dep_vec, dep_vec_abs
+        return D1, D2
 
     def set_coefficients(self, free_coeffs=None, coeffs=None):
         """
@@ -369,6 +373,52 @@ class Spline(object):
 
         # now we have numerical values for the coefficients so we can set this to False
         self._prov_flag = False
+
+    # noinspection PyPep8Naming
+    def new_interpolate(self, fnc, set_coeffs=False):
+        """
+        Determines the spline's coefficients such that it interpolates
+        a given function. It respects the given boundary conditions, even if the
+        interpolated function does not
+
+        Parameters
+        ----------
+
+        fnc : callable or tuple of arrays (tt, xx)
+
+        set_coeffs: bool
+            determine whether the calculated coefficients should be set to self or not
+        """
+        if not callable(fnc):
+            fnc = self._interpolate_array(fnc)
+
+        assert callable(fnc)
+
+        # get the suitable number of points but exclude the boundaries
+        N = len(self._indep_coeffs)
+        tt = np.linspace(self.a, self.b, N + 2)[1:-1]
+        vv = np.array([fnc(t) for t in tt])
+
+        lhs = []
+        rhs = []
+        for t, v in zip(tt, vv):
+            D1, D2 = self.get_dependence_vectors(t)
+            lhs.append(D1)
+            rhs.append(v-D2)
+
+        # Background: for each point we have the equation
+        # D1*a + D2 = v
+        # <=>
+        # D1*a = v - D2
+        # where a are the free coeffs
+        
+        D1_matrix = np.array(lhs)
+        free_coeffs = np.linalg.solve(D1_matrix, rhs)
+
+        if set_coeffs:
+            self.set_coefficients(free_coeffs=free_coeffs)
+
+        return free_coeffs
 
     def interpolate(self, fnc=None, m0=None, mn=None, set_coeffs=False):
         """

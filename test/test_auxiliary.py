@@ -6,7 +6,10 @@ import pytest
 import sympy as sp
 import numpy as np
 
+from ipHelp import IPS
 
+
+# noinspection PyPep8Naming
 class TestCseLambdify(object):
 
     def test_single_expression(self):
@@ -56,8 +59,8 @@ class TestCseLambdify(object):
         
         assert type(F) == np.ndarray
         assert not isinstance(F, np.matrix)
-        assert F.shape == (3,1)
-        assert np.allclose(F, np.ones((3,1)))
+        assert F.shape == (3, 1)
+        assert np.allclose(F, np.ones((3, 1)))
 
     #@pytest.xfail(reason="Not implemented, yet")
     #def test_1d_array_input(self):
@@ -80,10 +83,11 @@ class TestCseLambdify(object):
         M = sp.Matrix([[x],
                        [y]])
 
-        f_arr = sp.lambdify(args=(x,y), expr=M, dummify=True, modules=[{'ImmutableMatrix' : np.array}, 'numpy'])
+        modules = [{'ImmutableMatrix': np.array}, 'numpy']
+        f_arr = sp.lambdify(args=(x, y), expr=M, dummify=True, modules=modules)
 
-        assert isinstance(f_arr(1,1), np.ndarray)
-        assert not isinstance(f_arr(1,1), np.matrix)
+        assert isinstance(f_arr(1, 1), np.ndarray)
+        assert not isinstance(f_arr(1, 1), np.matrix)
 
     # following test is not relevant for pytrajectory
     # but might be for an outsourcing of the cse_lambdify function
@@ -113,9 +117,10 @@ class TestCseLambdify(object):
         f1 = [x, u, p]
         f2 = [x, u, 0*p]
 
-
-        fnc1 = pytrajectory.auxiliary.sym2num_vectorfield(f_sym=f1, x_sym=[x], u_sym=[u], p_sym=[p], vectorized=True, cse=True)
-        fnc2 = pytrajectory.auxiliary.sym2num_vectorfield(f_sym=f2, x_sym=[x], u_sym=[u], p_sym=[p], vectorized=True, cse=True)
+        fnc1 = pytrajectory.auxiliary.sym2num_vectorfield(f_sym=f1, x_sym=[x], u_sym=[u],
+                                                          p_sym=[p], vectorized=True, cse=True)
+        fnc2 = pytrajectory.auxiliary.sym2num_vectorfield(f_sym=f2, x_sym=[x], u_sym=[u],
+                                                          p_sym=[p], vectorized=True, cse=True)
 
         N = 4
         xx = np.zeros((1, N)) + 1
@@ -130,24 +135,57 @@ class TestCseLambdify(object):
 
     def test_spline_interpolate(self):
         # TODO: This test should live in a separate spline-related file
-        from pytrajectory import splines
 
-        S = splines.Spline(a=0, b=1, n=50, bv={0: (10, 20)}, use_std_approach=True)
-        S.make_steady()
-        tt = np.linspace(S.a, S.b, 100)
-        xx = np.sin(10*tt)
-        S.interpolate((tt, xx), set_coeffs=True)
-
-        xx_s = aux.vector_eval(S.f, tt)
-
+        from pytrajectory.splines import Spline
         import matplotlib.pyplot as plt
-        plt.plot(tt, xx)
-        plt.plot(tt, xx_s)
+
+        a, b = 0, 1
+        N = 1000
+        tt = np.linspace(a, b, N)
+
+        # indices where we want wo test "equalness" later
+        idx1, idx2 = N/2 - 5,  N/2 + 5
+
+        xx = np.sin(10*tt)
+
+        slist = []
+
+        # m0=0, m1=0,
+        S1 = slist.append(Spline(a=0, b=1, n=50, bv={0: (3, -3)}, use_std_approach=False))
+        S2 = slist.append(Spline(a=0, b=1, n=50, bv={0: (3, -3)}, use_std_approach=True))
+        S1 = slist.append(Spline(a=0, b=1, n=10, bv={0: (3, -3), 1: (0, 0)}, use_std_approach=True))
+        #S1_0 = slist.append(Spline(a=0, b=1, n=50, bv={}, use_std_approach=False))
+        # S2_0 = slist.append(Spline(a=0, b=1, n=50, bv={}, use_std_approach=True))
+
+        for s in slist:
+            s.make_steady()
+            s.new_interpolate((tt, xx), set_coeffs=True)
+
+            # ensure that the creation of standard scipy-interpolantor works as expected
+            ifnc = s._interpolate_array((tt, xx))
+            xxi = ifnc(tt)
+            assert np.allclose(xx[idx1:idx2], xxi[idx1:idx2])
+
+            # now test our evaluation result
+            xx_s = aux.vector_eval(s.f, tt)
+            assert np.allclose(xx[idx1:idx2], xx_s[idx1:idx2], rtol=5e-3)
+
+        # plotting
+        if 1:
+            plt.plot(tt, xx)
+            lw = len(slist)
+            for s in slist:
+                xx_s = aux.vector_eval(s.f, tt)
+                plt.plot(tt, xx_s, lw=lw)
+                lw -= 1
+
         plt.show()
 
-        idx1, idx2 = 45, 50
-        assert np.allclose(xx[idx1:idx2], xx_s[idx1:idx2])
+        # allow 0.5 % tollerance
 
 
 if __name__ == "__main__":
-    print("\n"*2 + r"   please run py.test -s %filename.py"+ "\n")
+    print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")
+
+    tests = TestCseLambdify()
+    tests.test_spline_interpolate()
