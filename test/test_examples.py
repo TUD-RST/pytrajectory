@@ -66,3 +66,6 @@ if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s %filename.py"+ "\n")
     # or: py.test -s --pdbcls=IPython.terminal.debugger:TerminalPdb %filename
 
+    tests = TestExamples()
+    tests.test_di_con_u1_x2_projective_integrator()
+

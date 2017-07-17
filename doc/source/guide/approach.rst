@@ -11,14 +11,14 @@ part using the left endpoint by
 
 .. math::
 
-   P_k(t) = c_{k,0} (t - x_k)^3 + c_{k,1}(t - x_k)^2 + c_{k,2}(t - x_k) + c_{k,3}
+   P_k(t) = c_{k,3} (t - x_k)^3 + c_{k,2}(t - x_k)^2 + c_{k,1}(t - x_k) + c_{k,0}
 
 However, in the thesis of O. Schnabel from which PyTrajectory emerged a different approach
 is used. He defined the polynomial parts using the right endpoint, i.e.
 
 .. math::
 
-   P_k(t) = c_{k,0} (t - x_{k+1})^3 + c_{k,1}(t - x_{k+1})^2 + c_{k,2}(t - x_{k+1}) + c_{k,3}
+   P_k(t) = c_{k,3} (t - x_{k+1})^3 + c_{k,2}(t - x_{k+1})^2 + c_{k,1}(t - x_{k+1}) + c_{k,0}
 
 This results in a different matrix to ensure the smoothness and boundary conditions
 of the splines:
