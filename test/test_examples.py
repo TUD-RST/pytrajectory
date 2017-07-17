@@ -57,7 +57,7 @@ class TestExamples(object):
     def test_di_con_u1_x2_projective_integrator(self):
         con = {'u1': [-1.3, 1.3], 'x2': [-.1, .8],}
         S1 = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=0, ub=0, constraints=con,
-                               show_ir=True,
+                               show_ir=False,
                                use_chains=False)
         S1.solve()
         assert S1.reached_accuracy

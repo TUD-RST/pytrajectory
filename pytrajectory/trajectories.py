@@ -72,7 +72,7 @@ class Trajectory(object):
         """
         return self._parameters['n_parts_u']
 
-    def _raise_spline_parts(self, k=None):
+    def raise_spline_parts(self, k=None):
         if k is not None:
             # This normally does not happen, and is only for 
             # experiments and debugging

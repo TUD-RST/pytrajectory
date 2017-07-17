@@ -446,63 +446,9 @@ class TransitionProblem(object):
             assert isinstance(tcpport, int)
             interfaceserver.listen_for_connections(tcpport)
 
-        # refsol visualization
+        self._process_refsol()
 
-        if self.refsol is not None:
-            self.check_refsol_consistency()
-            auxiliary.make_refsol_callable(self.refsol)
-
-            # the reference solution specifies how often spline parts should
-            # be raised
-            for i in range(self.refsol.n_raise_spline_parts):
-                self.eqs.trajectories._raise_spline_parts()
-
-            if 0:
-                # dbg visualization
-
-                C = self.eqs.trajectories.init_splines(export=True)
-                self.eqs.guess = None
-                new_params = OrderedDict()
-
-                tt = self.refsol.tt
-                new_spline_values = []
-                fnclist = self.refsol.xxfncs + self.refsol.uufncs
-
-                for i, (key, s) in enumerate(C.splines.iteritems()):
-                    coeffs = s.interpolate(fnclist[i], set_coeffs=True)
-                    new_spline_values.append(auxiliary.vector_eval(s.f, tt))
-
-                    sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)  # List of tuples like (cx1_0_0, 2.41)
-                    new_params.update(sym_num_tuples)
-
-                mm = 1./25.4  # mm to inch
-                scale = 8
-                fs = [75*mm*scale, 35*mm*scale]
-                rows = np.round((len(new_spline_values) + 0)/2.0 + .25)  # round up
-
-                plt.figure(figsize=fs)
-                for i in xrange(len(new_spline_values)):
-                    plt.subplot(rows, 2, i + 1)
-                    plt.plot(tt, self.refsol.xu_list[i], 'k', lw=3, label='sim')
-                    plt.plot(tt, new_spline_values[i], label='new')
-                    ax = plt.axis()
-                    plt.vlines(s.nodes, -1000, 1000, color="0.85")
-                    plt.axis(ax)
-                    plt.grid(1)
-                plt.legend(loc='best')
-                plt.show()
-
-        # do the first iteration step
-        logging.info("1st Iteration: {} spline parts".format(self.eqs.trajectories.n_parts_x))
-        try:        
-            self._iterate()
-        except auxiliary.NanError:
-            logging.warn("NanError")
-            return None, None
-
-        # this was the first iteration
-        # now we are getting into the loop
-        self.nIt = 1
+        self.nIt = 0
 
         def q_finish_loop():
             res = self.reached_accuracy or self.nIt >= self._parameters['maxIt']
@@ -510,24 +456,21 @@ class TransitionProblem(object):
 
         while not q_finish_loop():
             
-            # raise the number of spline parts
-            self.eqs.trajectories._raise_spline_parts()
+            if not self.nIt == 0:
+                # raise the number of spline parts (not in the first step)
+                self.eqs.trajectories.raise_spline_parts()
 
-            # TODO: this should be simpliefied
-            if self.nIt == 1:
-                logging.info("2nd Iteration: {} spline parts".format(self.eqs.trajectories.n_parts_x))
-            elif self.nIt == 2:
-                logging.info("3rd Iteration: {} spline parts".format(self.eqs.trajectories.n_parts_x))
-            elif self.nIt >= 3:
-                logging.info("{}th Iteration: {} spline parts".format(self.nIt+1, self.eqs.trajectories.n_parts_x))
-
-            print('par = {}'.format(self.get_par_values()))
+            msg = "Iteration #{}; spline parts_ {}".format(self.nIt + 1,
+                                                           self.eqs.trajectories.n_parts_x)
+            logging.info(msg)
             # start next iteration step
-            try:        
+            try:
                 self._iterate()
             except auxiliary.NanError:
                 logging.warn("NanError")
                 return None, None
+
+            logging.info('par = {}'.format(self.get_par_values()))
 
             # increment iteration number
             self.nIt += 1
@@ -638,88 +581,7 @@ class TransitionProblem(object):
             # Solve the resulting initial value problem
             self.simulate()
 
-            # dbg: create new splines (to interpolate the obtained result)
-            C = self.eqs.trajectories.init_splines(export=True)
-            new_params = OrderedDict()
-
-            tt = self.sim_data_tt
-            new_spline_values = []
-            old_spline_values = []
-
-            data = list(self.sim_data_xx.T) + list(self.sim_data_uu.T)
-            for i, (key, s) in enumerate(C.splines.iteritems()):
-
-                coeffs = s.interpolate((self.sim_data_tt, data[i]), set_coeffs=True)
-                new_spline_values.append(auxiliary.vector_eval(s.f, tt))
-
-                s_old = self.eqs.trajectories.splines[key]
-                old_spline_values.append(auxiliary.vector_eval(s_old.f, tt))
-                sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)  # List of tuples like (cx1_0_0, 2.41)
-
-                new_params.update(sym_num_tuples)
-
-            # calculate a new "solution" (sampled simulation result
-            new_sol = []
-            notfound = []
-            for key in self.eqs.all_free_parameters:
-                value = new_params.pop(key, None)
-                if value is not None:
-                    new_sol.append(value)
-                else:
-                    notfound.append(key)
-
-            #  Vergleich:
-
-            mm = 1./25.4  # mm to inch
-            scale = 8
-            fs = [75*mm*scale, 35*mm*scale]
-            rows = np.round((len(data) + 1)/2.0 + .25)  # round up
-
-            par = self.get_par_values()
-
-            # this is needed for vectorized evaluation
-            n_tt = len(self.sim_data_tt)
-            assert par.ndim == 1
-            par = par.reshape(self.dyn_sys.n_par, 1)
-            par = par.repeat(n_tt, axis=1)
-
-            # input part of the vectorfiled
-            gg = self.eqs.Df_vectorized(self.sim_data_xx.T, self.sim_data_uu.T, par).transpose(2, 0, 1)
-            gg = gg[:, :-1, -1]
-
-            # drift part of the vf
-            ff = self.eqs.ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0, par).T[:, :-1]
-
-            labels = self.dyn_sys.states + self.dyn_sys.inputs
-
-            if self._parameters['show_ir']:
-                plt.figure(figsize=fs)
-                for i in xrange(len(data)):
-                    plt.subplot(rows, 2, i+1)
-                    plt.plot(tt, data[i], 'k', lw=3, label='sim')
-                    plt.plot(tt, old_spline_values[i], label='old')
-                    plt.plot(tt, new_spline_values[i], 'r-', label='new')
-                    ax = plt.axis()
-                    plt.vlines(s.nodes, -10, 10, color="0.85")
-                    plt.axis(ax)
-                    plt.grid(1)
-                    plt.ylabel(labels[i])
-                plt.legend(loc='best')
-
-                # plt.subplot(rows, 2, i + 2)
-                # plt.title("vf: f")
-                # plt.plot(tt, ff)
-                #
-                # plt.subplot(rows, 2, i + 3)
-                # plt.title("vf: g")
-                # plt.plot(tt, gg)
-
-                fname =  auxiliary.datefname(ext="pdf")
-                # plt.savefig(fname)
-                # logging.debug(fname + " written.")
-
-                plt.show()
-                # IPS()
+            self._show_intermediate_results()
 
             # check if desired accuracy is reached
             self.check_accuracy()
@@ -745,6 +607,7 @@ class TransitionProblem(object):
             if slvr.cond_rel_tol and slvr.solve_count < self._parameters['localEsc']:
                 # we are in a local minimum
                 # > try to jump out by randomly changing the solution
+                # Note: this approach seems not to be successful
                 if self.eqs.trajectories.n_parts_x >= 40:
                     # values between 0.32 and 3.2:
                     scale = 10**(np.random.rand(len(slvr.x0))-.5)
@@ -763,21 +626,155 @@ class TransitionProblem(object):
             else:
                 # IPS()
                 logging.warn("unexpected state in mainloop of outer iteration -> break loop")
+                break
 
-            #
-            # # any of the following  conditions ends the loop
-            # cond1 = self.reached_accuracy
-            #
-            # # following means: solver stopped not
-            # # only because of maximum step             # number
-            # cond2 = (not slvr.cond_num_steps) or slvr.cond_abs_tol \
-            #                                   or slvr.cond_rel_tol
-            # cond3 = slvr.solve_count >= self._parameters['accIt']
-            #
-            # if cond1 or cond2 or cond3:
-            #     break
-            # else:
-            #     logging.debug('New attempt\n\n')
+    def _process_refsol(self, visualize=False):
+        """
+        Handle given reference solution and (optionally) visualize it (for debug and development).
+
+        :return: None
+        """
+
+        if self.refsol is None:
+            return
+
+        self.check_refsol_consistency()
+        auxiliary.make_refsol_callable(self.refsol)
+
+        # the reference solution specifies how often spline parts should
+        # be raised
+        for i in range(self.refsol.n_raise_spline_parts):
+            self.eqs.trajectories.raise_spline_parts()
+
+        if visualize:
+            # dbg visualization
+
+            C = self.eqs.trajectories.init_splines(export=True)
+            self.eqs.guess = None
+            new_params = OrderedDict()
+
+            tt = self.refsol.tt
+            new_spline_values = []
+            fnclist = self.refsol.xxfncs + self.refsol.uufncs
+
+            for i, (key, s) in enumerate(C.splines.iteritems()):
+                coeffs = s.interpolate(fnclist[i], set_coeffs=True)
+                new_spline_values.append(auxiliary.vector_eval(s.f, tt))
+
+                sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)
+                # List of tuples like (cx1_0_0, 2.41)
+
+                new_params.update(sym_num_tuples)
+
+            mm = 1./25.4  # mm to inch
+            scale = 8
+            fs = [75*mm*scale, 35*mm*scale]
+            rows = np.round((len(new_spline_values) + 0)/2.0 + .25)  # round up
+
+            plt.figure(figsize=fs)
+            for i in xrange(len(new_spline_values)):
+                plt.subplot(rows, 2, i + 1)
+                plt.plot(tt, self.refsol.xu_list[i], 'k', lw=3, label='sim')
+                plt.plot(tt, new_spline_values[i], label='new')
+                ax = plt.axis()
+                plt.vlines(s.nodes, -1000, 1000, color="0.85")
+                plt.axis(ax)
+                plt.grid(1)
+            plt.legend(loc='best')
+            plt.show()
+
+    def _show_intermediate_results(self):
+        """
+        If the appropriate parameters is set this method displays intermediate results.
+        Useful for debugging and development.
+
+        :return: None (just polt)
+        """
+
+        if not self._parameters['show_ir']:
+            return
+
+        # dbg: create new splines (to interpolate the obtained result)
+        C = self.eqs.trajectories.init_splines(export=True)
+        new_params = OrderedDict()
+
+        tt = self.sim_data_tt
+        new_spline_values = []
+        old_spline_values = []
+
+        data = list(self.sim_data_xx.T) + list(self.sim_data_uu.T)
+        for i, (key, s) in enumerate(C.splines.iteritems()):
+            coeffs = s.interpolate((self.sim_data_tt, data[i]), set_coeffs=True)
+            new_spline_values.append(auxiliary.vector_eval(s.f, tt))
+
+            s_old = self.eqs.trajectories.splines[key]
+            old_spline_values.append(auxiliary.vector_eval(s_old.f, tt))
+            sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)  # List of tuples like (cx1_0_0, 2.41)
+
+            new_params.update(sym_num_tuples)
+
+        # calculate a new "solution" (sampled simulation result
+        new_sol = []
+        notfound = []
+        for key in self.eqs.all_free_parameters:
+            value = new_params.pop(key, None)
+            if value is not None:
+                new_sol.append(value)
+            else:
+                notfound.append(key)
+
+        # Vergleich:
+
+        mm = 1./25.4  # mm to inch
+        scale = 8
+        fs = [75*mm*scale, 35*mm*scale]
+        rows = np.round((len(data) + 1)/2.0 + .25)  # round up
+
+        par = self.get_par_values()
+
+        # this is needed for vectorized evaluation
+        n_tt = len(self.sim_data_tt)
+        assert par.ndim == 1
+        par = par.reshape(self.dyn_sys.n_par, 1)
+        par = par.repeat(n_tt, axis=1)
+
+        # input part of the vectorfiled
+        gg = self.eqs.Df_vectorized(self.sim_data_xx.T, self.sim_data_uu.T, par).transpose(2, 0, 1)
+        gg = gg[:, :-1, -1]
+
+        # drift part of the vf
+        ff = self.eqs.ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0, par).T[:, :-1]
+
+        labels = self.dyn_sys.states + self.dyn_sys.inputs
+
+        plt.figure(figsize=fs)
+        for i in xrange(len(data)):
+            plt.subplot(rows, 2, i + 1)
+            plt.plot(tt, data[i], 'k', lw=3, label='sim')
+            plt.plot(tt, old_spline_values[i], label='old')
+            plt.plot(tt, new_spline_values[i], 'r-', label='new')
+            ax = plt.axis()
+            plt.vlines(s.nodes, -10, 10, color="0.85")
+            plt.axis(ax)
+            plt.grid(1)
+            plt.ylabel(labels[i])
+        plt.legend(loc='best')
+
+        # plt.subplot(rows, 2, i + 2)
+        # plt.title("vf: f")
+        # plt.plot(tt, ff)
+        #
+        # plt.subplot(rows, 2, i + 3)
+        # plt.title("vf: g")
+        # plt.plot(tt, gg)
+
+        if 0:
+            fname = auxiliary.datefname(ext="pdf")
+            plt.savefig(fname)
+            logging.debug(fname + " written.")
+
+        plt.show()
+        # IPS()
 
     def simulate(self):
         """
