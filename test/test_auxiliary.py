@@ -150,12 +150,17 @@ class TestCseLambdify(object):
 
         slist = []
 
-        # m0=0, m1=0,
-        S1 = slist.append(Spline(a=0, b=1, n=50, bv={0: (3, -3)}, use_std_approach=False))
-        S2 = slist.append(Spline(a=0, b=1, n=50, bv={0: (3, -3)}, use_std_approach=True))
-        S1 = slist.append(Spline(a=0, b=1, n=10, bv={0: (3, -3), 1: (0, 0)}, use_std_approach=True))
-        #S1_0 = slist.append(Spline(a=0, b=1, n=50, bv={}, use_std_approach=False))
-        # S2_0 = slist.append(Spline(a=0, b=1, n=50, bv={}, use_std_approach=True))
+        # only 0th oder
+        slist.append(Spline(a=0, b=1, n=50, bv={0: (1.5, 1.5)}, use_std_approach=False))
+        slist.append(Spline(a=0, b=1, n=50, bv={0: (1.5, 1.5)}, use_std_approach=True))
+
+        # 0th and 1st order
+        slist.append(Spline(a=0, b=1, n=10, bv={0: (1.5, 1.5), 1: (0, 0)}, use_std_approach=False))
+        slist.append(Spline(a=0, b=1, n=10, bv={0: (1.5, 1.5), 1: (0, 0)}, use_std_approach=True))
+
+        # no boundary values
+        slist.append(Spline(a=0, b=1, n=50, bv={}, use_std_approach=False))
+        slist.append(Spline(a=0, b=1, n=50, bv={}, use_std_approach=True))
 
         for s in slist:
             s.make_steady()
@@ -170,8 +175,11 @@ class TestCseLambdify(object):
             xx_s = aux.vector_eval(s.f, tt)
             assert np.allclose(xx[idx1:idx2], xx_s[idx1:idx2], rtol=5e-3)
 
+            # ensure that we don't have values like 1e12 near boundaries
+            assert all((-10 < xx_s) * (xx_s < 10))
+
         # plotting
-        if 1:
+        if 0:
             plt.plot(tt, xx)
             lw = len(slist)
             for s in slist:
@@ -179,7 +187,8 @@ class TestCseLambdify(object):
                 plt.plot(tt, xx_s, lw=lw)
                 lw -= 1
 
-        plt.show()
+            plt.axis([-.1, 1.1, -2, 2])
+            plt.show()
 
         # allow 0.5 % tollerance
 

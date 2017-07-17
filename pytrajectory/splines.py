@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import numpy as np
 import sympy as sp
 import scipy.sparse as sparse
@@ -54,14 +55,13 @@ class Spline(object):
         # usually used when dealing with spline interpolation
         #
         # later this standard approach has been implemented and was intended
-        # to replace the other one, but it turned out that when using this
-        # standard approach some examples suddendly fail
+        # to replace the other one, but it turned out that
+        # convergence properties of the whole algorithm for some examples got worse
         #
         # until this issue is resolved the user is enabled to choose between
         # the two approaches be altering the following attribute
 
-        if bv is None:
-            bv = {}
+        self._init_bc(bv)
 
         self.masterobject = kwargs.get("masterobject")
 
@@ -124,6 +124,7 @@ class Spline(object):
 
         # the free parameters of the spline
         self._indep_coeffs = None
+        self._indep_coeffs_sym = None
 
         # cache for a frequently used part of a block-matrix
         self._node_eval_block = None
@@ -186,6 +187,26 @@ class Spline(object):
         else:
             return self._P[i].deriv(d)(t - (i+1)*self._h)
 
+    def _init_bc(self, bc):
+        """
+        This method processes the provided boundary conditions and stores them in an instance
+        variable (OrderedDict)
+        """
+        self._boundary_values = OrderedDict()
+
+        if (bc is None) or (len(bc) == 0):
+            return
+
+        keys = sorted(bc.keys())
+        maxorder = max(keys)
+        if not len(keys) == maxorder + 1:
+            msg = "Only consecutive boundary conditions are allowed. "\
+                  "You have to provide bc also for all lower orders."
+            raise ValueError(msg)
+
+        for k in keys:
+            self._boundary_values[k] = bc[k]
+
     def f(self, t):
         """This is just a wrapper to evaluate the spline itself."""
         if not self._prov_flag:
@@ -229,7 +250,8 @@ class Spline(object):
         """
         make_steady(S=self)
         self._indep_coeffs_sym = self._indep_coeffs.copy()
-    ##:: array([cx1_0_0, cx1_1_0, cx1_2_0, ..., cx1_8_0, cx1_9_0, cx1_0_2])
+        ##:: array([cx1_0_0, cx1_1_0, cx1_2_0, ..., cx1_8_0, cx1_9_0, cx1_0_2])
+
     def differentiate(self, d=1, new_tag=''):
         """
         Returns the `d`-th derivative of this spline function object.
@@ -394,9 +416,14 @@ class Spline(object):
 
         assert callable(fnc)
 
-        # get the suitable number of points but exclude the boundaries
+        # get a suitable number of points
         N = len(self._indep_coeffs)
-        tt = np.linspace(self.a, self.b, N + 2)[1:-1]
+        if self._boundary_values.get(0) is None:
+            # no given bc -> include boundary points
+            tt = np.linspace(self.a, self.b, N)
+        else:
+            # exclude the boundaries because we already have given bc
+            tt = np.linspace(self.a, self.b, N + 2)[1:-1]
         vv = np.array([fnc(t) for t in tt])
 
         lhs = []
@@ -411,7 +438,7 @@ class Spline(object):
         # <=>
         # D1*a = v - D2
         # where a are the free coeffs
-        
+
         D1_matrix = np.array(lhs)
         free_coeffs = np.linalg.solve(D1_matrix, rhs)
 
@@ -710,6 +737,7 @@ def differentiate(spline_fnc):
 
 
 # TODO: rename to make_smooth_c2
+# noinspection PyPep8Naming
 def make_steady(S):
     """
     This method sets up and solves equations that satisfy boundary conditions and
@@ -788,13 +816,10 @@ def make_steady(S):
     # now we build the matrix for the equation system
     # that ensures the smoothness conditions
 
-    # get matrix dimensions --> (3.21) & (3.22)
-    N1 = 3 * (S.n - 1) + 2 * (nu + 1)
-    N2 = 4 * S.n
-
     # get matrix and right hand site of the equation system
     # that ensures smoothness and compliance with the boundary values
-    M, r = get_smoothness_matrix(S, N1, N2) ##:: see the docs:
+    M, r = get_smoothness_matrix(S, nu) ##:: see the docs:
+    N1, N2 = M.shape
     # http://pytrajectory.readthedocs.io/en/master/guide/background.html#candidate-functions
 
     # get A and B matrix such that
@@ -874,7 +899,7 @@ def make_steady(S):
     S._steady_flag = True
 
 
-def get_smoothness_matrix(S, N1, N2):
+def get_smoothness_matrix(S, nu):
     """
     Returns the coefficient matrix and right hand side for the
     equation system that ensures the spline's smoothness in its
@@ -886,11 +911,7 @@ def get_smoothness_matrix(S, N1, N2):
     S : Spline
         The spline function object to get the matrix for.
 
-    N1 : int
-        First dimension of the matrix.
-
-    N2 : int
-        Second dimension of the matrix.
+    nu : order of derivatives up to which boundary conditions are given
 
     Returns
     -------
@@ -904,6 +925,10 @@ def get_smoothness_matrix(S, N1, N2):
 
     n = S.n  # number of pieces
     h = S._h  # width of the interval
+
+    # get matrix dimensions --> (3.21) & (3.22)
+    N1 = 3*(S.n - 1) + 2*(nu + 1)
+    N2 = 4*S.n
 
     # initialise the matrix and the right hand site
     M = sparse.lil_matrix((N1, N2))
@@ -1045,6 +1070,7 @@ def _switch_coeffs(S, all_coeffs=False, dep_arrays=None):
 
 
 if __name__ == '__main__':
+    # TODO: if this is still useful it should be exported to a unittest
     import matplotlib.pyplot as plt
 
     bv = {0 : [0.0, 1.0],
