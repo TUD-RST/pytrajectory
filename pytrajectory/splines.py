@@ -81,7 +81,6 @@ class Spline(object):
         # dictionary with boundary values
         #   key: order of the spline's derivative to which the values belong
         #   values: the boundary values the derivative should satisfy
-        self._boundary_values = bv  ##:: every time only one: e.g. bv={0:(0.0,0.2*pi)}
 
         # create array of symbolic coefficients
         self._coeffs = sp.symarray('c'+tag, (self.n, 4))  ##:: e.g.: array([[cxi_0_0, cxi_0_1, cxi_0_2, cxi_0_3],...,[cxi_9_0, cxi_9_1, cxi_9_2, cxi_9_3]])
@@ -180,7 +179,9 @@ class Spline(object):
 
         # get polynomial part where t is in
         i = int(np.floor(t * self.n / self.b))
-        if i == self.n: i -= 1
+        if i >= self.n:
+            # this might e.g. happen when the simulator calls the input spline with t > self.b
+            i = self.n - 1
 
         if self._use_std_approach:
             return self._P[i].deriv(d)(t - (i)*self._h)

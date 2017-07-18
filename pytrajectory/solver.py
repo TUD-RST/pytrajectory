@@ -253,9 +253,9 @@ class Solver:
                     logging.debug("lm: inner loop shell")
                     IPS()
 
-                if self.mu > 1:
+                if self.mu > 10:
                     # just for breakpoint (dbg)
-                    pass
+                    IPS()
                 
                 # if the system more or less behaves linearly 
                 break_inner_loop = rho > b0

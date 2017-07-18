@@ -108,6 +108,7 @@ class TransitionProblem(object):
         self._parameters['localEsc'] = kwargs.get('localEsc', 0)
         self._parameters['reltol'] = kwargs.get('reltol', 2e-5)
         self._parameters['show_ir'] = kwargs.get('show_ir', False)
+        self._parameters['show_refsol'] = kwargs.get('show_refsol', False)
 
         self.refsol = kwargs.get('refsol', None)  # this serves to reproduce a given trajectory
 
@@ -628,7 +629,7 @@ class TransitionProblem(object):
                 logging.warn("unexpected state in mainloop of outer iteration -> break loop")
                 break
 
-    def _process_refsol(self, visualize=False):
+    def _process_refsol(self):
         """
         Handle given reference solution and (optionally) visualize it (for debug and development).
 
@@ -646,7 +647,7 @@ class TransitionProblem(object):
         for i in range(self.refsol.n_raise_spline_parts):
             self.eqs.trajectories.raise_spline_parts()
 
-        if visualize:
+        if self._parameters.get('show_refsol', False):
             # dbg visualization
 
             C = self.eqs.trajectories.init_splines(export=True)
@@ -760,7 +761,7 @@ class TransitionProblem(object):
             plt.plot(tt, data[i], 'k', lw=3, label='sim')
             plt.plot(tt, old_spline_values[i], lw=3, label='old')
             plt.plot(tt, actual_spline_values[i], label='actual')
-            plt.plot(tt, new_spline_values[i], 'r-', label='sim-interp')
+            # plt.plot(tt, new_spline_values[i], 'r-', label='sim-interp')
             ax = plt.axis()
             plt.vlines(s.nodes, -10, 10, color="0.85")
             plt.axis(ax)

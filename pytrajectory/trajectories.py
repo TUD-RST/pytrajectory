@@ -10,6 +10,7 @@ import auxiliary
 
 from ipHelp import IPS
 
+
 class Trajectory(object):
     """
     This class handles the creation and managing of the spline functions
@@ -82,7 +83,12 @@ class Trajectory(object):
 
             # TODO: introduce parameter `ku` and handle it here
             # (and in CollocationSystem.get_guess())
-            self._parameters['n_parts_u'] *= self._parameters['kx']
+            npu = self._parameters['n_parts_u']
+            npu *= self._parameters['kx']
+            nx = self.masterobject.dyn_sys.n_states
+            # this should prevent the input signal from getting too much ripple
+            np.clip(npu, 0, nx*3)
+            self._parameters['n_parts_u'] = npu
 
         return self.n_parts_x
     
