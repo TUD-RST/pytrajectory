@@ -16,6 +16,7 @@ from ipHelp import IPS
 np.set_printoptions(threshold='nan') ##??
 
 
+# noinspection PyPep8Naming
 class CollocationSystem(object):
     """
     This class represents the collocation system that is used
@@ -201,7 +202,7 @@ class CollocationSystem(object):
 
         # define the callable functions for the eqs
 
-        def G(c, info=False, symbeq=False):
+        def F(c, info=False, symbeq=False):
             """
             :param c: main argument (free parameters)
             :param info: flag for debug
@@ -283,14 +284,14 @@ class CollocationSystem(object):
 
         # save the dimension of the result and the argument for this function
         # this is correct without penalty constraints
-        G.dim, G.argdim = SMC.Mx.shape
+        F.dim, F.argdim = SMC.Mx.shape
         # TODO: Check if this is correct together with free parameters
 
         # regard additional constraint equations
-        G.dim += n_cpts*self.sys.n_pconstraints
+        F.dim += n_cpts*self.sys.n_pconstraints
 
         # now define jacobian
-        def DG(c, debug=False, symbeq=False):
+        def DF(c, debug=False, symbeq=False):
             """
             :param c: main argument (free parameters)
             :param symbeq: flag for calling this function with symbolic c
@@ -386,11 +387,11 @@ class CollocationSystem(object):
                 return res
 
         # dbg (call the new functions)
-        z = np.zeros((G.argdim,))
-        G(z)
-        DG(z)
+        z = np.zeros((F.argdim,))
+        F(z)
+        DF(z)
 
-        C = Container(G=G, DG=DG,
+        C = Container(F=F, DF=DF,
                       Mx=MC.Mx, Mx_abs=MC.Mx_abs,
                       Mu=MC.Mu, Mu_abs=MC.Mu_abs,
                       Mp=MC.Mp, Mp_abs=MC.Mp_abs,
@@ -731,17 +732,17 @@ class CollocationSystem(object):
 
         return guess
 
-    def solve(self, G, DG, new_solver=True):
+    def solve(self, F, DF, new_solver=True):
         """
         This method is used to solve the collocation equation system.
 
         Parameters
         ----------
 
-        G : callable
+        F : callable
             Function that "evaluates" the equation system.
 
-        DG : callable
+        DF : callable
             Function for the jacobian.
 
         new_solver : bool
@@ -754,7 +755,7 @@ class CollocationSystem(object):
         # create our solver
         ##:: note: x0 = [u,x,z_par]
         if new_solver:
-            self.solver = Solver(masterobject=self.masterobject, F=G, DF=DG, x0=self.guess,
+            self.solver = Solver(masterobject=self.masterobject, F=F, DF=DF, x0=self.guess,
                                  tol=self._parameters['tol'],
                                  reltol=self._parameters['reltol'],
                                  maxIt=self._parameters['sol_steps'],

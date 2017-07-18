@@ -561,14 +561,14 @@ class TransitionProblem(object):
 
         # Build the collocation equations system
         C = self.eqs.build()
-        G, DG = C.G, C.DG
+        F, DF = C.F, C.DF
 
         old_res = 1e20
         old_sol = None
 
         new_solver = True
         while True:
-            self.tmp_sol = self.eqs.solve(G, DG, new_solver=new_solver)
+            self.tmp_sol = self.eqs.solve(F, DF, new_solver=new_solver)
 
             # in the following iterations we want to use the same solver
             # object (we just had an intermediate look, whether the solution
