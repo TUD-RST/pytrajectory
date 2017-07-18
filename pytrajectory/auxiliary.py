@@ -2,12 +2,13 @@
 import numpy as np
 import sympy as sp
 from sympy.utilities.lambdify import _get_namespace
-import time
 from scipy.interpolate import interp1d, UnivariateSpline
 import scipy.integrate
 from scipy.linalg import expm
-from collections import OrderedDict
 from matplotlib import pyplot as plt
+from collections import OrderedDict
+import copy
+import time
 
 from pytrajectory.splines import Spline, get_null_spline
 from pytrajectory.simulation import Simulator
@@ -764,13 +765,36 @@ def new_spline(Tend, n_parts, targetvalues, tag, bv=None, use_std_approach=True)
     """
 
     s = Spline(0, Tend, n=n_parts, bv=bv, tag=tag, nodes_type="equidistant",
-                 use_std_approach=use_std_approach)
+               use_std_approach=use_std_approach)
 
     s.make_steady()
     assert np.ndim(targetvalues[0]) == 1
     assert np.ndim(targetvalues[1]) == 1
     s.interpolate(targetvalues, set_coeffs=True)
     return s
+
+
+def eval_sol(masterobject, sol, tt):
+    """
+    This function take an arbitrary solution for the free parameters and constructs a
+    list of arrays like [x1(tt), x2(tt), ... um(tt)]
+    where xi and uj are evaluations of splines corresponding to the free coeffs in `sol`.
+
+    This is usefull to visualize a intermediate result of the solver or an initial guess.
+
+    :param masterobject:
+    :param sol:
+    :return:
+    """
+
+    traj = copy.deepcopy(masterobject.eqs.trajectories)
+    traj.set_coeffs(sol)
+
+    res = []
+    for s in traj.splines.values():
+        res.append(vector_eval(s.f, tt))
+
+    return res
 
 
 def siumlate_with_input(tp, inputseq, n_parts ):
