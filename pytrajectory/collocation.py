@@ -588,8 +588,7 @@ class CollocationSystem(object):
         This method is used to determine a starting value (guess) for the
         solver of the collocation equation system.
 
-        If it is the first iteration step, then a vector with the same length as
-        the vector of the free parameters with arbitrary values is returned.
+        If it is the first iteration step, see _set_initial_guess().
 
         Else, for every variable a spline has been created for, the old spline
         of the iteration before and the new spline are evaluated at specific
@@ -600,69 +599,8 @@ class CollocationSystem(object):
         """
 
         if not self.trajectories.old_splines:
-            # we are at the first iteration (no old splines exist)
-            if self._first_guess is not None:
-                # user defines initial value of free coefficients
-                # together, `guess` and `refsol` make no sense
-                assert self.masterobject.refsol is None
-
-                guess = np.empty(0)
-
-                # iterate over the system quantities (x_i, u_j)
-            
-                for k, v in self.trajectories.indep_vars.items():
-                    logging.debug("Get new guess for spline {}".format(k))
-
-                    if k in self._first_guess:
-                        s = self.trajectories.splines[k]
-                        f = self._first_guess[k]
-
-                        free_vars_guess = s.interpolate(f)
-
-                    elif 'seed' in self._first_guess:
-                        np.random.seed(self._first_guess.get('seed'))
-
-                        # to achieve greater variability in initial guesses
-                        # it seems usefull to transform the random values
-                        # (scale and offset)
-                        #
-                        if 'scale' in self._first_guess:
-                            scale = self._first_guess.get('scale')
-                            offset = -0.5
-                        else:
-                            offset = 0
-                            scale = 1
-                        free_vars_guess = (np.random.random(len(v)) + offset) * scale
-                        
-                    else:
-                        free_vars_guess = 0.1 * np.ones(len(v))
-
-                    guess = np.hstack((guess, free_vars_guess))
-                    guess[self._afp_index:] = self._parameters['z_par']
-                    
-            elif self.masterobject.refsol is not None:
-                # TODO: handle free parameters
-                guess = self.interpolate_refsol()
-            
-            else:
-                # first_guess and refsol are None
-                # user neither defines initial value of free coefficients nor reference solution
-
-                free_vars_all = np.hstack(self.trajectories.indep_vars.values())
-                ##:: self.trajectories.indep_vars.values() contains all the free-par. e.g.:
-                ##:: (5 x 11): free_coeffs_all = array([cx3_0_0, cx3_1_0, ..., cx3_8_0, cx1_0_0, ..., cx1_14_0, cx1_15_0, cx1_16_0, k]
-                guess = 0.1 * np.ones(free_vars_all.size) ##:: init. guess = 0.1
-                ##!! itemindex = np.argwhere(free_coeffs_all == sp.symbols('k'))
-                guess[self._afp_index:] = self._parameters['z_par']
-                #guess[-1] = self._parameters['z_par'] # in 1st round, the last element of guess is the value of z_par
-
-                ##!! self.itemindex = itemindex[0][0]
-                ##!! p = np.array([2.5])
-                ##!! guess = np.hstack((guess,p[0])
-
-
-            # End of case discrimination between first_guess and refsol and None of these
-            # TODO: Check indentation levels (mistake is probable)
+            self._set_initial_guess()
+            return
 
         else:
             # old_splines do exist
@@ -722,6 +660,78 @@ class CollocationSystem(object):
 
         # the new guess
         self.guess = guess
+
+    def _set_initial_guess(self):
+        """
+        generate the initial value for the free parameters
+        - either randomly
+        - or [.1, .1, ..., .1]
+
+        :return: None (set self.guess)
+        """
+        # we are at the first iteration (no old splines exist)
+        if self._first_guess is not None:
+            # user defines initial value of free coefficients
+            # together, `guess` and `refsol` make no sense
+            assert self.masterobject.refsol is None
+
+            guess = np.empty(0)
+
+            # iterate over the system quantities (x_i, u_j)
+
+            for k, v in self.trajectories.indep_vars.items():
+                logging.debug("Get new guess for spline {}".format(k))
+
+                if k in self._first_guess:
+                    s = self.trajectories.splines[k]
+                    f = self._first_guess[k]
+
+                    free_vars_guess = s.interpolate(f)
+
+                elif 'seed' in self._first_guess:
+                    np.random.seed(self._first_guess.get('seed'))
+
+                    # to achieve greater variability in initial guesses
+                    # it seems usefull to transform the random values
+                    # (scale and offset)
+                    #
+                    if 'scale' in self._first_guess:
+                        scale = self._first_guess.get('scale')
+                        offset = -0.5
+                    else:
+                        offset = 0
+                        scale = 1
+                    free_vars_guess = (np.random.random(len(v)) + offset)*scale
+                    # print free_vars_guess
+
+                else:
+                    free_vars_guess = 0.1*np.ones(len(v))
+
+                guess = np.hstack((guess, free_vars_guess))
+                guess[self._afp_index:] = self._parameters['z_par']
+
+        elif self.masterobject.refsol is not None:
+            # TODO: handle free parameters
+            guess = self.interpolate_refsol()
+
+        else:
+            # first_guess and refsol are None
+            # user neither defines initial value of free coefficients nor reference solution
+
+            free_vars_all = np.hstack(self.trajectories.indep_vars.values())
+            ##:: self.trajectories.indep_vars.values() contains all the free-par. e.g.:
+            ##:: (5 x 11): free_coeffs_all = array([cx3_0_0, cx3_1_0, ..., cx3_8_0, cx1_0_0, ..., cx1_14_0, cx1_15_0, cx1_16_0, k]
+            guess = 0.1*np.ones(free_vars_all.size)  ##:: init. guess = 0.1
+            ##!! itemindex = np.argwhere(free_coeffs_all == sp.symbols('k'))
+            guess[self._afp_index:] = self._parameters['z_par']
+            # guess[-1] = self._parameters['z_par'] # in 1st round, the last element of guess is the value of z_par
+
+            ##!! self.itemindex = itemindex[0][0]
+            ##!! p = np.array([2.5])
+            ##!! guess = np.hstack((guess,p[0])
+
+        self.guess = guess
+
 
     # TODO: handle free parameters
     def interpolate_refsol(self):

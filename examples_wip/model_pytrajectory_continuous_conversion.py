@@ -17,7 +17,7 @@ from numpy import pi
 
 
 msg = """
-Dieses Skript verfolgt den Ansatz des Stetigem Umbaus
+Dieses Skript verfolgt den Ansatz des stetigem Umbaus
 (continous conversion)
 
 Ausgangspunkt ist eine gültige Lösung der RWA, mit Endbedingungen (`xb_0`),
@@ -178,44 +178,44 @@ rod_lengths = [0.5] * N
 pendulum_sizes = [0.015] * N
 
 car_width, car_height = [0.05, 0.02]
-    
+
 # the drawing function
 def draw(xt, image):
     x = xt[3]
     phi = xt[:3] * -1.0
-    
+
     x_car = x
     y_car = 0
-    
+
     # coordinates of the pendulums
     x_p = []
     y_p = []
-    
+
     # first pendulum
     x_p.append( x_car + rod_lengths[0] * sin(phi[0]) )
     y_p.append( rod_lengths[0] * cos(phi[0]) )
-    
+
     # the rest
     for i in xrange(1,3):
         x_p.append( x_p[i-1] + rod_lengths[i] * sin(phi[i]) )
         y_p.append( y_p[i-1] + rod_lengths[i] * cos(phi[i]) )
-        
+
     # create image
-    
+
     # first the car and joint
     car = mpl.patches.Rectangle((x_car-0.5*car_width, y_car-car_height), car_width, car_height,
                                 fill=True, facecolor='grey', linewidth=2.0)
     joint = mpl.patches.Circle((x_car,0), 0.005, color='black')
-    
+
     image.patches.append(car)
     image.patches.append(joint)
-    
+
     # then the pendulums
     for i in xrange(3):
-        image.patches.append( mpl.patches.Circle(xy=(x_p[i], y_p[i]), 
-                                                 radius=pendulum_sizes[i], 
+        image.patches.append( mpl.patches.Circle(xy=(x_p[i], y_p[i]),
+                                                 radius=pendulum_sizes[i],
                                                  color='black') )
-        
+
         if i == 0:
             image.lines.append( mpl.lines.Line2D(xdata=[x_car, x_p[0]], ydata=[y_car, y_p[0]],
                                                  color='black', zorder=1, linewidth=2.0) )

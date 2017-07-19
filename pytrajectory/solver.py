@@ -136,7 +136,6 @@ class Solver:
 
         self.W = scp.sparse.csr_matrix(np.diag(values))
 
-
     def leven(self):
         """
         This method is an implementation of the Levenberg-Marquardt-Method
@@ -146,8 +145,6 @@ class Solver:
         """
         i = 0
         x = self.x0  ##:: guess_value
-        res = 1  ##:: residuum
-        res_alt = -1
 
         eye = scp.sparse.identity(len(self.x0)) ##:: diagonal matrix, value: 1.0, danwei
 
@@ -178,7 +175,7 @@ class Solver:
         T_start = time.time()
         
         break_outer_loop = False
-        
+
         while not break_outer_loop:
             i += 1
             
