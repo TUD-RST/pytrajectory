@@ -677,24 +677,26 @@ class CollocationSystem(object):
 
             guess = np.empty(0)
 
+            seed = self._first_guess.get('seed', None)
+            random_flag = seed is not None
+            if random_flag:
+                np.random.seed(seed)
+
             # iterate over the system quantities (x_i, u_j)
 
             for k, v in self.trajectories.indep_vars.items():
-                logging.debug("Get new guess for spline {}".format(k))
 
-                if k in self._first_guess:
-                    s = self.trajectories.splines[k]
-                    f = self._first_guess[k]
+                if random_flag:
 
-                    free_vars_guess = s.interpolate(f)
-
-                elif 'seed' in self._first_guess:
-                    np.random.seed(self._first_guess.get('seed'))
+                    if self._first_guess.get('recall_seed', False):
+                        # this option is to cause old behavior (before 2017-07-19)
+                        # for the sake of reproducible results
+                        np.random.seed(seed)
 
                     # to achieve greater variability in initial guesses
                     # it seems usefull to transform the random values
                     # (scale and offset)
-                    #
+
                     if 'scale' in self._first_guess:
                         scale = self._first_guess.get('scale')
                         offset = -0.5
@@ -702,7 +704,7 @@ class CollocationSystem(object):
                         offset = 0
                         scale = 1
                     free_vars_guess = (np.random.random(len(v)) + offset)*scale
-                    # print free_vars_guess
+                    print free_vars_guess
 
                 else:
                     free_vars_guess = 0.1*np.ones(len(v))
