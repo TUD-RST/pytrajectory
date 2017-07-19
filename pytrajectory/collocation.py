@@ -250,7 +250,8 @@ class CollocationSystem(object):
                 # nc: number of collocation points
 
                 # now, this 2d array should be rearranged to a flattened vector
-                # the constraint-values should be handled separately (they are not part of ff(x)-xdot)
+                # the constraint-values should be handled separately
+                # (they are not part of ff(x)-xdot)
                 F1 = F0[:n_states, :]
                 C = F0[n_states:, :]
 
@@ -260,7 +261,7 @@ class CollocationSystem(object):
                 F = F1.ravel(order='F').take(take_indices, axis=0)[:, None]
 
                 # calculate xdot:
-                dX = MC.Mdx.dot(c)[:,None] + MC.Mdx_abs
+                dX = MC.Mdx.dot(c)[:, None] + MC.Mdx_abs
                 # dX has shape (ns*nc) x 1
                 
                 dX = dX.take(take_indices, axis=0)
@@ -620,7 +621,18 @@ class CollocationSystem(object):
 
                     elif 'seed' in self._first_guess:
                         np.random.seed(self._first_guess.get('seed'))
-                        free_vars_guess = np.random.random(len(v))
+
+                        # to achieve greater variability in initial guesses
+                        # it seems usefull to transform the random values
+                        # (scale and offset)
+                        #
+                        if 'scale' in self._first_guess:
+                            scale = self._first_guess.get('scale')
+                            offset = -0.5
+                        else:
+                            offset = 0
+                            scale = 1
+                        free_vars_guess = (np.random.random(len(v)) + offset) * scale
                         
                     else:
                         free_vars_guess = 0.1 * np.ones(len(v))
