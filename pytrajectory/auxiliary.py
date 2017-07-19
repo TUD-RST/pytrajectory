@@ -1,4 +1,4 @@
-# IMPORTS
+# -*- coding: utf-8 -*-
 import numpy as np
 import sympy as sp
 from sympy.utilities.lambdify import _get_namespace
@@ -595,6 +595,25 @@ def saturation_functions(y_fnc, dy_fnc, y0, y1, first_deriv=True):
         return dy * (4.0*np.exp(m*y))/(1.0+np.exp(m*y))**2
 
     return psi_y, dpsi_dy
+
+
+def switch_on(x, xmin, xmax, m=None, scale=1):
+    """
+    return a smooth function which is ≈1*scale between xmin and xmax and ≈0 elswhere
+
+    :param x:       independent variable
+    :param xmin:
+    :param xmax:
+    :param m:       slope at the (smooth) saltus. default: None -> heuristic calculation
+    :param scale:   scaling factor of result
+    :return:
+    """
+    assert xmin < xmax
+    if m is None:
+        m = 50/(xmax - xmin)
+
+    res = 1 - 1/(1 + sp.exp(m*(x - xmin))) - 1/(1 + sp.exp(m*(xmax - x)))
+    return res*scale
 
 
 def penalty_expression(x, xmin, xmax, m=5, scale=1):

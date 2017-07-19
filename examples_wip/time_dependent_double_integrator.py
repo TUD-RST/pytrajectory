@@ -33,11 +33,15 @@ def rhs1(state, u):
     return np.array(ff)
 
 
-def rhs2(state, u):
-    x1, x2, z = state
+def rhs2(state, u, pp, evalconstr=True):
+    pp  # ignored parameters
+    x1, x2, t = state
     u1, = u
 
     ff = [x2, u1, 1]
+    if evalconstr:
+        c = aux.switch_on(t, -1, Tb/2)*u1**2
+        ff.append(c)
     return np.array(ff)
 
 
@@ -50,21 +54,37 @@ ub = 0.0
 xa1 = [0, 0]
 xb1 = [1, 0]
 
+xa2 = [0, 0, 0]
+xb2 = [1, 0, 1]
+
 from pytrajectory import log
 
 log.console_handler.setLevel(10)
 
-S = TransitionProblem(rhs1, Ta, Tb, xa1, xb1, constraints=None,
-                      eps=1e-1, su=30, kx=2, use_chains=False,
-                      first_guess={'seed': 4, 'scale': 100},
-                      use_std_approach=False,
-                      sol_steps=200,
-                      show_ir=True)
+if 0:
+    S = TransitionProblem(rhs1, Ta, Tb, xa1, xb1, constraints=None,
+                          eps=1e-1, su=30, kx=2, use_chains=False,
+                          first_guess={'seed': 4, 'scale': 10},
+                          use_std_approach=False,
+                          sol_steps=200,
+                          ierr=None,
+                          show_ir=True)
+
+
+S2 = TransitionProblem(rhs2, Ta, Tb, xa2, xb2, constraints=None,
+                       eps=1e-1, su=30, kx=2, use_chains=False,
+                       first_guess={'seed': 4, 'scale': 10},
+                       use_std_approach=False,
+                       sol_steps=200,
+                       ierr=None,
+                       show_ir=True)
+
+S = S2
 
 # start BVP-solution
-x, u = S.solve()
+x, u, p = S2.solve()
 
-
+sys.argv.append('plot')
 
 # the following code provides an animation of the system above
 # for a more detailed explanation have a look at the 'Visualisation' section in the documentation
@@ -88,8 +108,6 @@ def draw(xt, image):
     image.patches.append(car)
 
     return image
-
-sys.argv.append('plot')
 
 
 if 'plot' in sys.argv or 'animate' in sys.argv:

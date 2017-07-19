@@ -230,9 +230,11 @@ class TransitionProblem(object):
 
         constraints : dict
             The box constraints for the state variables
+
         """
 
-        if self.dyn_sys.f_sym.has_constraint_penalties:
+
+        if self.dyn_sys.f_sym.has_constraint_penalties and not len(self.constraints) == 0:
             msg = "Combination of both types of constraints not yet supported."
             raise NotImplementedError(msg)
 
@@ -244,6 +246,8 @@ class TransitionProblem(object):
         x = sp.symbols(self.dyn_sys.states)
         u = sp.symbols(self.dyn_sys.inputs)
         par = sp.symbols(self.dyn_sys.par)
+
+        # full matrix including penalty_constraints
         ff_mat = sp.Matrix(self.dyn_sys.f_sym(x, u, par))
 
         # get neccessary information form the dynamical system
@@ -299,11 +303,24 @@ class TransitionProblem(object):
         xup = self.dyn_sys.states + self.dyn_sys.inputs + self.dyn_sys.par
         _f_sym = sp.lambdify(xup, ff, modules='sympy')
 
-        def f_sym(x, u, p):
-            xup = np.hstack((x, u, p))
-            return _f_sym(*xup)
+        # handle additional penalty constraint expressions
+        n_pconstraints = self.dyn_sys.n_pconstraints
+        if n_pconstraints > 0:
+            def f_sym(x, u, p, evalconstr=True):
+                xup = np.hstack((x, u, p))
+                res = _f_sym(*xup)
+                if evalconstr:
+                    # full result
+                    return res
+                else:
+                    return res[:-n_pconstraints]
+        else:
+            def f_sym(x, u, p):
+                xup = np.hstack((x, u, p))
+                return _f_sym(*xup)
 
         f_sym.n_par = self.dyn_sys.n_par
+        f_sym.has_constraint_penalties = n_pconstraints > 0
 
         # create a new unconstrained system
         xa = [boundary_values[x][0] for x in self.dyn_sys.states]
@@ -890,7 +907,7 @@ class TransitionProblem(object):
         if ierr:
             # calculate maximum consistency error on the whole interval
 
-            maxH = auxiliary.consistency_error((a,b),
+            maxH = auxiliary.consistency_error((a, b),
                                                self.eqs.trajectories.x, self.eqs.trajectories.u,
                                                self.eqs.trajectories.dx,
                                                self.dyn_sys.f_num_simulation,
@@ -901,12 +918,12 @@ class TransitionProblem(object):
         else:
             # just check if tolerance for the boundary values is satisfied
             reached_accuracy = (max(err) < eps)
-        
+
+        msg = "  --> reached desired accuracy: " + str(reached_accuracy)
         if reached_accuracy:
-            logging.info("  --> reached desired accuracy: "+str(reached_accuracy))
+            logging.info(msg)
         else:
-            logging.debug("  --> reached desired accuracy: "+str(reached_accuracy))
-        
+            logging.debug(msg)
         self.reached_accuracy = reached_accuracy
 
     def get_par_values(self):
@@ -1150,7 +1167,7 @@ class DynamicalSystem(object):
         if n_all_args == 4:
             assert argspec.args[-1] == 'evalconstr'
             msg = "unexpected numbers or values for default arguments in f_sym"
-            assert argspec.defaults is (True,), msg
+            assert argspec.defaults == (True,), msg
 
             # this flag is stored as attribute of the function
             # -> easier access, where ever the function occurs
@@ -1190,21 +1207,6 @@ class DynamicalSystem(object):
         # of the boundary value lists
         n_states = len(self.xa)
 
-        # determine n_pconstraints
-        # if getattr(self.f_sym, 'has_constraint_penalties', False):
-        if self.f_sym.has_constraint_penalties:
-            testargs = [self.xa, [0]*self.n_inputs]
-            if self.n_par > 0:
-                testargs.append([1]*self.n_par)
-
-            # number of returned values - number of states
-            n_pconstraints = len(self.f_sym(*testargs, evalconstr=True)) - self.n_states
-            if n_pconstraints < 1:
-                msg = "No constraint equations found, but signature of f_sym indicates such."
-                raise ValueError(msg)
-        else:
-            n_pconstraints = 0
-
         assert self.n_pos_args in (2, 3)
         if self.n_pos_args == 3:
             # f_sym expects a third argument
@@ -1229,13 +1231,16 @@ class DynamicalSystem(object):
             u = np.ones(j)
 
             if j > 100:
-                msg = "More than 100 input components are not supported. " \
-                      "Probalbly this is an error caused by the algorithm for determining" \
-                      "the input dimension"
+                msg = "Unexpected unpacking Error inside rhs-function.\n " \
+                      "Probable reasons for this error:\n" \
+                      " - Wrong size of initial value (xa)\n" \
+                      " - System with > 100 input components (not supported)\n" \
+                      " - interal algortihmic error"
+
                 raise ValueError(msg)
 
             try:
-                print u
+                # print u
                 self.f_sym(x, u, *par_arg)
                 # if no ValueError is raised j is the dimension of the inputs
                 n_inputs = j
@@ -1256,9 +1261,25 @@ class DynamicalSystem(object):
                 # calling error for lambda -> dimensions do not match
                 j += 1
 
-        # TODO: give a log message w.r.t. additional free parameters
+        # determine n_pconstraints
+        # if getattr(self.f_sym, 'has_constraint_penalties', False):
+        if self.f_sym.has_constraint_penalties:
+            testargs = [self.xa, [0]*n_inputs]
+            if n_par > 0:
+                testargs.append([1]*n_par)
+
+            # number of returned values - number of states
+            n_pconstraints = len(self.f_sym(*testargs, evalconstr=True)) - n_states
+            if n_pconstraints < 1:
+                msg = "No constraint equations found, but signature of f_sym indicates such."
+                raise ValueError(msg)
+        else:
+            n_pconstraints = 0
+
         logging.debug("--> state: {}".format(n_states))
-        logging.debug("--> input : {}".format(n_inputs))
+        logging.debug("--> input: {}".format(n_inputs))
+        logging.debug("--> a.f.p.: {}".format(n_par))
+        logging.debug("--> p.constraint-expr.: {}".format(n_pconstraints))
 
         self.n_states = n_states
         self.n_inputs = n_inputs

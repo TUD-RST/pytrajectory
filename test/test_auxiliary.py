@@ -5,6 +5,7 @@ import pytrajectory.auxiliary as aux
 import pytest
 import sympy as sp
 import numpy as np
+import matplotlib.pyplot as plt
 
 from ipHelp import IPS
 
@@ -133,11 +134,12 @@ class TestCseLambdify(object):
         assert res1.shape == (3, N)
         assert res2.shape == (3, N)
 
+    # new_interpolate is currently not used because it tends to unwanted oscillations
+    @pytest.mark.xfail(reason='this only works for the method Spline.new_interpolate')
     def test_spline_interpolate(self):
         # TODO: This test should live in a separate spline-related file
 
         from pytrajectory.splines import Spline
-        import matplotlib.pyplot as plt
 
         a, b = 0, 1
         N = 1000
@@ -172,6 +174,7 @@ class TestCseLambdify(object):
             assert np.allclose(xx[idx1:idx2], xxi[idx1:idx2])
 
             # now test our evaluation result
+            # allow 0.5 % tollerance
             xx_s = aux.vector_eval(s.f, tt)
             assert np.allclose(xx[idx1:idx2], xx_s[idx1:idx2], rtol=5e-3)
 
@@ -190,7 +193,16 @@ class TestCseLambdify(object):
             plt.axis([-.1, 1.1, -2, 2])
             plt.show()
 
-        # allow 0.5 % tollerance
+
+    def test_switch_on(self):
+        t = sp.Symbol('t')
+        swo = aux.switch_on(t, 0, 0.5)
+        fnc = sp.lambdify(t, swo, modules="numpy")
+        tt = np.linspace(-3, 3, 1e3)
+
+        if 1:
+            plt.plot(tt, fnc(tt))
+            plt.show()
 
 
 if __name__ == "__main__":
@@ -198,3 +210,4 @@ if __name__ == "__main__":
 
     tests = TestCseLambdify()
     tests.test_spline_interpolate()
+    tests.test_switch_on()
