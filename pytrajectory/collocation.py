@@ -105,12 +105,11 @@ class CollocationSystem(object):
         
         # determine for each spline the index range of its free coeffs in the concatenated
         # vector of all free coeffs
-        # Note: this call also sets the variable self.all_free_parameters
         indic = self._get_index_dict()  ##:: e.g. {'x1': (0, 17), 'x2': (0, 17), 'u1': (0, 17), 'x3': (17, 26), 'x4': (17, 26)}, from 0th to 16th coeff. belong to chain (x1,x2,x3), from 17th to 25th belong to chain(x3,x4)
 
-        # compute dependence matrices
+        # compute dependence matrices (sparse format)
         # Mx, Mx_abs, Mdx, Mdx_abs, Mu, Mu_abs, Mp, Mp_abs = self._build_dependence_matrices(indic)
-        MC = self._build_dependence_matrices(indic)
+        SMC = self._build_dependence_matrices(indic)
 
         # TODO: self._build_dependence_matrices should already return this container
 
@@ -144,7 +143,7 @@ class CollocationSystem(object):
 
         # here we determine the jacobian matrix of the derivatives of the system state functions
         # (as they depend on the free parameters in a linear fashion its just the above matrix Mdx)
-        DdX = MC.Mdx[take_indices, :]  ##:: in e.g.4: the 3rd,7th,...row, <21x26 sparse matrix>
+        DdX = SMC.Mdx[take_indices, :]  ##:: in e.g.4: the 3rd,7th,...row, <21x26 sparse matrix>
         # here we compute the jacobian matrix of the system/input splines as they also depend on
         # the free parameters
         DXUP = []
@@ -154,7 +153,7 @@ class CollocationSystem(object):
         n_vars = n_states + n_inputs + n_par
 
         for i in xrange(n_cpts):
-            DXUP.append(np.vstack(( MC.Mx[n_states * i : n_states * (i+1)].toarray(), MC.Mu[n_inputs * i : n_inputs * (i+1)].toarray(), MC.Mp[n_par * i : n_par * (i+1)].toarray() )))
+            DXUP.append(np.vstack(( SMC.Mx[n_states * i : n_states * (i+1)].toarray(), SMC.Mu[n_inputs * i : n_inputs * (i+1)].toarray(), SMC.Mp[n_par * i : n_par * (i+1)].toarray() )))
             
         # DXU_old = DXU  # obsolete
         DXUP = np.vstack(DXUP)
@@ -165,15 +164,13 @@ class CollocationSystem(object):
         ff_vec = self.ff_vectorized
         Df_vec = self.Df_vectorized
 
-        # transform matrix formats for faster dot products
-        # Sparse Matrix Container:
-        SMC = Container()
+        # also make the matrices available in dense format
+        # Dense Matrix Container:
+        DMC = Container()
         # convert all 2d arrays (from MC) to sparse datatypes (to SMC)
-        for k, v in MC.__dict__.items():
-            # Todo:MC == SMC ?? 
-            # SMC.__dict__[k] = v.tocsr() 
-            SMC.__dict__[k] = v.toarray() 
-        SMC.DdX = SMC.Mdx[take_indices, :]
+        for k, v in SMC.__dict__.items():
+            DMC.__dict__[k] = v.toarray()
+        DMC.DdX = DMC.Mdx[take_indices, :]
 
         self.n_cpts = n_cpts
         DdX = DdX.tocsr()
@@ -183,7 +180,7 @@ class CollocationSystem(object):
             if sparse: # for debug
                 C = SMC
             else: # original codes
-                C = MC
+                C = DMC
 
             X = C.Mx.dot(c)[:, None] + C.Mx_abs  ##:: X = [S1(t=0), S2(0), S1(0.5), S2(0.5), S1(1), S2(1)]
             U = C.Mu.dot(c)[:, None] + C.Mu_abs  ##:: U = [Su(t=0), Su(0.5), Su(1)]
@@ -215,7 +212,7 @@ class CollocationSystem(object):
             # c = np.hstack(sorted(self.trajectories.indep_vars.values(), key=lambda arr: arr[0].name))
 
             # we can only multiply dense arrays with "symbolic arrays" (dtype=object)
-            sparseflag = symbeq ##!! not
+            sparseflag = not symbeq
             X, U, P = get_X_U_P(c, sparseflag)
 
             # TODO_ok: check if both spline approaches result in same values here
@@ -230,7 +227,7 @@ class CollocationSystem(object):
                 # nx: number of states, nc: number of collocation points
                 eq_list = []  # F(w) = 0
                 F =  ff_vec(X, U, P).ravel(order='F').take(take_indices, axis=0)[:,None] 
-                dX = SMC.Mdx.dot(c)[:,None] + SMC.Mdx_abs
+                dX = DMC.Mdx.dot(c)[:,None] + DMC.Mdx_abs
                 dX = dX.take(take_indices, axis=0)
                 F2 = F - dX
                 # the following makes F2 easier to read
@@ -261,7 +258,7 @@ class CollocationSystem(object):
                 F = F1.ravel(order='F').take(take_indices, axis=0)[:, None]
 
                 # calculate xdot:
-                dX = MC.Mdx.dot(c)[:, None] + MC.Mdx_abs
+                dX = SMC.Mdx.dot(c)[:, None] + SMC.Mdx_abs
                 # dX has shape (ns*nc) x 1
                 
                 dX = dX.take(take_indices, axis=0)
@@ -278,14 +275,14 @@ class CollocationSystem(object):
                 # debug:
                 if info:
                     # see Container docstring for motivation
-                    iC = Container(X=X, U=U, F=F, P=P, dX=dX, res=res, MC=MC)
+                    iC = Container(X=X, U=U, F=F, P=P, dX=dX, res=res, MC=SMC)
                     res = iC
     
                 return res
 
         # save the dimension of the result and the argument for this function
         # this is correct without penalty constraints
-        F.dim, F.argdim = SMC.Mx.shape
+        F.dim, F.argdim = DMC.Mx.shape
         # TODO: Check if this is correct together with free parameters
 
         # regard additional constraint equations
@@ -318,7 +315,7 @@ class CollocationSystem(object):
                 DF_sym = linalg.block_diag(*DF_blocks).dot(DXUP.toarray()) ##:: array(dtype=object)
                 if self.trajectories._parameters['use_chains']:
                     DF_sym = DF_sym.take(take_indices, axis=0)
-                DG = DF_sym - SMC.DdX
+                DG = DF_sym - DMC.DdX
 
                 # the following makes DG easier to read
                 DG = DG.reshape(self.n_cpts, self.sys.n_states, -1)
@@ -393,10 +390,10 @@ class CollocationSystem(object):
         DF(z)
 
         C = Container(F=F, DF=DF,
-                      Mx=MC.Mx, Mx_abs=MC.Mx_abs,
-                      Mu=MC.Mu, Mu_abs=MC.Mu_abs,
-                      Mp=MC.Mp, Mp_abs=MC.Mp_abs,
-                      Mdx=MC.Mdx, Mdx_abs=MC.Mdx_abs,
+                      Mx=SMC.Mx, Mx_abs=SMC.Mx_abs,
+                      Mu=SMC.Mu, Mu_abs=SMC.Mu_abs,
+                      Mp=SMC.Mp, Mp_abs=SMC.Mp_abs,
+                      Mdx=SMC.Mdx, Mdx_abs=SMC.Mdx_abs,
                       guess=self.guess)
         
         # return the callable functions
@@ -407,6 +404,10 @@ class CollocationSystem(object):
         self.C = C
 
         return C
+
+    @property
+    def all_free_parameters(self):
+        return self.trajectories.indep_var_list
 
     def _get_index_dict(self):
         """
@@ -419,15 +420,14 @@ class CollocationSystem(object):
         i = 0
         j = 0
 
-        self.all_free_parameters = []  # this means free coeffs for X, U (and additional parameters P?)
-    
-        # iterate over spline quantities (OrderedDict)
+        # iterate over spline quantities; OrderedDict like e.g.:
+        # [('x1', array([cx1_0_1, cx1_0_3, ...]), ... ('z_par_1', array([k0], dtype=object))])
+
         for k, v in self.trajectories.indep_vars.items():
             # increase j by the number of indep coeffs on which it depends
             j += len(v)
             indic[k] = (i, j)
             i = j
-            self.all_free_parameters.extend(v)
 
         # TODO: Do we have to take care of additional parameters here ??
         # iterate over all quantities including inputs
@@ -471,7 +471,7 @@ class CollocationSystem(object):
         # TODO: check if this sorting is consistent with the rest of the code
         free_param = np.hstack(sorted(self.trajectories.indep_vars.values(), key=lambda arr: arr[0].name)) ##:: array([cu1_0_0, cu1_1_0, cu1_2_0, ..., cx4_8_0, cx4_9_0, cx4_0_2, k])
         n_dof = free_param.size
-        
+
         # store internal information:
         self.dbgC = Container(cpts=cpts, indic=indic, dx_fnc=dx_fnc, x_fnc=x_fnc, u_fnc=u_fnc)
         self.dbgC.free_param = free_param
@@ -686,7 +686,14 @@ class CollocationSystem(object):
 
             for k, v in self.trajectories.indep_vars.items():
 
-                if random_flag:
+                if k in self._first_guess:
+                    # this can be used e.g. to set a zero function for u1
+                    s = self.trajectories.splines[k]
+                    f = self._first_guess[k]
+
+                    free_vars_guess = s.interpolate(f)
+
+                elif random_flag:
 
                     if self._first_guess.get('recall_seed', False):
                         # this option is to cause old behavior (before 2017-07-19)
@@ -710,11 +717,26 @@ class CollocationSystem(object):
                     free_vars_guess = 0.1*np.ones(len(v))
 
                 guess = np.hstack((guess, free_vars_guess))
+
+                msg = "Invalid length of initial guess."
+                assert len(guess) == len(self.all_free_parameters), msg
+
+                # overwrite the suitable entries
+                # with the provided estimations of additional free parameters
                 guess[self._afp_index:] = self._parameters['z_par']
 
         elif self.masterobject.refsol is not None:
             # TODO: handle free parameters
             guess = self.interpolate_refsol()
+            # guess for free coeffs is complete
+
+            # afp-guess still missing
+            assert len(guess) == len(self.all_free_parameters) - self.sys.n_par
+            assert len(self._parameters['z_par']) == self.sys.n_par
+            guess = np.concatenate((guess, self._parameters['z_par']))
+
+            errmsg = "Invalid length of initial guess."
+            assert len(guess) == len(self.all_free_parameters), errmsg
 
         else:
             # first_guess and refsol are None

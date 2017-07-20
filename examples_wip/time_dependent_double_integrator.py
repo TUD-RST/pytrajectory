@@ -25,26 +25,6 @@ bestrafen.
 """
 
 
-def rhs1(state, u):
-    x1, x2 = state
-    u1, = u
-
-    ff = [x2, u1]
-    return np.array(ff)
-
-
-def rhs2(state, u, pp, evalconstr=True):
-    pp  # ignored parameters
-    x1, x2, t = state
-    u1, = u
-
-    ff = [x2, u1, 1]
-    if evalconstr:
-        c = aux.switch_on(t, -1, Tb/2)*u1**2
-        ff.append(c)
-    return np.array(ff)
-
-
 Ta = 0.0
 Tb = 1.0
 
@@ -70,10 +50,56 @@ if 0:
                           ierr=None,
                           show_ir=True)
 
+# calculation of overshooting reference solution
+import symbtools as st
+aa = st.symb_vector('a0:5')
+t = sp.Symbol('t')
+ref = (aa.T*sp.Matrix(5, 1, lambda i, j: t**i))[0,0]
+eqns = []
+eqns.append(ref.subs(t, 0) - xa1[0])
+eqns.append(ref.diff(t).subs(t, Ta) - xa1[1])
+eqns.append(ref.subs(t, Tb) - xb1[0])
+eqns.append(ref.diff(t).subs(t, Tb) - xb1[1])
+eqns.append(ref.subs(t, 0.7*Tb) - xb1[0]*2.0)
+
+sol = sp.solve(eqns, aa)
+
+#IPS()
+
+x_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 0), modules="numpy")
+v_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 1), modules="numpy")
+u_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 2), modules="numpy")
+
+
+def rhs1(state, u):
+    x1, x2 = state
+    u1, = u
+
+    ff = [x2, u1]
+    return np.array(ff)
+
+
+def rhs2(state, u, pp, evalconstr=True):
+    pp  # ignored parameters
+    x1, x2, t = state
+    u1, = u
+    u1_all = u1 + u_ref_num(t)
+
+    ff = [x2, u1_all, 1]
+    if evalconstr:
+        c = u1**2 + 0 * aux.switch_on(t, -1, Tb/2)*u1**2
+        ff.append(c)
+    return np.array(ff)
+
+tt = np.linspace(Ta, Tb, 1e3)
+xx_ref = np.column_stack((x_ref_num(tt), v_ref_num(tt), tt))
+refsol = aux.Container(tt=tt, xx=xx_ref, uu=tt*0)
+
 
 S2 = TransitionProblem(rhs2, Ta, Tb, xa2, xb2, constraints=None,
                        eps=1e-1, su=30, kx=2, use_chains=False,
-                       first_guess={'seed': 4, 'scale': 10},
+                       #first_guess={'seed': 4, 'scale': 10, 'u1': lambda t: 0},
+                       refsol=refsol,
                        use_std_approach=False,
                        sol_steps=200,
                        ierr=None,

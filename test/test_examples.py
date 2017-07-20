@@ -54,7 +54,7 @@ class TestExamples(object):
         log.console_handler.setLevel(10)
         con = {'u1': [-1.3, 1.3], 'x2': [-.1, .8],}
         S1 = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=0, ub=0, constraints=con,
-                               show_ir=True,
+                               show_ir=False,
                                accIt=0,
                                use_chains=False)
         S1.solve()
