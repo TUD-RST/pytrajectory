@@ -17,11 +17,12 @@ from numpy import pi
 
 
 msg = """
-Dieses Skript testet, wie zeitabhängige Systeme berücksichtigt werden können.
-Das passiert durch Einführung eines Pseudo-Zustandes z mit z_dot = 1.
-Dann kann man auf den Eingang schon einen Referenzverlauf geben und der eigentliche Eingang
-ist nur die Korrektur davon. Man will, dass die Korrektur insgesamt klein ist, also kann man sie
-bestrafen.
+This script shows how time dependent Systems can be handled.
+This happens by the introduction of a pseudo-state z with z_dot = 1.
+
+With the time variable available one can include the a reference input.
+The additional input can then be considered as a correction which is desired to be small
+and can thus be penalized (with penalty constraints)
 """
 
 
@@ -35,20 +36,11 @@ xa1 = [0, 0]
 xb1 = [1, 0]
 
 xa2 = [0, 0, 0]
-xb2 = [1, 0, 1]
+xb2 = [1.2, 0, 1]
 
 from pytrajectory import log
 
 log.console_handler.setLevel(10)
-
-if 0:
-    S = TransitionProblem(rhs1, Ta, Tb, xa1, xb1, constraints=None,
-                          eps=1e-1, su=30, kx=2, use_chains=False,
-                          first_guess={'seed': 4, 'scale': 10},
-                          use_std_approach=False,
-                          sol_steps=200,
-                          ierr=None,
-                          show_ir=True)
 
 # calculation of overshooting reference solution
 import symbtools as st
@@ -78,6 +70,21 @@ def rhs1(state, u):
     ff = [x2, u1]
     return np.array(ff)
 
+if 0:
+    # original system
+    S = TransitionProblem(rhs1, Ta, Tb, xa1, xb1, constraints=None,
+                          eps=1e-1, su=30, kx=2, use_chains=False,
+                          first_guess={'seed': 4, 'scale': 10},
+                          use_std_approach=False,
+                          sol_steps=200,
+                          ierr=None,
+                          show_ir=True)
+
+
+# This factor adjusts how strong a deviation from the standard input is penalized.
+# Experience: 1 is much too strong
+input_penalty_scale = 0.01
+
 
 def rhs2(state, u, pp, evalconstr=True):
     pp  # ignored parameters
@@ -87,13 +94,13 @@ def rhs2(state, u, pp, evalconstr=True):
 
     ff = [x2, u1_all, 1]
     if evalconstr:
-        c = u1**2 + 0 * aux.switch_on(t, -1, Tb/2)*u1**2
+        c =input_penalty_scale*u1**2 + 0 * aux.switch_on(t, -1, Tb/2)*u1**2
         ff.append(c)
     return np.array(ff)
 
 tt = np.linspace(Ta, Tb, 1e3)
 xx_ref = np.column_stack((x_ref_num(tt), v_ref_num(tt), tt))
-refsol = aux.Container(tt=tt, xx=xx_ref, uu=tt*0)
+refsol = aux.Container(tt=tt, xx=xx_ref, uu=tt*0, n_raise_spline_parts=0)
 
 
 S2 = TransitionProblem(rhs2, Ta, Tb, xa2, xb2, constraints=None,
