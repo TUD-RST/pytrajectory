@@ -430,6 +430,9 @@ class TransitionProblem(object):
         assert tt[0] == self.a
         assert tt[-1] == self.b
 
+        msg = "refsol has the wrong number of states"
+        assert xx.shape[1] == self.dyn_sys.n_states, msg
+
         if not np.allclose(xx[0, :], self.dyn_sys.xa):
             logging.warn("boundary values and reference solution not consistent at Ta")
         if not np.allclose(xx[-1, :], self.dyn_sys.xb):
@@ -664,6 +667,9 @@ class TransitionProblem(object):
 
         # the reference solution specifies how often spline parts should
         # be raised
+        if not hasattr(self.refsol, 'n_raise_spline_parts'):
+            self.refsol.n_raise_spline_parts = 0
+
         for i in range(self.refsol.n_raise_spline_parts):
             self.eqs.trajectories.raise_spline_parts()
 
