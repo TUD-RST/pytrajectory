@@ -838,6 +838,46 @@ def siumlate_with_input(tp, inputseq, n_parts ):
     return tt, xx, uu
 
 
+def calc_chebyshev_nodes(a, b, npts, include_borders=True):
+    """
+    Return roots of chebyshev polybnomials in [a, b] (and optionally including borders).
+    Serves to determine the evaluation points for interpolation (e.g. for refsol.)
+
+    :param a:       left border
+    :param b:       right border
+    :param npts:    number of points
+    :param include_borders:
+                    flag whether or not borders should be included
+    :return:        list of chebyshev nodes (including borders)
+    """
+    # determine rank of chebychev polynomial
+    # of which to calculate zero points
+    nc = int(npts)
+
+    if not include_borders:
+        # we will remove the outer most points later
+        nc += 2
+
+    # calculate zero points of chebychev polynomial --> in [-1,1]
+    cheb_cpts = [np.cos((2.0*i + 1)/(2*(nc + 1))*np.pi) for i in xrange(nc)]
+    cheb_cpts.sort()
+
+    # map chebychev nodes from [-1,1] to our interval [a,b],
+    # this means: scale the nodes such that node_min == a and node_max == b
+
+    na = min(cheb_cpts)
+    nb = max(cheb_cpts)
+
+    normed_cheb_nodes = (np.array(cheb_cpts) - na)/(nb - na)
+    # values now between 0 and 1 (including borders)
+    chpts = a + normed_cheb_nodes*(b-a)
+
+    if not include_borders:
+        return chpts[1:-1]
+
+    return chpts
+
+
 def calc_gramian(A, B, T, info=False):
     """
     calculate the gramian matrix corresponding to A, B, by numerically solving an ode

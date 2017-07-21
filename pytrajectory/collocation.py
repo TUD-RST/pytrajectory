@@ -9,7 +9,8 @@ from log import logging, Timer
 from trajectories import Trajectory
 from solver import Solver
 
-from auxiliary import sym2num_vectorfield, Container, NanError, reshape_wrapper
+from auxiliary import sym2num_vectorfield, Container, NanError
+import auxiliary as aux
 
 from ipHelp import IPS
 
@@ -889,25 +890,14 @@ def collocation_nodes(a, b, npts, coll_type):
         # get equidistant collocation points
         cpts = np.linspace(a, b, npts, endpoint=True)
     elif coll_type == 'chebychev':
-        # determine rank of chebychev polynomial
-        # of which to calculate zero points
-        nc = int(npts) - 2
-
-        # calculate zero points of chebychev polynomial --> in [-1,1]
-        cheb_cpts = [np.cos( (2.0*i+1)/(2*(nc+1)) * np.pi) for i in xrange(nc)]
-        cheb_cpts.sort()
-
-        # transfer chebychev nodes from [-1,1] to our interval [a,b]
-        chpts = [a + (b-a)/2.0 * (chp + 1) for chp in cheb_cpts]
-
-        # add left and right borders
-        cpts = np.hstack((a, chpts, b))
+        cpts = aux.calc_chebyshev_nodes(a, b, npts)
     else:
         logging.warning('Unknown type of collocation points.')
         logging.warning('--> will use equidistant points!')
         cpts = np.linspace(a, b, npts, endpoint=True)
     
     return cpts
+
 
 def _get_derivation_order(fnc):
     """

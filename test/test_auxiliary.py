@@ -204,10 +204,26 @@ class TestCseLambdify(object):
             plt.plot(tt, fnc(tt))
             plt.show()
 
+    # noinspection PyTypeChecker
+    def test_calc_chebyshev_nodes(self):
+
+        N = 10
+        pts_borders = aux.calc_chebyshev_nodes(0, 1, 10, include_borders=True)
+        pts_noborders = aux.calc_chebyshev_nodes(0, 1, 10, include_borders=False)
+
+        assert len(pts_borders) == len(pts_noborders) == N
+        assert tuple(pts_borders[[0, -1]]) == (0, 1)
+        assert all((0 < pts_noborders) * (pts_noborders < 1))
+
+        if 0:
+            plt.plot(pts_borders, pts_borders*0, 'o')
+            plt.plot(pts_noborders, pts_noborders*0, '.' )
+            plt.show()
+
 
 if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")
 
     tests = TestCseLambdify()
-    tests.test_spline_interpolate()
-    tests.test_switch_on()
+    # tests.test_spline_interpolate()
+    tests.test_calc_chebyshev_nodes()
