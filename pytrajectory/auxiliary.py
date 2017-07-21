@@ -10,8 +10,8 @@ from collections import OrderedDict
 import copy
 import time
 
-from pytrajectory.splines import Spline, get_null_spline
-from pytrajectory.simulation import Simulator
+import splines
+from simulation import Simulator
 from log import logging, Timer
 
 from ipHelp import IPS
@@ -787,8 +787,8 @@ def new_spline(Tend, n_parts, targetvalues, tag, bv=None, use_std_approach=True)
     :return:                Spline object
     """
 
-    s = Spline(0, Tend, n=n_parts, bv=bv, tag=tag, nodes_type="equidistant",
-               use_std_approach=use_std_approach)
+    s = splines.Spline(0, Tend, n=n_parts, bv=bv, tag=tag, nodes_type="equidistant",
+                       use_std_approach=use_std_approach)
 
     s.make_steady()
     assert np.ndim(targetvalues[0]) == 1
@@ -953,8 +953,8 @@ def copy_splines(splinedict):
 
     res = OrderedDict()
     for k, v in splinedict.items():
-        S = Spline(v.a, v.b, n=v.n, tag=v.tag, bv=v._boundary_values,
-                   use_std_approach=v._use_std_approach)
+        S = splines.Spline(v.a, v.b, n=v.n, tag=v.tag, bv=v._boundary_values,
+                           use_std_approach=v._use_std_approach)
         S.masterobject = v.masterobject
         S._dep_array = v._dep_array.copy()
         S._dep_array_abs = v._dep_array_abs.copy()

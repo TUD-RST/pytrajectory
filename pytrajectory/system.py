@@ -15,6 +15,7 @@ from simulation import Simulator
 from solver import Solver
 import auxiliary
 import visualisation
+import splines
 from log import logging
 import interfaceserver
 
@@ -742,7 +743,7 @@ class TransitionProblem(object):
 
             s_actual = self.eqs.trajectories.splines[key]
             if self.eqs.trajectories.old_splines is None:
-                s_old = auxiliary.get_null_spline(self.a, self.b)
+                s_old = splines.get_null_spline(self.a, self.b)
             else:
                 s_old = self.eqs.trajectories.old_splines[key]
             actual_spline_values.append(auxiliary.vector_eval(s_actual.f, tt))

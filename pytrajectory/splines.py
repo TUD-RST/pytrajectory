@@ -4,6 +4,7 @@ import sympy as sp
 import scipy.sparse as sparse
 from scipy.sparse.linalg import spsolve
 from scipy.interpolate import interp1d
+import auxiliary as aux
 
 from log import logging
 
@@ -398,19 +399,24 @@ class Spline(object):
         self._prov_flag = False
 
     # noinspection PyPep8Naming
-    def new_interpolate(self, fnc, set_coeffs=False):
+    def new_interpolate(self, fnc, set_coeffs=False, method='equi'):
         """
         Determines the spline's coefficients such that it interpolates
         a given function. It respects the given boundary conditions, even if the
         interpolated function does not
+
+        Note: this function currently is only used for the approximation of reference solution
+        (not after number of spline-parts has been increased).
 
         Parameters
         ----------
 
         fnc : callable or tuple of arrays (tt, xx)
 
-        set_coeffs: bool
+        set_coeffs : bool
             determine whether the calculated coefficients should be set to self or not
+
+        method : str ('equi' or 'cheby')
         """
         if not callable(fnc):
             fnc = self._interpolate_array(fnc)
@@ -419,12 +425,22 @@ class Spline(object):
 
         # get a suitable number of points
         N = len(self._indep_coeffs)
-        if self._boundary_values.get(0) is None:
-            # no given bc -> include boundary points
-            tt = np.linspace(self.a, self.b, N)
-        else:
-            # exclude the boundaries because we already have given bc
-            tt = np.linspace(self.a, self.b, N + 2)[1:-1]
+
+        if method == 'equi':
+            if self._boundary_values.get(0) is None:
+                # no given bc -> include boundary points
+                tt = np.linspace(self.a, self.b, N)
+            else:
+                # exclude the boundaries because we already have given bc
+                tt = np.linspace(self.a, self.b, N + 2)[1:-1]
+        elif method == 'cheby':
+            if self._boundary_values.get(0) is None:
+                # no given bc -> include boundary points
+                tt = aux.calc_chebyshev_nodes(self.a, self.b, N, include_borders=True)
+            else:
+                # exclude the boundaries because we already have given bc
+                tt = aux.calc_chebyshev_nodes(self.a, self.b, N, include_borders=False)
+
         vv = np.array([fnc(t) for t in tt])
 
         lhs = []

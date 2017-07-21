@@ -36,7 +36,7 @@ xa1 = [0, 0]
 xb1 = [1, 0]
 
 xa2 = [0, 0, 0]
-xb2 = [1.2, 0, 1]
+xb2 = [1, 0, 1]
 
 from pytrajectory import log
 
@@ -94,7 +94,7 @@ def rhs2(state, u, pp, evalconstr=True):
 
     ff = [x2, u1_all, 1]
     if evalconstr:
-        c =input_penalty_scale*u1**2 + 0 * aux.switch_on(t, -1, Tb/2)*u1**2
+        c = 0*input_penalty_scale*u1**2 + 0*aux.switch_on(t, -1, Tb/2)*u1**2
         ff.append(c)
     return np.array(ff)
 

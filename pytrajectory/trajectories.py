@@ -5,6 +5,7 @@ import copy
 from collections import OrderedDict
 
 from splines import Spline, differentiate
+import splines
 from log import logging
 import auxiliary
 

@@ -556,7 +556,6 @@ class CollocationSystem(object):
                 
                 Mp[k, i:j] = mp  # mp = 1
                 Mp_abs[k] = mp_abs    # mp_abs = 0
-                print "**", mp, mp_abs
 
         MC = Container()
         MC.Mx = Mx
@@ -788,7 +787,10 @@ class CollocationSystem(object):
         for fnc, (k, v) in zip(fnc_list, self.trajectories.indep_vars.items()):
             logging.debug("Get guess from refsol for spline {}".format(k))
             s_new = self.trajectories.splines[k]
-            free_coeffs_guess = s_new.interpolate(fnc)
+            # free_coeffs_guess = s_new.interpolate(fnc)
+
+            # use Chebyshev nodes to increase approximation quality
+            free_coeffs_guess = s_new.new_interpolate(fnc, method='cheby')
             guess = np.hstack((guess, free_coeffs_guess))
 
         return guess

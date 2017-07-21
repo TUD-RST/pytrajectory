@@ -9,6 +9,7 @@ to achieve a transition between desired states of a nonlinear control system.
 from system import TransitionProblem, ControlSystem
 from trajectories import Trajectory
 from splines import Spline
+import splines
 from solver import Solver
 from simulation import Simulator
 from visualisation import Animation
