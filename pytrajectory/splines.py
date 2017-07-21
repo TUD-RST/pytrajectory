@@ -129,6 +129,8 @@ class Spline(object):
         # cache for a frequently used part of a block-matrix
         self._node_eval_block = None
 
+        self._steady_flag = False
+
     def __getitem__(self, key):
         return self._P[key]
 
@@ -418,28 +420,36 @@ class Spline(object):
 
         method : str ('equi' or 'cheby')
         """
+
+        assert self._steady_flag
         if not callable(fnc):
             fnc = self._interpolate_array(fnc)
 
         assert callable(fnc)
 
         # get a suitable number of points
-        N = len(self._indep_coeffs)
+        N = len(self._indep_coeffs) - 2
+        # - 2 because we want two conditions for the slope at the borders
+
+        bv0 = self._boundary_values.get(0)
+
+        # True if we have real boundary values
+        bv0_flag = bv0 is not None and bv0 != (None, None)
 
         if method == 'equi':
-            if self._boundary_values.get(0) is None:
-                # no given bc -> include boundary points
-                tt = np.linspace(self.a, self.b, N)
-            else:
+            if bv0_flag:
                 # exclude the boundaries because we already have given bc
                 tt = np.linspace(self.a, self.b, N + 2)[1:-1]
-        elif method == 'cheby':
-            if self._boundary_values.get(0) is None:
-                # no given bc -> include boundary points
-                tt = aux.calc_chebyshev_nodes(self.a, self.b, N, include_borders=True)
             else:
+                # no given bc -> include boundary points
+                tt = np.linspace(self.a, self.b, N)
+        elif method == 'cheby':
+            if bv0_flag:
                 # exclude the boundaries because we already have given bc
                 tt = aux.calc_chebyshev_nodes(self.a, self.b, N, include_borders=False)
+            else:
+                # no given bc -> include boundary points
+                tt = aux.calc_chebyshev_nodes(self.a, self.b, N, include_borders=True)
 
         vv = np.array([fnc(t) for t in tt])
 
@@ -455,6 +465,16 @@ class Spline(object):
         # <=>
         # D1*a = v - D2
         # where a are the free coeffs
+
+        # add two equations for the slope at the borders:
+        dt = (self.b - self.a)/1e3
+
+        # dependence vectors for 1st derivative
+        for t in [self.a, self.b - dt]:
+            slope = (fnc(t + dt) - fnc(t))/dt
+            D1, D2 = self.get_dependence_vectors(t, d=1)
+            lhs.append(D1)
+            rhs.append(slope - D2)
 
         D1_matrix = np.array(lhs)
         free_coeffs = np.linalg.solve(D1_matrix, rhs)

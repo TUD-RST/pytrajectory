@@ -686,7 +686,7 @@ class TransitionProblem(object):
             fnclist = self.refsol.xxfncs + self.refsol.uufncs
 
             for i, (key, s) in enumerate(C.splines.iteritems()):
-                coeffs = s.interpolate(fnclist[i], set_coeffs=True)
+                coeffs = s.new_interpolate(fnclist[i], set_coeffs=True)
                 new_spline_values.append(auxiliary.vector_eval(s.f, tt))
 
                 sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)
