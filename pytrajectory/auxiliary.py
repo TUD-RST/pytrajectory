@@ -35,6 +35,10 @@ class Container(object):
         for key, value in kwargs.iteritems():
             self.__setattr__(str(key), value)
 
+    @property
+    def dict(self):
+        return self.__dict__
+
 
 class IntegChain(object):
     """

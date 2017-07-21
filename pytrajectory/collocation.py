@@ -275,7 +275,8 @@ class CollocationSystem(object):
                 # debug:
                 if info:
                     # see Container docstring for motivation
-                    iC = Container(X=X, U=U, F=F, P=P, dX=dX, res=res, MC=SMC)
+                    iC = Container(X=X, U=U, F=F, P=P, dX=dX, res=res, MC=SMC,
+                                   ff=ff_vec, Df=Df_vec)
                     res = iC
     
                 return res
