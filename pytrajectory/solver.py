@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 from numpy.linalg import solve, norm
 import scipy as scp
@@ -136,7 +137,6 @@ class Solver:
 
         self.W = scp.sparse.csr_matrix(np.diag(values))
 
-
     def leven(self):
         """
         This method is an implementation of the Levenberg-Marquardt-Method
@@ -146,8 +146,6 @@ class Solver:
         """
         i = 0
         x = self.x0  ##:: guess_value
-        res = 1  ##:: residuum
-        res_alt = -1
 
         eye = scp.sparse.identity(len(self.x0)) ##:: diagonal matrix, value: 1.0, danwei
 
@@ -178,7 +176,7 @@ class Solver:
         T_start = time.time()
         
         break_outer_loop = False
-        
+
         while not break_outer_loop:
             i += 1
             
@@ -193,11 +191,38 @@ class Solver:
             break_inner_loop = False
             count_inner = 0
             while not break_inner_loop:
-                A = DFx.T.dot(DFx) + self.mu**2*eye  ##:: left side of equation, J'J+mu^2*I, Matrix.T=inv(Matrix)
+                #: left side of equation, J'J+mu^2*I, Matrix.T=inv(Matrix)
+                A = DFx.T.dot(DFx) + self.mu**2*eye
 
-                b = DFx.T.dot(Fx) ##:: right side of equation, J'f, (f=Fx)
-                    
-                s = -scp.sparse.linalg.spsolve(A, b)  ##:: h
+                #: right side of equation, J'f, (f=Fx)
+                b = DFx.T.dot(Fx)
+
+                s = -scp.sparse.linalg.spsolve(A, b)  #: h
+
+                # !! dbg / investigation code
+                if 0:
+                    C = self.F(x, info=True)
+                    n_states, n_points = C.X.shape
+                    if self.masterobject.dyn_sys.n_pconstraints == 1:
+                        dX = np.row_stack((C.dX.reshape(-1, n_states).T, [0]*n_points))
+                    else:
+                        dX = C.dX.reshape(-1, n_states).T
+                    i = 0
+                    r = C.ff(C.X[:, i:i + 1], C.U[:, i:i + 1], C.P[:, i:i + 1]) - dX[:, i:i + 1]
+
+                    # drop penalty values
+                    ff = Fx[:-n_points].reshape(-1, n_states).T
+                    plt.plot(abs(ff.T))
+                    plt.title(u"Fehler der refsol-Startschätzung: in Randbereichen am stärksten")
+                    # Fazit: ggf die Veränderung der Parameter stärker wichten, wo die Fehler groß sind
+                    # plt.figure()
+                    # plt.plot(s)
+                    plt.show()
+                    ll = zip(abs(s), self.masterobject.eqs.all_free_parameters)
+                    ll.sort()
+                    # sehen, welche Parmeter sich wie stark verändern...
+                    # IPS()
+                    # Note Fx is organized as follows: all penalty values are at the end
 
                 xs = x + np.array(s).flatten()
                 
@@ -212,10 +237,6 @@ class Solver:
                 normFx = norm(Fx)
                 normFxs = norm(Fxs)
 
-                # obsolete:
-                # R1 = (normFx**2 - normFxs**2) ##:: F(x)^2-F(x+h)^2, F(x)=f
-                # R2 = (normFx**2 - (norm(Fx+DFx.dot(s)))**2) # F(x)^2-(F(x)+F'(x)h)^2
-
                 R1 = (normFx - normFxs)
                 R2 = (normFx - (norm(Fx+DFx.dot(s))))
                 rho = R1 / R2
@@ -226,7 +247,7 @@ class Solver:
                 if R1 < 0 or R2 < 0:
                     # the step was too big -> residuum would be increasing
                     self.mu *= 2
-                    rho = 0.0 # ensure another iteration
+                    rho = 0.0  # ensure another iteration
                     
                     # logging.debug("increasing res. R1=%f, R2=%f, dismiss solution" % (R1, R2))
 
@@ -237,7 +258,7 @@ class Solver:
 
                 # -> if b0 < rho < b1 : leave mu unchanged
                 
-                logging.debug("  rho= %f    mu= %f"%(rho, self.mu))
+                logging.debug("  rho= %f    mu= %f, |s|^2=%f" % (rho, self.mu, norm(s)))
 
                 if np.isnan(rho):
                     # this should might be caused by large values for xs
@@ -253,9 +274,9 @@ class Solver:
                     logging.debug("lm: inner loop shell")
                     IPS()
 
-                if self.mu > 1:
+                if self.mu > 10:
                     # just for breakpoint (dbg)
-                    pass
+                    IPS()
                 
                 # if the system more or less behaves linearly 
                 break_inner_loop = rho > b0

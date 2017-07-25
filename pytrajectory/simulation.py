@@ -27,7 +27,7 @@ class Simulator(object):
         Time step.
     """
 
-    def __init__(self, ff, T, start, u, z_par, dt=0.01):
+    def __init__(self, ff, T, start, u, z_par=None, dt=0.01):
         """
 
         :param ff:      vectorfield function
@@ -46,7 +46,11 @@ class Simulator(object):
         self.ut = []
         self.nu = len(np.atleast_1d(self.u(0)))
 
+        # handle absence of additional free parameters
+        if z_par is None:
+            z_par = []
         self.pt = z_par
+
         # time steps
         self.t = []
 

@@ -19,6 +19,8 @@ boundary value problem with free parameters. This approach is based on the
 work of K. Graichen and M. Zeitz (e.g. see [Graichen05]_) and was
 picked up by O. Schnabel ([Schnabel13]_)  in the project thesis from which 
 PyTrajectory emerged.
+An impressive application of this method is the swingup of the triple pendulum,
+see [TU-Wien-video]_ and  [Glueck13]_.
 
 
 .. _collocation_method:
@@ -209,6 +211,28 @@ remain as the free parameters of the spline function.
    Optionally, there is available an alternative approach for defining the candidate functions, see :ref:`non-standard-approach`.
 
 
+In both cases internally the concept of dependence-arrays (``dep_array``, ``dep_array_abs``) is used to express all coefficients
+:math:`\boldsymbol{c}` by the free coefficients :math:`\boldsymbol{a}`. Background (:math:`\boldsymbol{P}` is a Permutation matrix):
+
+.. math::
+   :nowrap:
+
+   \begin{eqnarray*}
+       \boldsymbol{c} & = & \boldsymbol{P} \left(\begin{matrix}
+        \boldsymbol{a} \\
+        \boldsymbol{b}
+      \end{matrix} \right) \\
+      & = & \boldsymbol{P}_1 \boldsymbol{a} + \boldsymbol{P}_2 \boldsymbol{b}\\
+      & = & \underbrace{
+      (\boldsymbol{P}_1 - \boldsymbol{P}_2\boldsymbol{B}^{-1} \boldsymbol{A})
+      }_{=:\boldsymbol{d}_1}\boldsymbol{a} +
+      \underbrace{
+       \boldsymbol{P}_2 \boldsymbol{B}^{-1}\boldsymbol{r}
+       }_{=:\boldsymbol{d}_2}
+   \end{eqnarray*}
+   
+Relation to variables in sources: :math:`\boldsymbol{d}_1` =: ``dep_array``, :math:`\boldsymbol{d}_2` =:  ``dep_array_abs``
+   
 .. _system_structure:
 
 Use of the system structure
@@ -424,3 +448,10 @@ References
 .. [Schnabel13]
    Schnabel, O. "Untersuchungen zur Trajektorienplanung durch Lösung eines Randwertproblems"
    Technische Universität Dresden, Institut für Regelungs- und Steuerungstheorie, 2013
+
+.. [TU-Wien-video]
+   Glück, T. et. al. "Triple Pendulum on a Cart", (laboratory video), https://www.youtube.com/watch?v=cyN-CRNrb3E
+
+
+.. [Glueck13]
+   Glück, T. and Eder, A. and Kugi, A. "Swing-up control of a triple pendulum on a cart with experimental validation", Automatica (2013), doi:10.1016/j.automatica.2012.12.006

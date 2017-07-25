@@ -37,8 +37,8 @@ ua = [0.0]
 ub = [0.0]
 
 # next, this is the dictionary containing the constraints
-con = { 0 : [-0.8, 0.3], 
-        1 : [-2.0, 2.0] }
+con = { 'x1': [-0.8, 0.3],
+        'x2': [-2.0, 2.0] }
 
 first_guess = {'seed': 20}
 # now we create our Trajectory object and alter some method parameters via the keyword arguments

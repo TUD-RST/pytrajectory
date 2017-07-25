@@ -192,8 +192,8 @@ ua = [0.0]
 ub = [0.0]
 
 # here we specify the constraints for the velocity of the car
-con = {0 : [-1.0, 1.0],
-       1 : [-2.0, 2.0]}
+con = {'x1': [-1.0, 1.0],
+       'x2': [-2.0, 2.0]}
 
 # now we create our Trajectory object and alter some method parameters via the keyword arguments
 S = TransitionProblem(f, a, b, xa, xb, ua, ub, constraints=con,

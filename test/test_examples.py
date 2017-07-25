@@ -1,100 +1,69 @@
-# IMPORTS
+# -*- coding: utf-8 -*-
 
-import os
-import inspect
-import pytest
-from IPython import embed as IPS
+"""
+This file is used to test some small pytrajectory examples.
 
-import pytrajectory
+"""
+
+from pytrajectory import TransitionProblem
+from pytrajectory import log
 
 
+# define the vectorfield
+def f(x, u):
+    x1, x2 = x
+    u1, = u
+
+    ff = [x2, u1]
+
+    return ff
+
+
+# system state boundary values for a = 0.0 [s] and b = 2.0 [s]
+xa = [0.0, 0.0]
+xb = [1.0, 0.0]
+
+
+# noinspection PyPep8Naming
 class TestExamples(object):
-    # first, we need to get the path to the example scripts
-    # 
-    # so we take the directory name of the absolute path
-    # of the source or compiled file in which the top of the
-    # call stack was defined in
-    # (should be this file...!)
-    pth = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-    
-    # the example scripts are located in a directory one level above the test scripts
-    # so we remove the last directory in the path
-    pth = pth.split(os.sep)[:-1]
-    
-    # and add that of the example 
-    examples_dir = os.sep.join(pth + ['examples'])
 
-    # now we test, if we can get the example scripts
-    test_example_path_failed = True
-    with open(os.path.join(examples_dir, 'ex0_InvertedPendulumSwingUp.py')) as f:
-        f.close()
-        test_example_path_failed = False
+    def test_di_integrator_pure(self):
+        S1 = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=0, ub=0,
+                               show_ir=False,
+                               use_chains=False)
+        S1.solve()
+        assert S1.reached_accuracy
 
-    def assert_reached_accuracy(self, loc):
-        for value in loc.values():
-            if isinstance(value, pytrajectory.system.TransitionProblem):
-                assert value.reached_accuracy
+    def test_di_constraint_x2_projective(self):
+        con = {'x2': [-0.1, 0.65]}
+        S1 = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=0, ub=0, constraints=con,
+                               show_ir=False,
+                               use_chains=False)
+        S1.solve()
+        assert S1.reached_accuracy
 
-    @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
-    def test_inverted_pendulum_swing_up(self):
-        script = os.path.join(self.examples_dir, 'ex0_InvertedPendulumSwingUp.py')
-        d = dict(locals(), **globals())
-        execfile(script, d, d)
-        self.assert_reached_accuracy(locals())
-    
-    @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
-    def test_inverted_pendulum_translation(self):
-        script = os.path.join(self.examples_dir, 'ex1_InvertedPendulumTranslation.py')
-        d = dict(locals(), **globals())
-        execfile(script, d, d)
-        self.assert_reached_accuracy(locals())
+    def test_di_con_u1_projective_integrator(self):
+        con = {'u1': [-1.2, 1.2]}
+        S1 = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=0, ub=0, constraints=con,
+                               show_ir=False,
+                               use_chains=False)
+        S1.solve()
+        assert S1.reached_accuracy
 
-    @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
-    def test_inverted_dual_pendulum_swing_up(self):
-        script = os.path.join(self.examples_dir, 'ex2_InvertedDualPendulumSwingUp.py')
-        d = dict(locals(), **globals())
-        execfile(script, d, d)
-        self.assert_reached_accuracy(locals())
+    def test_di_con_u1_x2_projective_integrator(self):
+        log.console_handler.setLevel(10)
+        con = {'u1': [-1.3, 1.3], 'x2': [-.1, .8],}
+        S1 = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=0, ub=0, constraints=con,
+                               show_ir=False,
+                               accIt=0,
+                               use_chains=False)
+        S1.solve()
+        assert S1.reached_accuracy
 
-    @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
-    def test_aricraft(self):
-        script = os.path.join(self.examples_dir, 'ex3_Aircraft.py')
-        d = dict(locals(), **globals())
-        execfile(script, d, d)
-        self.assert_reached_accuracy(locals())
-    
-    @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
-    def test_underactuated_manipulator(self):
-        script = os.path.join(self.examples_dir, 'ex4_UnderactuatedManipulator.py')
-        d = dict(locals(), **globals())
-        execfile(script, d, d)
-        self.assert_reached_accuracy(locals())
-    
-    @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
-    def test_acrobot(self):
-        script = os.path.join(self.examples_dir, 'ex5_Acrobot.py')
-        d = dict(locals(), **globals())
-        execfile(script, d, d)
-        self.assert_reached_accuracy(locals())
-    
-    @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
-    def test_constrained_double_integrator(self):
-        script = os.path.join(self.examples_dir, 'ex6_ConstrainedDoubleIntegrator.py')
-        d = dict(locals(), **globals())
-        execfile(script, d, d)
-        self.assert_reached_accuracy(locals())
+if __name__ == "__main__":
+    print("\n"*2 + r"   please run py.test -s %filename.py"+ "\n")
+    # or: py.test -s --pdbcls=IPython.terminal.debugger:TerminalPdb %filename
 
-    @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
-    def test_constrained_inverted_pendulum(self):
-        script = os.path.join(self.examples_dir, 'ex7_ConstrainedInvertedPendulum.py')
-        d = dict(locals(), **globals())
-        execfile(script, d, d)
-        self.assert_reached_accuracy(locals())
+    tests = TestExamples()
+    tests.test_di_con_u1_x2_projective_integrator()
 
-    @pytest.mark.slow
-    @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
-    def test_constrained_double_pendulum(self):
-        script = os.path.join(self.examples_dir, 'ex8_ConstrainedDoublePendulum.py')
-        d = dict(locals(), **globals())
-        execfile(script, d, d)
-        self.assert_reached_accuracy(locals())
