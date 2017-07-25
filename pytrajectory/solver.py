@@ -205,19 +205,20 @@ class Solver:
                     n_states, n_points = C.X.shape
                     if self.masterobject.dyn_sys.n_pconstraints == 1:
                         dX = np.row_stack((C.dX.reshape(-1, n_states).T, [0]*n_points))
+                        ff = Fx[:-n_points].reshape(-1, n_states).T
                     else:
                         dX = C.dX.reshape(-1, n_states).T
+                        ff = Fx.reshape(-1, n_states).T
                     i = 0
                     r = C.ff(C.X[:, i:i + 1], C.U[:, i:i + 1], C.P[:, i:i + 1]) - dX[:, i:i + 1]
-
                     # drop penalty values
-                    ff = Fx[:-n_points].reshape(-1, n_states).T
                     plt.plot(abs(ff.T))
                     plt.title(u"Fehler der refsol-Startschätzung: in Randbereichen am stärksten")
                     # Fazit: ggf die Veränderung der Parameter stärker wichten, wo die Fehler groß sind
                     # plt.figure()
                     # plt.plot(s)
                     plt.show()
+                    IPS()
                     ll = zip(abs(s), self.masterobject.eqs.all_free_parameters)
                     ll.sort()
                     # sehen, welche Parmeter sich wie stark verändern...
@@ -298,8 +299,9 @@ class Solver:
 
             if i > 1 and self.res > self.res_old:
                 logging.warn("res_old > res  (should not happen)")
-
-            logging.debug("sp=%d  nIt=%d   k=%f  res=%f" % (n_spln_prts, i, xs[-1], self.res))
+            spaces = " " * 10
+            msg = "sp=%d  nIt=%d   k=%f  %s res=%f"
+            logging.debug(msg % (n_spln_prts, i, xs[-1], spaces, self.res))
             
             self.cond_abs_tol = self.res <= self.tol
             if self.res > 1:

@@ -686,8 +686,11 @@ class TransitionProblem(object):
             fnclist = self.refsol.xxfncs + self.refsol.uufncs
 
             for i, (key, s) in enumerate(C.splines.iteritems()):
-                coeffs = s.new_interpolate(fnclist[i], set_coeffs=True)
+                coeffs = s.new_interpolate(fnclist[i], set_coeffs=True, method="cheby")
                 new_spline_values.append(auxiliary.vector_eval(s.f, tt))
+
+                if 'u' in key:
+                    IPS()
 
                 sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)
                 # List of tuples like (cx1_0_0, 2.41)

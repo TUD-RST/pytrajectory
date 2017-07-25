@@ -793,6 +793,9 @@ class CollocationSystem(object):
             free_coeffs_guess = s_new.new_interpolate(fnc, method='cheby')
             guess = np.hstack((guess, free_coeffs_guess))
 
+            if 'u' in k:
+                IPS()
+
         return guess
 
     def solve(self, F, DF, new_solver=True):

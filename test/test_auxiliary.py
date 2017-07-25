@@ -193,6 +193,39 @@ class TestCseLambdify(object):
             plt.axis([-.1, 1.1, -2, 2])
             plt.show()
 
+    def test_spline_interpolate2(self):
+        from pytrajectory.splines import Spline
+        u_values = np.r_[0, -16, - 14, -11, -4, 3]*1.0
+
+        Ta, Tb = 0, 1
+        n_parts = 85
+        tt1 = np.linspace(Ta, Tb, len(u_values))
+
+        uspline = aux.new_spline(Tb, n_parts=10, targetvalues=(tt1, u_values), tag='u0')
+
+        tt = np.linspace(Ta, Tb, 30000)
+        vv = aux.vector_eval(uspline.f, tt)
+        plt.plot(tt, vv)
+
+        S = Spline(a=Ta, b=Tb, n=n_parts, use_std_approach=False, tag="u1")
+        S.make_steady()
+        coeffs, tt2, slope_places = S.new_interpolate(uspline.f, set_coeffs=True, method="cheby")
+        # S.new_interpolate(uspline.f, set_coeffs=True, method="equi")
+
+        vv2 = aux.vector_eval(S.f, tt)
+        plt.plot(tt, vv2)
+
+        nodes_t = aux.calc_chebyshev_nodes(Ta, Tb, (n_parts)*.7-1, include_borders=True)
+        nodes_t = tt2  # aux.calc_chebyshev_nodes(Ta, Tb, (n_parts)*.7-1, include_borders=True)
+        nodes_x = aux.vector_eval(S.f, nodes_t)
+
+        nodes_dx = aux.vector_eval(S.f, slope_places)
+
+        plt.plot(nodes_t, nodes_x, 'ro')
+        plt.plot(slope_places, nodes_dx, 'kx')
+
+        plt.show()
+        assert S.f(Ta) == uspline.f(Ta)
 
     def test_switch_on(self):
         t = sp.Symbol('t')
@@ -227,3 +260,4 @@ if __name__ == "__main__":
     tests = TestCseLambdify()
     # tests.test_spline_interpolate()
     tests.test_calc_chebyshev_nodes()
+    tests.test_spline_interpolate2()
