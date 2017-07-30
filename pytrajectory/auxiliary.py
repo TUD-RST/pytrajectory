@@ -7,8 +7,10 @@ import scipy.integrate
 from scipy.linalg import expm
 from matplotlib import pyplot as plt
 from collections import OrderedDict
+from numbers import Number
 import copy
 import time
+import inspect
 
 import splines
 from simulation import Simulator
@@ -243,7 +245,7 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
         The symbols for the input variables of the control system.
 
     p_sym : np.array
-    
+
     vectorized : bool
         Whether or not to return a vectorized function.
 
@@ -539,7 +541,127 @@ def cse_lambdify(args, expr, **kwargs):
         cse_args_evaluated = eval_pairs_fnc(args)
         return reduced_exprs_fnc(*cse_args_evaluated)
 
+    # later we might need the information how many scalar args this funcion expects
+    cse_fnc.args_info = args
+
     return cse_fnc
+
+
+def broadcasting_wrapper(original_fnc, original_shape=None):
+    """
+    Create a wrapper function which takes care of correctly broadcasting the result.
+
+    Background:
+    Let fnc1 = sp.lambdify(x, expr1, modules="numpy") # with expr1 = 3*x**2
+    Let fnc2 = sp.lambdify(x, expr2, modules="numpy") # with expr2 = 0*x**2
+
+    fnc1(np.arange(12)) returns an 1d-array of shape (12,)
+    fnc2(np.arange(12)) returns a plain zero
+
+    shape of result depends on the expression -> we dont want this
+
+    :param original_fnc:
+    :param original_shape:  tuple, or None (None means scalar)
+    :return:
+    """
+
+    # find out how many scalar args the funcition expects
+    # this is only used for security assertations
+    args_info = getattr(original_fnc, 'args_info', None)
+    if args_info:
+        n_args = len(args_info)
+    else:
+        argspec = inspect.getargspec(original_fnc)
+        if not argspec.varargs is None and argspec.keywords is None and argspec.defaults is None:
+            msg = "Unexpected calling signature of original fnc"
+            raise ValueError(msg)
+
+        n_args = len(argspec.args)
+
+    assert n_args > 0
+
+    def fnc(*args):
+
+        # accept two calling-cases:
+        # 1: scalar args -> e.g. fnc(0, 3.5)
+        # 2: sequences of args (list, tuple, 1d-array) -> e.g. fnc([0, 1], [3.5])
+        # Note: calling fnc(*arr), where arr is a 2d array results in case 2
+
+        assert len(args) == n_args
+
+        if is_flat_sequence_of_numbers(args):
+            res = original_fnc(*args)
+            if original_shape is None:
+                assert res == float(res)
+            else:
+                res = np.array(res).reshape(original_shape)
+
+        # do not allow too much felxibility (faster development)
+        # first arg mus now be an array (which determines the length of the additional dimension)
+        elif not isinstance(args[0], np.ndarray):
+            msg1 = "Unexpected type {} of first arg (Expect either scalar or array)."
+            raise TypeError(msg1.format(type(args[0])))
+
+        # get a list of arrays of same shape
+        bc_args = np.broadcast_arrays(*args)
+
+        assert args[0].ndim == 1
+        L = len(args[0])
+
+        res_list = []
+
+        # if original_shape is None:
+        if original_shape is None:
+            tmp_shape = (1,)
+        else:
+            tmp_shape = original_shape
+
+        scalar_args = zip(*bc_args)
+
+        # now: evaluation
+        for arg in scalar_args:
+            # arg now should be
+            tmp = np.array(original_fnc(*arg))
+            res_list.append(tmp.reshape(tmp_shape))
+
+        assert len(res_list) == L
+
+        # stack along the last axis (should be 1 or 2)
+
+        res = np.stack(res_list, axis=len(tmp_shape))
+        return res
+
+    return fnc
+
+
+# TODO: Unittest
+def is_flat_sequence_of_numbers(obj, test_all=False):
+
+    if isinstance(obj, basestring):
+        return False
+
+    if not hasattr(obj, '__iter__'):
+        return False
+
+    assert hasattr(obj, '__len__')
+
+    if isinstance(obj, np.ndarray):
+        return obj.ndim == 1 and not obj.dtype == np.dtype('O')
+
+    if isinstance(obj, (tuple, list)):
+        if len(obj) == 0:
+            return True
+
+        if not test_all:
+            # only test first element (for performance reasons)
+            return isinstance(obj[0], Number)
+        else:
+            # Implement the above test for all elements
+            raise NotImplementedError()
+
+    else:
+        msg = "Unexpected type of sequence"
+        raise ValueError(msg)
 
 
 def saturation_functions(y_fnc, dy_fnc, y0, y1, first_deriv=True):
@@ -687,7 +809,7 @@ def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, par, npts=500, return_err
         A function for the vectorfield of the control system.
 
     par: np.array
-    
+
     npts : int
         Number of point to determine the error at.
 
@@ -1119,3 +1241,20 @@ def reshape_wrapper(arr, dim=None, **kwargs):
             return np.zeros((1, 0))
         else:
             return np.zeros((0, 1))
+
+
+def to_np(spobj, dtype=float):
+    """
+    Convert a sympy object to a numpy array
+    :param spobj:       sympy object to convert
+    :param dtype:       dtype-arg for the resulting array
+    :return:
+    """
+
+    # this is copied from symbtools package
+
+    # because np.int can not understand sp.Integer
+    # we temporarily convert to float
+    arr_float = np.vectorize(float)
+    arr1 = arr_float(np.array(spobj))
+    return np.array(arr1, dtype)

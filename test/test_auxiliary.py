@@ -25,7 +25,7 @@ class TestCseLambdify(object):
     def test_list(self):
         x, y = sp.symbols('x, y')
         ones = np.ones(10)
-    
+
         l = [0.5*(x + y), sp.asin(sp.sin(0.5*(x+y))), sp.sin(x+y)**2 + sp.cos(x+y)**2]
 
         f = pytrajectory.auxiliary.cse_lambdify(args=(x,y), expr=l, modules='numpy')
@@ -38,7 +38,7 @@ class TestCseLambdify(object):
     def test_matrix_to_matrix(self):
         x, y = sp.symbols('x, y')
         ones = np.ones(10)
-    
+
         M = sp.Matrix([0.5*(x + y), sp.asin(sp.sin(0.5*(x+y))), sp.sin(x+y)**2 + sp.cos(x+y)**2])
 
         f = pytrajectory.auxiliary.cse_lambdify(args=(x,y), expr=M,
@@ -50,14 +50,14 @@ class TestCseLambdify(object):
     def test_matrix_to_array(self):
         x, y = sp.symbols('x, y')
         ones = np.ones(10)
-    
+
         M = sp.Matrix([0.5*(x + y), sp.asin(sp.sin(0.5*(x+y))), sp.sin(x+y)**2 + sp.cos(x+y)**2])
 
         f = pytrajectory.auxiliary.cse_lambdify(args=(x,y), expr=M,
                                                 modules=[{'ImmutableMatrix' : np.array}, 'numpy'])
 
         F = f(1., 1.)
-        
+
         assert type(F) == np.ndarray
         assert not isinstance(F, np.matrix)
         assert F.shape == (3, 1)
@@ -66,7 +66,7 @@ class TestCseLambdify(object):
     #@pytest.xfail(reason="Not implemented, yet")
     #def test_1d_array_input(self):
     #    x, y = sp.symbols('x, y')
-    # 
+    #
     #    A = np.array([0.5*(x + y), sp.asin(sp.sin(0.5*(x+y))), sp.sin(x+y)**2 + sp.cos(x+y)**2])
     #
     #    f = pytrajectory.auxiliary.cse_lambdify(args=(x,y), expr=A,
@@ -133,6 +133,93 @@ class TestCseLambdify(object):
 
         assert res1.shape == (3, N)
         assert res2.shape == (3, N)
+
+    def test_cse_lambdify(self):
+        # TODO
+        pass
+
+    def test_broadcasting_wrapper(self):
+
+        nx = 2
+        nu = 1
+        npar = 1
+        x1, x2 = xx = sp.symbols("x1:{}".format(nx + 1))
+        uu = sp.symbols("u1:{}".format(nu + 1))
+        pp = sp.symbols("p1:{}".format(npar + 1))
+
+        # sparsely occupied
+        f1 = sp.Matrix([[x2, 0]])
+        # f2 = sp.Matrix([[x1*x2, 0]])
+
+        # more densly occupied
+        f2 = sp.Matrix([[x1 * x2, 7 * x1 ** 4 + 3 * x2 ** 2, sp.cos(x1 + x2)]])
+
+        Jx1 = f1.jacobian(xx)
+        Jx2 = f2.jacobian(xx)
+
+        N = 6
+        np.random.seed(1)
+        xxn = np.random.rand(nx, N)
+        uun = np.random.rand(nu, N)
+        ppn = np.random.rand(nu, N)
+
+        modules_arg = [{'ImmutableMatrix': np.array}, 'numpy']
+
+        allargs = np.vstack((xxn, uun, ppn))  # each column is a valid collection of xup-args
+
+        a1 = allargs[:, 0]  # dim-1 array
+
+        fnc1 = sp.lambdify(xx + uu + pp, Jx1, modules=modules_arg)
+        fnc2 = sp.lambdify(xx + uu + pp, Jx2, modules=modules_arg)
+
+        r1 = fnc1(*a1)
+        r2 = fnc2(*a1)
+
+        assert isinstance(r1, np.ndarray) and isinstance(r2, np.ndarray)
+
+        rplmts = zip(xx + uu + pp, a1)
+        Jx1_num = aux.to_np(Jx1.subs(rplmts))
+        Jx2_num = aux.to_np(Jx2.subs(rplmts))
+
+        assert np.allclose(r1, Jx1_num)
+        assert np.allclose(r2, Jx2_num)
+
+        r1 = fnc1(*allargs)
+        r2 = fnc2(*allargs)
+
+        fnc_bc1 = aux.broadcasting_wrapper(fnc1, original_shape=Jx1.shape)
+        fnc_bc2 = aux.broadcasting_wrapper(fnc2, original_shape=Jx2.shape)
+
+        w1 = fnc_bc1(*allargs)
+        w2 = fnc_bc2(*allargs)
+
+        # this is the justification for the broadcasting_wrapper:
+        # the shape of the result depends on the expression
+        assert not w1.shape == r1.shape
+        assert w2.shape == r2.shape
+
+        assert w1.shape == Jx1.shape + (N,)
+        assert w2.shape == Jx2.shape + (N,)
+
+        for i in xrange(N):
+            rplmts = zip(xx + uu + pp, allargs[:, i])
+            Jx1_num = aux.to_np(Jx1.subs(rplmts))
+            Jx2_num = aux.to_np(Jx2.subs(rplmts))
+
+            assert np.allclose(w1[:, :, i], Jx1_num)
+            assert np.allclose(w2[:, :, i], Jx2_num)
+
+    def test_is_flat_sequence_of_numbers(self):
+
+        tests = [(list(range(10)), True),
+                 (tuple(range(10)), True),
+                 (np.arange(17), True),
+                 ("hello", False),
+                 (None, False),
+                 (np.array([[1, 2], [3, 4]]), False),
+                ]
+        for obj, res in tests:
+            assert aux.is_flat_sequence_of_numbers(obj) == res
 
     # new_interpolate is currently not used because it tends to unwanted oscillations
     @pytest.mark.xfail(reason='this only works for the method Spline.new_interpolate')
@@ -259,5 +346,10 @@ if __name__ == "__main__":
 
     tests = TestCseLambdify()
     # tests.test_spline_interpolate()
-    tests.test_calc_chebyshev_nodes()
-    tests.test_spline_interpolate2()
+    # tests.test_calc_chebyshev_nodes()
+    # tests.test_sym2num_matrix()
+    # tests.test_cse_lambdify()
+    tests.test_broadcasting_wrapper()
+    tests.test_is_flat_sequence_of_numbers()
+
+    # tests.test_rhs_extended_factory()
