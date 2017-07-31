@@ -1267,3 +1267,45 @@ def to_np(spobj, dtype=float):
     arr_float = np.vectorize(float)
     arr1 = arr_float(np.array(spobj))
     return np.array(arr1, dtype)
+
+
+def get_attributes_from_object(obj):
+    """
+    Use some magic from inspect module to get the left-hand-side of the line calling this function
+    and from this information we get the desired names
+
+    x, y, z, a, b, c = get_variables_from_object(myContainer)
+
+    This function is intended to avoid redundancy and space in situations like
+    x = myContainer.x
+    y = myContainer.y
+    ...
+
+    :param obj:
+    :return:        tuple of attribute values
+    """
+
+    frame, fname, l_number, fnc_name, lines, idx =\
+                  inspect.getouterframes(inspect.currentframe())[1]
+
+    assert len(lines) == 1
+    src_line, = lines
+    assert src_line.count("=") == 1
+
+    # left hand side
+    lhs = src_line.split("=")[0]
+    names = lhs.split(',')
+
+    results = []
+    for n in names:
+        n = n.strip()  # remove spaces
+        if not hasattr(obj, n):
+            msg = "Name {} not found".format(n)
+            raise NameError(msg)
+        results.append(getattr(obj, n))
+
+    if len(results) == 1:
+        results = results[0]
+
+    return results
+

@@ -13,6 +13,34 @@ from ipHelp import IPS
 # noinspection PyPep8Naming
 class TestCseLambdify(object):
 
+    # define some frequently used data:
+    nx = 2
+    nu = 1
+    npar = 1
+    x1, x2 = xx = sp.symbols("x1:{}".format(nx + 1))
+    uu = sp.symbols("u1:{}".format(nu + 1))
+    pp = sp.symbols("p1:{}".format(npar + 1))
+
+    # sparsely occupied
+    f1 = sp.Matrix([[x2, 0]])
+    # f2 = sp.Matrix([[x1*x2, 0]])
+
+    # more densly occupied
+    f2 = sp.Matrix([[x1*x2, 7*x1 ** 4 + 3*x2 ** 2, sp.cos(x1 + x2)]])
+
+    Jx1 = f1.jacobian(xx)
+    Jx2 = f2.jacobian(xx)
+
+    N = 6
+    np.random.seed(1)
+    xxn = np.random.rand(nx, N)
+    uun = np.random.rand(nu, N)
+    ppn = np.random.rand(nu, N)
+
+    modules_arg = [{'ImmutableMatrix': np.array}, 'numpy']
+
+    allargs = np.vstack((xxn, uun, ppn))  # each column is a valid collection of xup-args
+
     def test_single_expression(self):
         x, y = sp.symbols('x, y')
 
@@ -135,38 +163,12 @@ class TestCseLambdify(object):
         assert res2.shape == (3, N)
 
     def test_cse_lambdify(self):
-        # TODO: remove code duplication with test_broadcast-wrapper
-        nx = 2
-        nu = 1
-        npar = 1
-        x1, x2 = xx = sp.symbols("x1:{}".format(nx + 1))
-        uu = sp.symbols("u1:{}".format(nu + 1))
-        pp = sp.symbols("p1:{}".format(npar + 1))
 
-        # sparsely occupied
-        f1 = sp.Matrix([[x2, 0]])
-        # f2 = sp.Matrix([[x1*x2, 0]])
-
-        # more densly occupied
-        f2 = sp.Matrix([[x1*x2, 7*x1 ** 4 + 3*x2 ** 2, sp.cos(x1 + x2)]])
-
-        Jx1 = f1.jacobian(xx)
-        Jx2 = f2.jacobian(xx)
-
-        N = 6
-        np.random.seed(1)
-        xxn = np.random.rand(nx, N)
-        uun = np.random.rand(nu, N)
-        ppn = np.random.rand(nu, N)
-
-        modules_arg = [{'ImmutableMatrix': np.array}, 'numpy']
-
-        allargs = np.vstack((xxn, uun, ppn))  # each column is a valid collection of xup-args
-
+        xx, uu, pp, xxn, uun, ppn, Jx1, Jx2, allargs, N = aux.get_attributes_from_object(self)
         a1 = allargs[:, 0]  # dim-1 array
 
-        fnc1 = aux.cse_lambdify(xx + uu + pp, Jx1, modules=modules_arg)
-        fnc2 = aux.cse_lambdify(xx + uu + pp, Jx2, modules=modules_arg)
+        fnc1 = aux.cse_lambdify(xx + uu + pp, Jx1, modules=self.modules_arg)
+        fnc2 = aux.cse_lambdify(xx + uu + pp, Jx2, modules=self.modules_arg)
 
         r1 = fnc1(*a1)
         r2 = fnc2(*a1)
@@ -197,37 +199,11 @@ class TestCseLambdify(object):
 
     def test_broadcasting_wrapper(self):
 
-        nx = 2
-        nu = 1
-        npar = 1
-        x1, x2 = xx = sp.symbols("x1:{}".format(nx + 1))
-        uu = sp.symbols("u1:{}".format(nu + 1))
-        pp = sp.symbols("p1:{}".format(npar + 1))
-
-        # sparsely occupied
-        f1 = sp.Matrix([[x2, 0]])
-        # f2 = sp.Matrix([[x1*x2, 0]])
-
-        # more densly occupied
-        f2 = sp.Matrix([[x1 * x2, 7 * x1 ** 4 + 3 * x2 ** 2, sp.cos(x1 + x2)]])
-
-        Jx1 = f1.jacobian(xx)
-        Jx2 = f2.jacobian(xx)
-
-        N = 6
-        np.random.seed(1)
-        xxn = np.random.rand(nx, N)
-        uun = np.random.rand(nu, N)
-        ppn = np.random.rand(nu, N)
-
-        modules_arg = [{'ImmutableMatrix': np.array}, 'numpy']
-
-        allargs = np.vstack((xxn, uun, ppn))  # each column is a valid collection of xup-args
-
+        xx, uu, pp, xxn, uun, ppn, Jx1, Jx2, allargs, N = aux.get_attributes_from_object(self)
         a1 = allargs[:, 0]  # dim-1 array
 
-        fnc1 = sp.lambdify(xx + uu + pp, Jx1, modules=modules_arg)
-        fnc2 = sp.lambdify(xx + uu + pp, Jx2, modules=modules_arg)
+        fnc1 = sp.lambdify(xx + uu + pp, self.Jx1, modules=self.modules_arg)
+        fnc2 = sp.lambdify(xx + uu + pp, self.Jx2, modules=self.modules_arg)
 
         r1 = fnc1(*a1)
         r2 = fnc2(*a1)
@@ -262,6 +238,30 @@ class TestCseLambdify(object):
 
         assert not w1.shape == r1.shape
         assert w2.shape == r2.shape
+
+        assert w1.shape == Jx1.shape + (N,)
+        assert w2.shape == Jx2.shape + (N,)
+
+        for i in xrange(N):
+            rplmts = zip(xx + uu + pp, allargs[:, i])
+            Jx1_num = aux.to_np(Jx1.subs(rplmts))
+            Jx2_num = aux.to_np(Jx2.subs(rplmts))
+
+            assert np.allclose(w1[:, :, i], Jx1_num)
+            assert np.allclose(w2[:, :, i], Jx2_num)
+
+    def test_sym2num_matrix(self):
+
+        xx, uu, pp, xxn, uun, ppn, Jx1, Jx2, allargs, N = aux.get_attributes_from_object(self)
+
+        fnc1_cse = aux.sym2num_vectorfield(Jx1, xx, uu, pp, vectorized=True, cse=True,
+                                           evalconstr=None)
+
+        fnc2_cse = aux.sym2num_vectorfield(Jx2, xx, uu, pp, vectorized=True, cse=True,
+                                           evalconstr=None)
+
+        w1 = fnc1_cse(xxn, uun, ppn)
+        w2 = fnc2_cse(xxn, uun, ppn)
 
         assert w1.shape == Jx1.shape + (N,)
         assert w2.shape == Jx2.shape + (N,)
@@ -405,6 +405,21 @@ class TestCseLambdify(object):
             plt.plot(pts_noborders, pts_noborders*0, '.' )
             plt.show()
 
+    def test_get_attributes_from_object(self):
+        c = aux.Container(x=0, y=1.0, z="abc")
+        c.a = 10
+
+        y = aux.get_attributes_from_object(c)
+        a, z, x = aux.get_attributes_from_object(c)
+
+        assert a == c.a
+        assert z == c.z
+        assert x == c.x
+        assert y == c.y
+
+        # test whether meaningful exception is raised
+        with pytest.raises(NameError):
+            K = aux.get_attributes_from_object(c)
 
 if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")
@@ -412,10 +427,12 @@ if __name__ == "__main__":
     tests = TestCseLambdify()
     # tests.test_spline_interpolate()
     # tests.test_calc_chebyshev_nodes()
-    # tests.test_sym2num_matrix()
-    # tests.test_broadcasting_wrapper()
-    # tests.test_is_flat_sequence_of_numbers()
+    tests.test_broadcasting_wrapper()
+
+    tests.test_is_flat_sequence_of_numbers()
     tests.test_cse_lambdify()
+    tests.test_sym2num_matrix()
+    tests.test_get_attributes_from_object()
 
 
     # tests.test_rhs_extended_factory()
