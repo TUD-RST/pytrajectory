@@ -81,8 +81,7 @@ class TestCseLambdify(object):
 
         M = sp.Matrix([0.5*(x + y), sp.asin(sp.sin(0.5*(x+y))), sp.sin(x+y)**2 + sp.cos(x+y)**2])
 
-        f = pytrajectory.auxiliary.cse_lambdify(args=(x,y), expr=M,
-                                                modules=[{'ImmutableMatrix' : np.array}, 'numpy'])
+        f = pytrajectory.auxiliary.cse_lambdify(args=(x, y), expr=M, modules=self.modules_arg)
 
         F = f(1., 1.)
 
@@ -276,14 +275,14 @@ class TestCseLambdify(object):
 
     def test_is_flat_sequence_of_numbers(self):
 
-        tests = [(list(range(10)), True),
-                 (tuple(range(10)), True),
-                 (np.arange(17), True),
-                 ("hello", False),
-                 (None, False),
-                 (np.array([[1, 2], [3, 4]]), False),
-                ]
-        for obj, res in tests:
+        tests_ = [(list(range(10)), True),
+                  (tuple(range(10)), True),
+                  (np.arange(17), True),
+                  ("hello", False),
+                  (None, False),
+                  (np.array([[1, 2], [3, 4]]), False),
+                  ]
+        for obj, res in tests_:
             assert aux.is_flat_sequence_of_numbers(obj) == res
 
     # new_interpolate is currently not used because it tends to unwanted oscillations
@@ -302,7 +301,7 @@ class TestCseLambdify(object):
 
         xx = np.sin(10*tt)
 
-        slist = []
+        slist = list()
 
         # only 0th oder
         slist.append(Spline(a=0, b=1, n=50, bv={0: (1.5, 1.5)}, use_std_approach=False))

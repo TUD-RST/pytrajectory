@@ -68,6 +68,7 @@ class TransitionProblem(object):
         su            10               Initial number of spline parts for the input variables
         kx            2               Factor for raising the number of spline parts
         maxIt         10              Maximum number of iteration steps
+                                      (numbers of raising spline-parts)
         eps           1e-2            Tolerance for the solution of the initial value problem
         ierr          1e-1            Tolerance for the error on the whole interval
         tol           1e-5            Tolerance for the solver of the equation system

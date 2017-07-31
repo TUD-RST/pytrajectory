@@ -308,32 +308,6 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
     else:
         raise TypeError(str(sym_type))
 
-    if vectorized:
-
-        # TODO: Check and clean up
-        # All this code seems to be obsolete
-        # we now use explicit broadcasting of the result (see below)
-
-        # in order to make the numeric function vectorized
-        # we have to check if the symbolic expression contains
-        # constant numbers as a single expression
-
-        # therefore we transform it into a sympy matrix
-        F_sym = sp.Matrix(F_sym)
-
-        # if there are elements which are constant numbers we have to use some
-        # trick to achieve the vectorization (as far as the developers know ;-) )
-        for i in xrange(F_sym.shape[0]):
-            for j in xrange(F_sym.shape[1]):
-                if F_sym[i,j].is_Number:
-                    # we add an expression which evaluates to zero, but enables us
-                    # to put an array into the matrix where there is now a single number
-                    #
-                    # we just take an arbitrary state, multiply it with 0 and add it
-                    # to the current element (constant)
-                    zero_expr = sp.Mul(0.0, sp.Symbol(str(x_sym[0])), evaluate=False)
-                    F_sym[i, j] = sp.Add(F_sym[i, j], zero_expr, evaluate=False)
-
     if sym_dim == 1:
         # if the original dimension was equal to one
         # we pass the expression as a list so that the
@@ -364,16 +338,16 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
     else:
         stack = np.hstack
 
-    if sym_dim == 1:
-        def f_num(x, u, p):
-            xup = stack((x, u, p))
-            raw = _f_num(*xup)  # list of arrays of potentially different length (1 or n)
-            return np.array(np.broadcast_arrays(*raw))
+    if isinstance(F_sym, (tuple, list)):
+        shape = (len(F_sym), 1)
     else:
-        def f_num(x, u, p):
-            xup = stack((x, u, p))
-            raw = _f_num(*xup)  # list of arrays of potentially different length (1 or n)
-            return np.array(np.broadcast_arrays(*raw))
+        shape = F_sym.shape
+    _f_num_bc = broadcasting_wrapper(_f_num, shape)
+
+    def f_num(x, u, p):
+        xup = stack((x, u, p))
+        res = _f_num_bc(*xup)
+        return res
 
     return f_num
 
