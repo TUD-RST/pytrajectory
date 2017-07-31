@@ -241,17 +241,25 @@ class TestCseLambdify(object):
         assert np.allclose(r1, Jx1_num)
         assert np.allclose(r2, Jx2_num)
 
-        r1 = fnc1(*allargs)
-        r2 = fnc2(*allargs)
-
         fnc_bc1 = aux.broadcasting_wrapper(fnc1, original_shape=Jx1.shape)
         fnc_bc2 = aux.broadcasting_wrapper(fnc2, original_shape=Jx2.shape)
+
+        # broadcasted function should also deal with flat argument lists
+        r1f = fnc_bc1(*tuple(a1))
+        r2f = fnc_bc2(*tuple(a1))
+
+        assert np.allclose(r1f, r1)
+        assert np.allclose(r2f, r2)
 
         w1 = fnc_bc1(*allargs)
         w2 = fnc_bc2(*allargs)
 
         # this is the justification for the broadcasting_wrapper:
         # the shape of the result depends on the expression
+
+        r1 = fnc1(*allargs)
+        r2 = fnc2(*allargs)
+
         assert not w1.shape == r1.shape
         assert w2.shape == r2.shape
 

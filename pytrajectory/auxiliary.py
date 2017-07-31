@@ -622,6 +622,8 @@ def broadcasting_wrapper(original_fnc, original_shape=None):
             else:
                 res = np.array(res).reshape(original_shape)
 
+            return res
+
         # do not allow too much felxibility (faster development)
         # first arg mus now be an array (which determines the length of the additional dimension)
         elif not isinstance(args[0], np.ndarray):
