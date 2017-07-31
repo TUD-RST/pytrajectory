@@ -135,8 +135,65 @@ class TestCseLambdify(object):
         assert res2.shape == (3, N)
 
     def test_cse_lambdify(self):
-        # TODO
-        pass
+        # TODO: remove code duplication with test_broadcast-wrapper
+        nx = 2
+        nu = 1
+        npar = 1
+        x1, x2 = xx = sp.symbols("x1:{}".format(nx + 1))
+        uu = sp.symbols("u1:{}".format(nu + 1))
+        pp = sp.symbols("p1:{}".format(npar + 1))
+
+        # sparsely occupied
+        f1 = sp.Matrix([[x2, 0]])
+        # f2 = sp.Matrix([[x1*x2, 0]])
+
+        # more densly occupied
+        f2 = sp.Matrix([[x1*x2, 7*x1 ** 4 + 3*x2 ** 2, sp.cos(x1 + x2)]])
+
+        Jx1 = f1.jacobian(xx)
+        Jx2 = f2.jacobian(xx)
+
+        N = 6
+        np.random.seed(1)
+        xxn = np.random.rand(nx, N)
+        uun = np.random.rand(nu, N)
+        ppn = np.random.rand(nu, N)
+
+        modules_arg = [{'ImmutableMatrix': np.array}, 'numpy']
+
+        allargs = np.vstack((xxn, uun, ppn))  # each column is a valid collection of xup-args
+
+        a1 = allargs[:, 0]  # dim-1 array
+
+        fnc1 = aux.cse_lambdify(xx + uu + pp, Jx1, modules=modules_arg)
+        fnc2 = aux.cse_lambdify(xx + uu + pp, Jx2, modules=modules_arg)
+
+        r1 = fnc1(*a1)
+        r2 = fnc2(*a1)
+
+        assert isinstance(r1, np.ndarray) and isinstance(r2, np.ndarray)
+
+        rplmts = zip(xx + uu + pp, a1)
+        Jx1_num = aux.to_np(Jx1.subs(rplmts))
+        Jx2_num = aux.to_np(Jx2.subs(rplmts))
+
+        assert np.allclose(r1, Jx1_num)
+        assert np.allclose(r2, Jx2_num)
+
+        with pytest.raises(AssertionError):
+            r1 = fnc1(*allargs)
+
+        with pytest.raises(AssertionError):
+            r2 = fnc2(*allargs)
+
+        for i in xrange(N):
+            ai = allargs[:, i]
+            rplmts = zip(xx + uu + pp, ai)
+            Jx1_num = aux.to_np(Jx1.subs(rplmts))
+            Jx2_num = aux.to_np(Jx2.subs(rplmts))
+
+            assert np.allclose(fnc1(*ai), Jx1_num)
+            assert np.allclose(fnc2(*ai), Jx2_num)
 
     def test_broadcasting_wrapper(self):
 
@@ -348,8 +405,9 @@ if __name__ == "__main__":
     # tests.test_spline_interpolate()
     # tests.test_calc_chebyshev_nodes()
     # tests.test_sym2num_matrix()
-    # tests.test_cse_lambdify()
-    tests.test_broadcasting_wrapper()
-    tests.test_is_flat_sequence_of_numbers()
+    # tests.test_broadcasting_wrapper()
+    # tests.test_is_flat_sequence_of_numbers()
+    tests.test_cse_lambdify()
+
 
     # tests.test_rhs_extended_factory()

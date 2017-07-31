@@ -380,7 +380,7 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
 
 def check_expression(expr):
     """
-    Checks whether a given expression is a sympy epression or a list
+    Checks whether a given expression is a sympy expression or a list
     of sympy expressions.
 
     Throws an exception if not.
@@ -441,6 +441,8 @@ def eval_replacements_fnc(args):
     else:
         replacements_str = ','.join(str(r) for r in zip(*replacement_pairs)[0])
 
+    # ensure iterable return type (also in case of only one result)
+    replacements_str = "({},)".format(replacements_str)
 
     eval_replacements_fnc_str = function_buffer.format(unpack_args=unpack_args_str,
                                                        eval_pairs=eval_pairs_str,
@@ -463,47 +465,66 @@ def eval_replacements_fnc(args):
 def cse_lambdify(args, expr, **kwargs):
     """
     Wrapper for sympy.lambdify which makes use of common subexpressions.
+
+    Parameters
+    ----------
+
+    args : iterable
+
+    expr : sympy expression or iterable of sympy expression
+
+    return callable
     """
 
-    # Note:
+    # Notes:
     # This was expected to speed up the evaluation of the created functions.
     # However performance gain is only at ca. 5%
 
-
-    # check input expression
-    if type(expr) == str:
-        raise TypeError('Not implemented for string input expression!')
+    # constant expressions are handled as well
 
     # check given expression
     try:
         check_expression(expr)
     except TypeError as err:
-        raise NotImplementedError("Only sympy expressions are allowed, yet")
+        raise NotImplementedError("Only (sequences of) sympy expressions are allowed, yet")
 
     # get sequence of symbols from input arguments
     if type(args) == str:
         args = sp.symbols(args, seq=True)
     elif hasattr(args, '__iter__'):
         # this may kill assumptions
+        # TODO: find out why this is done an possbly remove
         args = [sp.Symbol(str(a)) for a in args]
 
     if not hasattr(args, '__iter__'):
         args = (args,)
 
     # get the common subexpressions
-    cse_pairs, red_exprs = sp.cse(expr, symbols=sp.numbered_symbols('r'))
+    symbol_generator = sp.numbered_symbols('r')
+    cse_pairs, red_exprs = sp.cse(expr, symbols=symbol_generator)
+
+    # Note: cse always returns a list because expr might be a sequence of expressions
+    # However we want only one expression back if we put one in
+    # (a matrix-object is covered by this)
     if len(red_exprs) == 1:
         red_exprs = red_exprs[0]
 
     # check if sympy found any common subexpressions
+    # typically cse_pairs looks like [(r0, cos(x1)), (r1, sin(x1))], ...
     if not cse_pairs:
-        # if not, use standard lambdify
-        return sp.lambdify(args, expr, **kwargs)
+        # add a meaningless mapping r0 |-→ 0 to avoid empty list
+        cse_pairs = [(symbol_generator.next(), 0)]
 
     # now we are looking for those arguments that are part of the reduced expression(s)
+    # find out the shortcut-symbols
     shortcuts = zip(*cse_pairs)[0]
-    atoms = sp.Set(red_exprs).atoms()
+    atoms = sp.Set(red_exprs).atoms(sp.Symbol)
     cse_args = [arg for arg in tuple(args) + tuple(shortcuts) if arg in atoms]
+
+    assert isinstance(cse_pairs[0][0], sp.Symbol)
+    if len(cse_args) == 0:
+        # this happens if expr is constant
+        cse_args = [cse_pairs[0][0]]
 
     # next, we create a function that evaluates the reduced expression
     cse_expr = red_exprs
@@ -538,10 +559,15 @@ def cse_lambdify(args, expr, **kwargs):
 
     # now we can wrap things together
     def cse_fnc(*args):
+        # this function is intended only for scalar args
+        # vectorization is handled by `broadcasting_wrapper`
+        for a in args:
+            assert isinstance(a, Number)
+
         cse_args_evaluated = eval_pairs_fnc(args)
         return reduced_exprs_fnc(*cse_args_evaluated)
 
-    # later we might need the information how many scalar args this funcion expects
+    # later we might need the information how many scalar args this function expects
     cse_fnc.args_info = args
 
     return cse_fnc
@@ -878,25 +904,6 @@ def vector_eval(func, argarr):
     :return:
     """
     return np.array([func(arg) for arg in argarr])
-
-if __name__ == '__main__':
-    from sympy import sin, cos, exp
-
-    x, y, z = sp.symbols('x, y, z')
-
-    F = [(x+y) * (y-z),
-         sp.sin(-(x+y)) + sp.cos(z-y),
-         sp.exp(sp.sin(-y-x) + sp.cos(-y+z))]
-
-    MF = sp.Matrix(F)
-
-    f = cse_lambdify(args=(x,y,z), expr=MF,
-                     modules=[{'ImmutableMatrix' : np.array}, 'numpy'])
-
-    f_num = f(np.r_[[1.0]*10], np.r_[[2.0]*10], np.r_[[3.0]*10])
-    f_num_check = np.array([[-3.0],
-                            [-np.sin(3.0) + np.cos(1.0)],
-                            [np.exp(-np.sin(3.0) + np.cos(1.0))]])
 
 
 def new_spline(Tend, n_parts, targetvalues, tag, bv=None, use_std_approach=True):
