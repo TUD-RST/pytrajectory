@@ -404,6 +404,40 @@ class TestCseLambdify(object):
             plt.plot(pts_noborders, pts_noborders*0, '.' )
             plt.show()
 
+    def test_rhs_extended_factory(self):
+
+        def rhs_di(state, u, pp, evalconstr=True):
+            pp  # ignored parameters
+            x1, x2 = state
+            u1, = u
+            u1_all = u1
+
+            ff = [x2**2, u1]
+            if evalconstr:
+                c = 0
+                ff.append(c)
+            return np.array(ff)
+
+        fnc_u = lambda t: np.atleast_1d(t*0)
+        fnc_du = lambda t: np.atleast_1d(t*0)
+
+        xa = [0, 0]
+        za = [0, 0, 0]
+        ua = [0]
+        pa = [1]
+
+        ext_rhs, DF = aux.extended_rhs_factory(rhs_di, fnc_u, fnc_du,
+                                               penalty_u=.1, nx=2, nu=1, npar=1)
+
+        J1 = DF(za, ua, pa)
+
+        z2 = np.column_stack((za, [1, 2, 3]))
+        u2 = np.column_stack(([0], [1]))
+        p2 = np.column_stack(([1], [1]))
+
+        J2 = DF(z2, u2, p2)
+        IPS()
+
     def test_get_attributes_from_object(self):
         c = aux.Container(x=0, y=1.0, z="abc")
         c.a = 10
@@ -420,6 +454,72 @@ class TestCseLambdify(object):
         with pytest.raises(NameError):
             K = aux.get_attributes_from_object(c)
 
+
+def understand_einsum():
+    """
+    This code serves to play arround interactively with np.einsum
+    :return:
+    """
+
+    Na = (3, 2, 4)
+    Nb = Na[1:]
+
+    import itertools
+
+    def symbolic_tensor(base_symb, shape):
+        r = np.empty(shape, dtype=object)
+        idx_lists = [range(l) for l in shape]
+        combined_idx_list = itertools.product(*idx_lists)
+
+        for idcs in combined_idx_list:
+            str_idcs = [str(i) for i in idcs]
+            name = base_symb + "_".join(str_idcs)
+            r[idcs] = sp.Symbol(name)
+
+        return r
+
+    AA = symbolic_tensor('a', Na)
+    bb = symbolic_tensor('b', Nb)
+
+    res_shape = AA.shape[0], AA.shape[2]
+    # use numbers anyway (because einsum does not work with symbols)
+
+    AA = np.arange(np.prod(Na)).reshape(Na)
+    bb = np.arange(np.prod(Nb)).reshape(Nb)
+
+    # we want to calculate:
+    # r_ik = sum_j (a_ijk * b_jk)
+
+    rr_direct = np.empty(res_shape)
+    for i in range(AA.shape[2]):
+        rr_direct[:, i] = np.dot(AA[:, :, i], bb[:, i])
+
+    # np.tensordot
+    ax_tuples = ([1], [0])
+    r = np.tensordot(AA, bb, ax_tuples)
+
+    # Problem: r contains more data than we want, we have to get a special diagonal
+
+    res_shape = AA.shape[0], AA.shape[2]
+    result = np.empty(res_shape, dtype=object)
+    for (i, j), _ in np.ndenumerate(result):
+        result[i, j] = r[i, j, j]
+
+    # maybe better with np.einsum
+
+    rr = np.einsum("ijk,jk->ik", AA, bb)
+
+    IPS()
+
+"""
+a = np.arange(60.).reshape(3,4,5)
+b = np.arange(24.).reshape(4,3,2)
+np.einsum('ijk,jil->kl', a, b)
+
+"""
+
+
+
 if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")
 
@@ -433,5 +533,5 @@ if __name__ == "__main__":
     tests.test_sym2num_matrix()
     tests.test_get_attributes_from_object()
 
-
-    # tests.test_rhs_extended_factory()
+    understand_einsum()
+    tests.test_rhs_extended_factory()

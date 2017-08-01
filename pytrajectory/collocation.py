@@ -82,10 +82,11 @@ class CollocationSystem(object):
         # strange sympy behavior (bug) for systems with more than 9 variables
         # workarround: we use real symbols now
         all_symbols = sp.symbols(dynsys.states + dynsys.inputs + dynsys.par) 
-        Df = sp.Matrix(f).jacobian(all_symbols)
-        
+
         self.ff_vectorized = sym2num_vectorfield(f, dynsys.states, dynsys.inputs, dynsys.par,
                                                  vectorized=True, cse=True)
+        # TODO: Optionally provide Jacobian separately (to enable time dependency)
+        Df = sp.Matrix(f).jacobian(all_symbols)
         self.Df_vectorized = sym2num_vectorfield(Df, dynsys.states, dynsys.inputs, dynsys.par,
                                                  vectorized=True, cse=True)
         self.f = f
@@ -794,7 +795,8 @@ class CollocationSystem(object):
             guess = np.hstack((guess, free_coeffs_guess))
 
             if 'u' in k:
-                IPS()
+                pass
+                # IPS()
 
         return guess
 

@@ -983,6 +983,149 @@ def calc_chebyshev_nodes(a, b, npts, include_borders=True):
     return chpts
 
 
+def ensure_colstack(seq, nrows):
+    """
+    Ensures that a sequence is in form of a columnstack
+
+    :param seq:
+    :param nrows:   desired number of rows
+
+    :return:        same data, maybe reshaped
+    """
+
+    arr = np.array(seq)
+    assert arr.size % nrows == 0
+
+    if arr.ndim == 1:
+        # only one column:
+        return arr.reshape(-1, 1)
+    elif arr.ndim == 2:
+        assert arr.shape[0] == nrows
+        return arr
+    else:
+        msg = "Unexpected dimensionality of array"
+        raise ValueError(msg)
+
+
+def extended_rhs_factory(fnc_rhs, fnc_uref, fnc_duref, penalty_u, nx, nu, npar):
+    """Based on xdot = f(x, u), create a new rhs-function:
+     zdot = f_new(z, u_new) with z = [x, t], zdot = [xdot, 1] and u_new = uref(t) + u_correction
+
+     This serves for the approximate reproduction of known solutions, because u_corr
+     can be penalized separately.
+
+     To be applicable in pytrajectory, the Jacobian is also needed (create and return)
+
+     This function assumes that there is a penalty-term returned by f
+
+    :param fnc_rhs:
+    :param fnc_uref:
+    :param fnc_duref:
+    :param penalty_u:   penalty function for u_corr (or float)
+    :param nx:              number of state components (without time)
+    :param nu:
+    :param npar:
+
+    :return:            f_new and Df_new
+    """
+
+    assert isinstance(fnc_uref(0), np.ndarray)
+
+    if isinstance(penalty_u + 0.0, np.float):
+        u_penalty_scale = penalty_u
+
+        def fnc_penalty_u(xx, input, par, t):
+            res = 0
+            for u in input:
+                res += u**2
+            return res*u_penalty_scale
+    else:
+        assert callable(penalty_u)
+        fnc_penalty_u = penalty_u
+
+    xx = sp.symbols('x1:{}'.format(nx+1))
+    uu = sp.symbols('u1:{}'.format(nu+1))
+    duu = sp.symbols('du1:{}'.format(nu+1))
+    pp = sp.symbols('p1:{}'.format(npar + 1))
+
+    f_sym = sp.Matrix(fnc_rhs(xx, uu, pp))
+
+    Jx = f_sym.jacobian(xx)
+    Ju = f_sym.jacobian(uu)
+    Jp = f_sym.jacobian(pp)
+
+    # now assume u = uref(t) + u (no further time-dependence)
+    Jt = Ju*duu
+
+    Jx_fnc = sym2num_vectorfield(Jx, xx, uu, pp, cse=True, vectorized=True)
+    Ju_fnc = sym2num_vectorfield(Ju, xx, uu, pp, cse=True, vectorized=True)
+    Jp_fnc = sym2num_vectorfield(Jp, xx, uu, pp, cse=True, vectorized=True)
+
+    dbg = Container(Jx=Jx, Jp=Jp, Jt=Jt, f_sym=f_sym)
+
+    def rhs_extended(state, input, par, evalconstr=True):
+
+        xx = state[:-1]
+        t = state[-1]
+
+        u_num = fnc_uref(t) + np.array(input)
+        res = list(fnc_rhs(xx, u_num, par, evalconstr))
+
+        # add special penalty for u_corr
+        res[-1] += fnc_penalty_u(xx, input, par, t)
+        return res
+
+    # create the function of the jacobian
+    # noinspection PyPep8Naming
+    def DF(state, input, par):
+
+        c = dbg
+
+        zzn = ensure_colstack(state, nx + 1)
+        xxn = zzn[:-1, :]
+        ttn = zzn[-1:, :]  # last row
+
+        uun = ensure_colstack(input, nu)
+        ppn = ensure_colstack(par, npar)
+
+        u_ref = fnc_uref(ttn)
+        du_ref = fnc_duref(ttn)
+
+        Jx = Jx_fnc(xxn, uun, ppn)
+        Ju = Ju_fnc(xxn, uun, ppn)
+        Jp = Jp_fnc(xxn, uun, ppn)
+
+        # now calculate the jacobian columns w.r.t  to t (time)
+        # "scalar case" would be: Jt = np.dot(Ju, du_ref)
+        # however we have multiple values for x and u and therefore need to do some
+        # tensor magic with numpy einsum
+        # for background information https://stackoverflow.com/questions/45440984/
+
+        Jt = np.einsum("ijk,jk->ik", Ju, du_ref)
+
+        # Jt is now a stack of matrix-vector-products
+        # we need it to be rearranged (see below for meaning of axes)
+        Jt = Jt.reshape(Jt.shape + (-1,)).swapaxes(1, 2)  # add extra dimension and "transpose"
+
+        assert Jx.ndim == 3
+        # meaning of the dimensions (m, n, r):
+        # (m, n): normal Jacobian (m: elements of f, n: elements of [x1, x2, ..., xn])
+        # r: 2nd axis of state-array (its a stack of r columns,
+        # each representing a point in state-space)
+
+        # Ju, Jp, Jt are also 3-dimensional
+        assert Ju.ndim == Jp.ndim == Jt.ndim == 3
+
+        # Background: we want a big Jacobian w.r.t to [x,t,u,p]
+        # -> concatenate all together along the 'argument-axis' (index=1, above labeld `n`)
+
+        J_all = np.concatenate((Jx, Jt, Ju, Jp), axis=1)
+
+        return J_all
+
+    return rhs_extended, DF
+
+
 def calc_gramian(A, B, T, info=False):
     """
     calculate the gramian matrix corresponding to A, B, by numerically solving an ode
