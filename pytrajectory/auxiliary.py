@@ -848,7 +848,7 @@ def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, par, npts=500, return_err
         x = x_fnc(t)
         u = u_fnc(t)
 
-        ff = ff_fnc(x, u, par)
+        ff = ff_fnc(x, u, par).ravel()
         dx = dx_fnc(t)
 
         error.append(ff - dx)

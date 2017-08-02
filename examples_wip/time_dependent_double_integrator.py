@@ -109,7 +109,6 @@ S2 = TransitionProblem(rhs2, Ta, Tb, xa2, xb2, constraints=None,
                        refsol=refsol,
                        use_std_approach=False,
                        sol_steps=200,
-                       ierr=None,
                        show_ir=True)
 
 S = S2
