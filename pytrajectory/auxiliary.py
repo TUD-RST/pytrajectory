@@ -352,22 +352,34 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
     return f_num
 
 
-def check_expression(expr):
+def preprocess_expression(expr):
     """
-    Checks whether a given expression is a sympy expression or a list
-    of sympy expressions.
+    Checks whether a given expression is a sympify-able expression or a sequence of such.
 
     Throws an exception if not.
+
+    Parameters
+    ----------
+
+    expr : number, sympy-expression or sequence (list or tuple)
+
+    Returns
+    -------
+
+    expr
+        sympified expression or list of sympified expressions
     """
 
     # if input expression is an iterable
     # apply check recursively
-    if isinstance(expr, list) or isinstance(expr, tuple):
-        for e in expr:
-            check_expression(e)
+    if isinstance(expr, (list, tuple)):
+        return [preprocess_expression(e) for e in expr]
+
     else:
-        if not isinstance(expr, sp.Basic) and not isinstance(expr, sp.Matrix):
+        expr = sp.sympify(expr)
+        if not isinstance(expr, (sp.Basic, sp.Matrix)):
             raise TypeError("Not a sympy expression!")
+        return expr
 
 
 def make_cse_eval_function(input_args, replacement_pairs, ret_filter=None, namespace=None):
@@ -458,7 +470,7 @@ def cse_lambdify(args, expr, **kwargs):
 
     # check given expression
     try:
-        check_expression(expr)
+        expr = preprocess_expression(expr)
     except TypeError as err:
         raise NotImplementedError("Only (sequences of) sympy expressions are allowed, yet")
 
