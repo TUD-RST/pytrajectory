@@ -1033,7 +1033,7 @@ def extended_rhs_factory(fnc_rhs, fnc_uref, fnc_duref, penalty_u, nx, nu, npar):
     :param fnc_rhs:
     :param fnc_uref:
     :param fnc_duref:
-    :param penalty_u:   penalty function for u_corr (or float)
+    :param penalty_u:   penalty function for u_corr (or number)
     :param nx:              number of state components (without time)
     :param nu:
     :param npar:
@@ -1043,7 +1043,8 @@ def extended_rhs_factory(fnc_rhs, fnc_uref, fnc_duref, penalty_u, nx, nu, npar):
 
     assert isinstance(fnc_uref(0), np.ndarray)
 
-    if isinstance(penalty_u + 0.0, np.float):
+    # convenience: create an ad hoc penaltization of corrective input (u_corr)
+    if isinstance(penalty_u, Number):
         u_penalty_scale = penalty_u
 
         def fnc_penalty_u(xx, input, par, t):
@@ -1081,10 +1082,24 @@ def extended_rhs_factory(fnc_rhs, fnc_uref, fnc_duref, penalty_u, nx, nu, npar):
         t = state[-1]
 
         u_num = fnc_uref(t) + np.array(input)
-        res = list(fnc_rhs(xx, u_num, par, evalconstr))
+        res = np.empty(nx + 1 + 1*evalconstr)  # + 1 for d t/dt = 1 and optionally +1 for constr
 
-        # add special penalty for u_corr
-        res[-1] += fnc_penalty_u(xx, input, par, t)
+        f_res_original = fnc_rhs(xx, u_num, par, evalconstr)
+
+        if not len(f_res_original) in (nx, nx+1):
+            msg = "unexpected length for return value of orignial rhs function "
+            raise ValueError(msg)
+
+        res[:nx] = f_res_original[:nx]
+
+        # TODO: if we have a time transformation this must be changed
+        # account for pseudostate t (dt/dt = 1)
+        res[nx] = 1
+
+        if evalconstr:
+            res[nx+1] = f_res_original[nx]
+            # add special penalty for u_corr
+            res[nx+1] += fnc_penalty_u(xx, input, par, t)
         return res
 
     # create the function of the jacobian

@@ -58,16 +58,31 @@ sol = sp.solve(eqns, aa)
 
 #IPS()
 
-x_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 0), modules="numpy")
-v_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 1), modules="numpy")
-u_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 2), modules="numpy")
+def my_lambdify(*args, **kwargs):
+    original_shape = kwargs.pop('original_shape', None)
+    fnc = sp.lambdify(*args, **kwargs)
+    return aux.broadcasting_wrapper(fnc, original_shape)
+#
+# x_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 0), modules="numpy")
+# v_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 1), modules="numpy")
+# u_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 2), modules="numpy")
+# du_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 3), modules="numpy")
+
+x_ref_num = my_lambdify(t, ref.subs(sol).diff(t, 0), modules="numpy")
+v_ref_num = my_lambdify(t, ref.subs(sol).diff(t, 1), modules="numpy")
+u_ref_num = my_lambdify(t, ref.subs(sol).diff(t, 2), modules="numpy", original_shape=(1,))
+du_ref_num = my_lambdify(t, ref.subs(sol).diff(t, 3), modules="numpy", original_shape=(1,))
 
 
-def rhs1(state, u):
+def rhs1(state, u, pp, evalconstr=True):
+    pp  # ignored parameters
     x1, x2 = state
     u1, = u
 
     ff = [x2, u1]
+    if evalconstr:
+        c = 0
+        ff.append(c)
     return np.array(ff)
 
 if 0:
@@ -99,10 +114,15 @@ def rhs2(state, u, pp, evalconstr=True):
     return np.array(ff)
 
 tt = np.linspace(Ta, Tb, 1e3)
-xx_ref = np.column_stack((x_ref_num(tt), v_ref_num(tt), tt))
+xx_ref = np.column_stack((x_ref_num(tt).squeeze(), v_ref_num(tt).squeeze(), tt))
 refsol = aux.Container(tt=tt, xx=xx_ref, uu=tt*0, n_raise_spline_parts=0)
 
+if 1:
 
+    rhs2, DF = aux.extended_rhs_factory(rhs1, u_ref_num, du_ref_num,
+                                        penalty_u=input_penalty_scale, nx=len(xa1), nu=1, npar=1)
+
+IPS()
 S2 = TransitionProblem(rhs2, Ta, Tb, xa2, xb2, constraints=None,
                        eps=1e-1, su=30, kx=2, use_chains=False,
                        #first_guess={'seed': 4, 'scale': 10, 'u1': lambda t: 0},
@@ -116,6 +136,7 @@ S = S2
 # start BVP-solution
 x, u, p = S2.solve()
 
+IPS()
 sys.argv.append('plot')
 
 # the following code provides an animation of the system above

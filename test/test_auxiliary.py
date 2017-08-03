@@ -436,7 +436,11 @@ class TestCseLambdify(object):
         p2 = np.column_stack(([1], [1]))
 
         J2 = DF(z2, u2, p2)
+
+        assert ext_rhs(za, ua, pa, evalconstr=False).size == len(za)
+        assert ext_rhs(za, ua, pa).size == len(za) + 1
         IPS()
+
 
     def test_get_attributes_from_object(self):
         c = aux.Container(x=0, y=1.0, z="abc")
