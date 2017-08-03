@@ -1044,6 +1044,10 @@ def extended_rhs_factory(fnc_rhs, fnc_uref, fnc_duref, penalty_u, nx, nu, npar):
 
     assert isinstance(fnc_uref(0), np.ndarray)
 
+    # assume that the provided function has penalty terms
+    argspec = inspect.getargspec(fnc_rhs)
+    assert argspec.args[-1] == 'evalconstr'
+
     # convenience: create an ad hoc penaltization of corrective input (u_corr)
     if isinstance(penalty_u, Number):
         u_penalty_scale = penalty_u
@@ -1059,6 +1063,10 @@ def extended_rhs_factory(fnc_rhs, fnc_uref, fnc_duref, penalty_u, nx, nu, npar):
 
     xx = sp.symbols('x1:{}'.format(nx+1))
     uu = sp.symbols('u1:{}'.format(nu+1))
+    uu_corr = sp.symbols('u_corr_1:{}'.format(nu+1))
+    uu_ref = sp.symbols('u_ref_1:{}'.format(nu+1))
+    uu = sp.symbols('u1:{}'.format(nu+1))
+
     duu = sp.symbols('du1:{}'.format(nu+1))
     pp = sp.symbols('p1:{}'.format(npar + 1))
 
@@ -1102,6 +1110,9 @@ def extended_rhs_factory(fnc_rhs, fnc_uref, fnc_duref, penalty_u, nx, nu, npar):
             # add special penalty for u_corr
             res[nx+1] += fnc_penalty_u(xx, input, par, t)
         return res
+
+    def rhs_simulation(state, input, par):
+        return rhs_extended(state, input, par, evalconstr=False)
 
     # create the function of the jacobian
     # noinspection PyPep8Naming
@@ -1151,7 +1162,57 @@ def extended_rhs_factory(fnc_rhs, fnc_uref, fnc_duref, penalty_u, nx, nu, npar):
 
         return J_all
 
-    return rhs_extended, DF
+    def vf_f(state, input, par):
+        """
+        return only the drift part of the vector-field (including u_ref, excluding u_corr)
+
+        Note: This is only needed for scientific interest and not for the actual calculation of a
+        solution
+
+        :param state:
+        :param input:
+        :param par:
+        :return:
+        """
+        assert isinstance(input, np.ndarray)
+        return rhs_extended(state=state, input=input*0, par=par)
+
+    def vf_g(state, input, par):
+        """
+        return only the input-dependent vector-field
+
+        Note: This is only needed for scientific interest and not for the actual calculation of a
+        solution
+
+        :param state:
+        :param input:
+        :param par:
+        :return:
+        """
+
+        # this could be done faster but we would need df/du for that
+        input = np.ones_like(input)
+        res = rhs_extended(state, input, par) - rhs_extended(state=state, input=input*0, par=par)
+        return res
+
+    assert isinstance(f_sym, sp.MatrixBase)
+    # assert getattr(f_sym, 'has_eval_constr', False)
+    f_sym_extended = sp.Matrix([0]*(nx+2))
+    f_sym_extended[:nx, :] = f_sym[:nx, :]
+    f_sym_extended[nx, 0] = 1  # extension with pseudostate t
+
+    t = sp.Symbol('t')
+    f_sym_extended[nx+1, 0] = f_sym[nx, 0]  # copy penalty-terms
+    f_sym_extended[nx+1, 0] += fnc_penalty_u(xx, uu_corr, pp, t)  # more penalty-terms
+
+    uu_rplmts = zip(uu, sp.Matrix(uu_corr) + sp.Matrix(uu_ref))
+    f_sym = f_sym.subs(uu_rplmts)
+    f_sym_extended = f_sym_extended.subs(uu_rplmts)
+
+    res = Container(ff_vectorized=rhs_extended, f_num_simulation=rhs_simulation, Df_vectorized=DF,
+                    vf_f=vf_f, vf_g=vf_g, f_sym_matrix=f_sym, f_sym_full_matrix=f_sym_extended)
+
+    return res
 
 
 def calc_gramian(A, B, T, info=False):

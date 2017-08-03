@@ -2,17 +2,13 @@
 
 import numpy as np
 import sympy as sp
-from scipy import sparse
 import pickle
 import copy
 import time
-import inspect
 from collections import OrderedDict
 
-from trajectories import Trajectory
 from collocation import CollocationSystem
 from simulation import Simulator
-from solver import Solver
 import auxiliary
 import visualisation
 import splines

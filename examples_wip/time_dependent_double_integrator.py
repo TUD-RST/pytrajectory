@@ -119,8 +119,11 @@ refsol = aux.Container(tt=tt, xx=xx_ref, uu=tt*0, n_raise_spline_parts=0)
 
 if 1:
 
-    rhs2, DF = aux.extended_rhs_factory(rhs1, u_ref_num, du_ref_num,
+    rC = aux.extended_rhs_factory(rhs1, u_ref_num, du_ref_num,
                                         penalty_u=input_penalty_scale, nx=len(xa1), nu=1, npar=1)
+
+    rhs2 = rC.ff_vectorized
+    Df = rC.Df_vectorized
 
 IPS()
 S2 = TransitionProblem(rhs2, Ta, Tb, xa2, xb2, constraints=None,

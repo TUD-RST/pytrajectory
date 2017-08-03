@@ -508,10 +508,7 @@ class Spline(object):
         if set_coeffs:
             self.set_coefficients(free_coeffs=free_coeffs)
 
-        if self.tag == "u1":
-            pass
-            # IPS()
-        return free_coeffs  # , tt, slope_places
+        return free_coeffs, tt, slope_places
 
     def interpolate(self, fnc=None, m0=None, mn=None, set_coeffs=False):
         """

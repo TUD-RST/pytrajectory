@@ -267,9 +267,31 @@ class DynamicalSystem(object):
 
     def _create_f_and_Df_objects(self):
         """
-        Pytrajectory needs
+        Pytrajectory needs several types of the systems vectorfield and its jacobians:
+
+        callable, symbolic, expressions, with additional constraints, without
+
+        This method creates them all:
+
+        # symbolic expressions
+        self.f_sym_full_matrix
+        self.f_sym_matrix
+        self.Df_expr
+
+        # callables
+        self.vf_f       # drift part
+        self.vf_g       # input vf
+
+        self.f_num
+        self.f_num_simulation
+        self.ff_vectorized
+        self.Df_vectorized
+
+
         :return:
         """
+        # TODO: Optionally provide Jacobian and symbolic expressions separately
+        # (to enable time dependency inside the systems equation)
 
         # with (penalty-) constraints (if present)
         self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, self.pps))
@@ -293,10 +315,8 @@ class DynamicalSystem(object):
                                             u_sym=self.inputs, p_sym=self.par,
                                             vectorized=False, cse=False, evalconstr=None)
 
-        # create a numeric counterpart for the vector field
-        # for faster evaluation
-
-        # IPS()
+        # This function is used for plotting:
+        # TODO: also use vectorized form there
         self.f_num = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
                                              u_sym=self.inputs, p_sym=self.par,
                                              vectorized=False, cse=False, evalconstr=True)
@@ -314,22 +334,17 @@ class DynamicalSystem(object):
         # ---
         # these objects were formerly defined in the class CollocationSystem:
 
+        # the vector field function which is used by CollocationSystem.build()
+        # to build the system of target-equations
         self.ff_vectorized = aux.sym2num_vectorfield(self.f_sym_full_matrix, self.states,
                                                      self.inputs, self.par,
                                                      vectorized=True, cse=True)
 
         all_symbols = sp.symbols(self.states + self.inputs + self.par)
 
-        all_symbols = sp.symbols(self.states + self.inputs + self.par)
-
-        # TODO: Optionally provide Jacobian separately (to enable time dependency)
-        # Generally it would be better to produce and store anything related to the system
-        # symbolic/numeric Vf/jacobian in the class `dynamical system`
         self.Df_expr = sp.Matrix(self.f_sym_full_matrix).jacobian(all_symbols)
         self.Df_vectorized = aux.sym2num_vectorfield(self.Df_expr, self.states, self.inputs,
                                                      self.par, vectorized=True, cse=True)
-
-
 
     # TODO: handle additional free parameters (if needed). Or at least raise NotImplementedError
     # Note: the lienarization approach did not yield promising results, therefore this code is
