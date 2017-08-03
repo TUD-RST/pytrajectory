@@ -86,6 +86,8 @@ class CollocationSystem(object):
         self.ff_vectorized = sym2num_vectorfield(f, dynsys.states, dynsys.inputs, dynsys.par,
                                                  vectorized=True, cse=True)
         # TODO: Optionally provide Jacobian separately (to enable time dependency)
+        # Generally it would be better to produce and store anything related to the system
+        # symbolic/numeric Vf/jacobian in the class `dynamical system`
         Df = sp.Matrix(f).jacobian(all_symbols)
         self.Df_vectorized = sym2num_vectorfield(Df, dynsys.states, dynsys.inputs, dynsys.par,
                                                  vectorized=True, cse=True)
