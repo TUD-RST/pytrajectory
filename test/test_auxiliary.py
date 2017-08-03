@@ -441,7 +441,6 @@ class TestCseLambdify(object):
         assert ext_rhs(za, ua, pa).size == len(za) + 1
         IPS()
 
-
     def test_get_attributes_from_object(self):
         c = aux.Container(x=0, y=1.0, z="abc")
         c.a = 10

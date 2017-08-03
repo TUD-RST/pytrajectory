@@ -4,10 +4,11 @@ import numpy as np
 import sympy as sp
 import inspect
 
-import auxiliary
+import auxiliary as aux
 from log import logging
 
 
+# noinspection PyPep8Naming
 class DynamicalSystem(object):
     """
     Provides access to information about the dynamical system that is the
@@ -60,13 +61,13 @@ class DynamicalSystem(object):
         if self.n_pos_args == 2:
             if f_sym.has_constraint_penalties:
                 def f_sym_wrapper(xx, uu, pp, evalconstr=True):
-                    # ignore pp
+                    pp  # ignore pp
                     return f_sym(xx, uu, evalconstr)
                 self.f_sym = f_sym_wrapper
 
             else:
                 def f_sym_wrapper(xx, uu, pp):
-                    # ignore pp
+                    pp  # ignore pp
                     return f_sym(xx, uu)
 
             f_sym_wrapper.has_constraint_penalties = f_sym.has_constraint_penalties
@@ -75,8 +76,8 @@ class DynamicalSystem(object):
         self.f_sym.n_par = self.n_par
         # set names of the state and input variables
         # (will be used as keys in various dictionaries)
-        self.states = tuple(['x{}'.format( i +1) for i in xrange(self.n_states)])
-        self.inputs = tuple(['u{}'.format( j +1) for j in xrange(self.n_inputs)])
+        self.states = tuple(['x{}'.format( i + 1) for i in xrange(self.n_states)])
+        self.inputs = tuple(['u{}'.format( j + 1) for j in xrange(self.n_inputs)])
 
         # TODO_ck: what does this mean??
         # Todo_yx: if self.par is a list,then the following 2 sentences
@@ -84,7 +85,7 @@ class DynamicalSystem(object):
         # self.par.append(tuple('z_par')) ##:: [('z_par',)]
 
         self.par = tuple \
-            (['z_par_{}'.format( k +1) for k in xrange(self.n_par)]) # z_par_1, z_par_2,
+            (['z_par_{}'.format( k + 1) for k in xrange(self.n_par)])  # z_par_1, z_par_2,
 
         self.xxs = sp.symbols(self.states)
         self.uus = sp.symbols(self.inputs)
@@ -107,30 +108,31 @@ class DynamicalSystem(object):
             logging.warn("System is not input affine. -> VF g has no meaning.")
 
         # vf_f and vf_g are not really neccessary, just for scientific playing
-        self.vf_f = auxiliary.sym2num_vectorfield(f_sym=ff, x_sym=self.states,
-                                                  u_sym=self.inputs, p_sym=self.par,
-                                                  vectorized=False, cse=False, evalconstr=None)
+        self.vf_f = aux.sym2num_vectorfield(f_sym=ff, x_sym=self.states,
+                                            u_sym=self.inputs, p_sym=self.par,
+                                            vectorized=False, cse=False, evalconstr=None)
 
-        self.vf_g = auxiliary.sym2num_vectorfield(f_sym=gg, x_sym=self.states,
-                                                  u_sym=self.inputs, p_sym=self.par,
-                                                  vectorized=False, cse=False, evalconstr=None)
+        self.vf_g = aux.sym2num_vectorfield(f_sym=gg, x_sym=self.states,
+                                            u_sym=self.inputs, p_sym=self.par,
+                                            vectorized=False, cse=False, evalconstr=None)
 
         # create a numeric counterpart for the vector field
         # for faster evaluation
 
         # IPS()
-        self.f_num = auxiliary.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-                                                   u_sym=self.inputs, p_sym=self.par,
-                                                   vectorized=False, cse=False, evalconstr=True)
+        self.f_num = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
+                                             u_sym=self.inputs, p_sym=self.par,
+                                             vectorized=False, cse=False, evalconstr=True)
 
         # to handle penalty contraints it is necessary to distinguish between
         # the extended vectorfield (state equations + constraints) and
         # the basic vectorfiled (only state equations)
         # for simulation, only the the basic vf shall be used
 
-        self.f_num_simulation = auxiliary.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-                                                              u_sym=self.inputs, p_sym=self.par,
-                                                              vectorized=False, cse=False, evalconstr=False)
+        self.f_num_simulation = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
+                                                        u_sym=self.inputs, p_sym=self.par,
+                                                        vectorized=False, cse=False,
+                                                        evalconstr=False)
 
     def _analyze_f_sym_signature(self):
         """
@@ -233,7 +235,7 @@ class DynamicalSystem(object):
                 n_inputs = j
                 found_n_inputs = True
             except ValueError as err:
-                if not "values to unpack" in err.message:
+                if "values to unpack" not in err.message:
                     logging.error("unexpected ValueError")
                     raise err
                 # unpacking error inside f_sym
@@ -292,7 +294,7 @@ class DynamicalSystem(object):
 
         # add state boundary values
         for i, x in enumerate(self.states):
-            boundary_values[x] = (xa[i], xb[i])  ##:: bv = {'x1':(xa[0],xb[0]),...}
+            boundary_values[x] = (xa[i], xb[i])  # :: bv = {'x1':(xa[0],xb[0]),...}
 
         # add input boundary values
         for j, u in enumerate(self.inputs):
@@ -301,6 +303,8 @@ class DynamicalSystem(object):
         return boundary_values
 
     # TODO: handle additional free parameters (if needed). Or at least raise NotImplementedError
+    # Note: the lienarization approach did not yield promising results, therefore this code is
+    # obsolete
     def get_linearization(self, xref, uref=None):
         """
         return A, B matrices of the Jacobian Linearization

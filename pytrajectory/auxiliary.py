@@ -1019,6 +1019,7 @@ def ensure_colstack(seq, nrows):
         raise ValueError(msg)
 
 
+# noinspection PyPep8Naming
 def extended_rhs_factory(fnc_rhs, fnc_uref, fnc_duref, penalty_u, nx, nu, npar):
     """Based on xdot = f(x, u), create a new rhs-function:
      zdot = f_new(z, u_new) with z = [x, t], zdot = [xdot, 1] and u_new = uref(t) + u_correction
@@ -1424,6 +1425,8 @@ def get_attributes_from_object(obj):
     x = myContainer.x
     y = myContainer.y
     ...
+
+    Note that this function is only intended to be used inside unit-tests
 
     :param obj:
     :return:        tuple of attribute values
