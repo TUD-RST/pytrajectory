@@ -91,48 +91,11 @@ class DynamicalSystem(object):
         self.uus = sp.symbols(self.inputs)
         self.pps = sp.symbols(self.par)
 
-        # with (penalty-) constraints (if present)
-        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, self.pps))
-
-        # without (penalty-) constraints
-        self.f_sym_matrix = self.f_sym_full_matrix[:self.n_states, :]
-
         # init dictionary for boundary values
         self.boundary_values = self._get_boundary_dict_from_lists(xa, xb, ua, ub)
 
-        # create vectorfields f and g (symbolically and as numerical function)
+        self._create_f_and_Df_objects()
 
-        ff = self.f_sym_matrix.subs(zip(self.uus, [0]*self.n_inputs))
-        gg = self.f_sym_matrix.jacobian(self.uus)
-        if gg.atoms(sp.Symbol).intersection(self.uus):
-            logging.warn("System is not input affine. -> VF g has no meaning.")
-
-        # vf_f and vf_g are not really neccessary, just for scientific playing
-        self.vf_f = aux.sym2num_vectorfield(f_sym=ff, x_sym=self.states,
-                                            u_sym=self.inputs, p_sym=self.par,
-                                            vectorized=False, cse=False, evalconstr=None)
-
-        self.vf_g = aux.sym2num_vectorfield(f_sym=gg, x_sym=self.states,
-                                            u_sym=self.inputs, p_sym=self.par,
-                                            vectorized=False, cse=False, evalconstr=None)
-
-        # create a numeric counterpart for the vector field
-        # for faster evaluation
-
-        # IPS()
-        self.f_num = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-                                             u_sym=self.inputs, p_sym=self.par,
-                                             vectorized=False, cse=False, evalconstr=True)
-
-        # to handle penalty contraints it is necessary to distinguish between
-        # the extended vectorfield (state equations + constraints) and
-        # the basic vectorfiled (only state equations)
-        # for simulation, only the the basic vf shall be used
-
-        self.f_num_simulation = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-                                                        u_sym=self.inputs, p_sym=self.par,
-                                                        vectorized=False, cse=False,
-                                                        evalconstr=False)
 
     def _analyze_f_sym_signature(self):
         """
@@ -301,6 +264,72 @@ class DynamicalSystem(object):
             boundary_values[u] = (ua[j], ub[j])
 
         return boundary_values
+
+    def _create_f_and_Df_objects(self):
+        """
+        Pytrajectory needs
+        :return:
+        """
+
+        # with (penalty-) constraints (if present)
+        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, self.pps))
+
+        # without (penalty-) constraints
+        self.f_sym_matrix = self.f_sym_full_matrix[:self.n_states, :]
+
+        # create vectorfields f and g (symbolically and as numerical function)
+
+        ff = self.f_sym_matrix.subs(zip(self.uus, [0]*self.n_inputs))
+        gg = self.f_sym_matrix.jacobian(self.uus)
+        if gg.atoms(sp.Symbol).intersection(self.uus):
+            logging.warn("System is not input affine. -> VF g has no meaning.")
+
+        # vf_f and vf_g are not really neccessary, just for scientific playing
+        self.vf_f = aux.sym2num_vectorfield(f_sym=ff, x_sym=self.states,
+                                            u_sym=self.inputs, p_sym=self.par,
+                                            vectorized=False, cse=False, evalconstr=None)
+
+        self.vf_g = aux.sym2num_vectorfield(f_sym=gg, x_sym=self.states,
+                                            u_sym=self.inputs, p_sym=self.par,
+                                            vectorized=False, cse=False, evalconstr=None)
+
+        # create a numeric counterpart for the vector field
+        # for faster evaluation
+
+        # IPS()
+        self.f_num = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
+                                             u_sym=self.inputs, p_sym=self.par,
+                                             vectorized=False, cse=False, evalconstr=True)
+
+        # to handle penalty contraints it is necessary to distinguish between
+        # the extended vectorfield (state equations + constraints) and
+        # the basic vectorfiled (only state equations)
+        # for simulation, only the the basic vf shall be used
+
+        self.f_num_simulation = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
+                                                        u_sym=self.inputs, p_sym=self.par,
+                                                        vectorized=False, cse=False,
+                                                        evalconstr=False)
+
+        # ---
+        # these objects were formerly defined in the class CollocationSystem:
+
+        self.ff_vectorized = aux.sym2num_vectorfield(self.f_sym_full_matrix, self.states,
+                                                     self.inputs, self.par,
+                                                     vectorized=True, cse=True)
+
+        all_symbols = sp.symbols(self.states + self.inputs + self.par)
+
+        all_symbols = sp.symbols(self.states + self.inputs + self.par)
+
+        # TODO: Optionally provide Jacobian separately (to enable time dependency)
+        # Generally it would be better to produce and store anything related to the system
+        # symbolic/numeric Vf/jacobian in the class `dynamical system`
+        self.Df_expr = sp.Matrix(self.f_sym_full_matrix).jacobian(all_symbols)
+        self.Df_vectorized = aux.sym2num_vectorfield(self.Df_expr, self.states, self.inputs,
+                                                     self.par, vectorized=True, cse=True)
+
+
 
     # TODO: handle additional free parameters (if needed). Or at least raise NotImplementedError
     # Note: the lienarization approach did not yield promising results, therefore this code is

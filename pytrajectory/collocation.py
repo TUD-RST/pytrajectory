@@ -62,37 +62,14 @@ class CollocationSystem(object):
         self. guess = None
         self.n_cpts = None
         
-        # create vectorized versions of the control system's vector field
+        # get vectorized versions of the control system's vector field
         # and its jacobian for the faster evaluation of the collocation equation system `G`
         # and its jacobian `DG` (--> see self.build())
         
-        # ??
-        ##:: f_sym is a function, but here the self-variable are already input, so f is value,
-        # not function. f = array([x2, u1, x4, -u1*(0.9*cos(x3) + 1) - 0.9*x2**2*sin(x3)])
-
-        xx, uu, pp = sp.symbols(dynsys.states), sp.symbols(dynsys.inputs), sp.symbols(dynsys.par)
-        f = dynsys.f_sym(xx, uu, pp)
-
-        # TODO_ok: check order of variables of differentiation ([x,u] vs. [u, x])
-        #       because in dot products in later evaluation of `DG` with vector `c`
-        #       values for u come first in `c`
-        
-        # TODO_ok: remove this comment after reviewing the problem
-        # previously the jacobian was calculated wrt to strings which triggered strange
-        # strange sympy behavior (bug) for systems with more than 9 variables
-        # workarround: we use real symbols now
-        all_symbols = sp.symbols(dynsys.states + dynsys.inputs + dynsys.par) 
-
-        self.ff_vectorized = sym2num_vectorfield(f, dynsys.states, dynsys.inputs, dynsys.par,
-                                                 vectorized=True, cse=True)
-        # TODO: Optionally provide Jacobian separately (to enable time dependency)
-        # Generally it would be better to produce and store anything related to the system
-        # symbolic/numeric Vf/jacobian in the class `dynamical system`
-        Df = sp.Matrix(f).jacobian(all_symbols)
-        self.Df_vectorized = sym2num_vectorfield(Df, dynsys.states, dynsys.inputs, dynsys.par,
-                                                 vectorized=True, cse=True)
-        self.f = f
-        self.Df = Df
+        self.Df_vectorized = dynsys.Df_vectorized
+        self.ff_vectorized = dynsys.ff_vectorized
+        self.f = dynsys.f_sym_full_matrix
+        self.Df = dynsys.Df_expr
 
         self.trajectories = Trajectory(masterobject, dynsys, **kwargs)
 
