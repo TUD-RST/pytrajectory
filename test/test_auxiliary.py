@@ -414,43 +414,6 @@ class TestCseLambdify(object):
             plt.plot(pts_noborders, pts_noborders*0, '.' )
             plt.show()
 
-    def test_rhs_extended_factory(self):
-
-        def rhs_di(state, u, pp, evalconstr=True):
-            pp  # ignored parameters
-            x1, x2 = state
-            u1, = u
-            u1_all = u1
-
-            ff = [x2**2, u1]
-            if evalconstr:
-                c = 0
-                ff.append(c)
-            return np.array(ff)
-
-        fnc_u = lambda t: np.atleast_1d(t*0)
-        fnc_du = lambda t: np.atleast_1d(t*0)
-
-        xa = [0, 0]
-        za = [0, 0, 0]
-        ua = [0]
-        pa = [1]
-
-        rC = aux.extended_rhs_factory(rhs_di, fnc_u, fnc_du,  penalty_u=.1, nx=2, nu=1, npar=1)
-
-        ff_vectorized, Df_vectorized = aux.get_attributes_from_object(rC)
-
-        J1 = Df_vectorized(za, ua, pa)
-
-        z2 = np.column_stack((za, [1, 2, 3]))
-        u2 = np.column_stack(([0], [1]))
-        p2 = np.column_stack(([1], [1]))
-
-        J2 = Df_vectorized(z2, u2, p2)
-
-        assert ff_vectorized(za, ua, pa, evalconstr=False).size == len(za)
-        assert ff_vectorized(za, ua, pa).size == len(za) + 1
-
     def test_get_attributes_from_object(self):
         c = aux.Container(x=0, y=1.0, z="abc")
         c.a = 10

@@ -96,7 +96,6 @@ class DynamicalSystem(object):
 
         self._create_f_and_Df_objects()
 
-
     def _analyze_f_sym_signature(self):
         """
         This function analyzes the calling signature of the user_provided function f_sym
@@ -112,6 +111,9 @@ class DynamicalSystem(object):
             raise TypeError(msg)
 
         n_all_args = len(argspec.args)
+
+        # TODO: It should be possible to get rid of evalconstr argument
+        # every result-component which has an index >= xn could be considered as penalty term
 
         msg = "Unexpected number of arguments in f_sym"
         assert 2 <= n_all_args <= 4, msg
@@ -290,8 +292,8 @@ class DynamicalSystem(object):
 
         :return:
         """
-        # TODO: Optionally provide Jacobian and symbolic expressions separately
-        # (to enable time dependency inside the systems equation)
+        # TODO: to enable time dependency inside the systems equation
+        # Expected rhs-signature: rhs(x, u, t, p, evalconstr))
 
         # with (penalty-) constraints (if present)
         self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, self.pps))
