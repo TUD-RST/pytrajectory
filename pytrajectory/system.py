@@ -221,14 +221,8 @@ class TransitionProblem(object):
     def unconstrain(self):
         """
         This method is used to enable compliance with desired box constraints given by the user.
-        It transforms the vectorfield by projecting the constrained state variables on
+        It transforms the vector-field by projecting the constrained state variables on
         new unconstrained ones.
-
-        Parameters
-        ----------
-
-        constraints : dict
-            The box constraints for the state variables
 
         """
 
