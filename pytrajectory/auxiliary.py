@@ -1266,16 +1266,24 @@ def to_np(spobj, dtype=float):
     """
     Convert a sympy object to a numpy array
     :param spobj:       sympy object to convert
-    :param dtype:       dtype-arg for the resulting array
+    :param dtype:       dtype-arg for the resulting array (float should be used for numbers)
     :return:
     """
 
-    # this is copied from symbtools package
+    # this is copied (and adapted) from symbtools package
 
-    # because np.int can not understand sp.Integer
-    # we temporarily convert to float
-    arr_float = np.vectorize(float)
-    arr1 = arr_float(np.array(spobj))
+    if dtype is float:
+        # because np.int can not understand sp.Integer
+        # we temporarily convert to float
+        arr_float = np.vectorize(float)
+        arr1 = arr_float(np.array(spobj))  # the inner array is with dtype: object
+    else:
+        arr1 = spobj
+
+    if isinstance(arr1, sp.MatrixBase):
+        # this avoids strange numpy behavior: __array__() takes exactly  1 argument (2 given)
+        arr1 = arr1.tolist()
+
     return np.array(arr1, dtype)
 
 

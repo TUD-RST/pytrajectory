@@ -291,6 +291,17 @@ class TestCseLambdify(object):
         for obj, res in tests_:
             assert aux.is_flat_sequence_of_numbers(obj) == res
 
+    def test_to_np(self):
+        a = sp.Matrix([7, 8, 9, 10.3])
+        A = a.reshape(2, 2)
+        assert np.alltrue( aux.to_np(a) == np.array(list(a)).reshape(-1, 1) )
+        assert np.alltrue( aux.to_np(A) == np.array(list(a)).reshape(A.shape) )
+
+        x1, x2 = sp.symbols("x1, x2")
+
+        B = sp.Matrix(3, 3, lambda i, j: x1*i + x2*j)
+        assert np.alltrue( aux.to_np(B, dtype=object) == np.array(list(B)).reshape(B.shape) )
+
     # new_interpolate is currently not used because it tends to unwanted oscillations
     @pytest.mark.xfail(reason='this only works for the method Spline.new_interpolate')
     def test_spline_interpolate(self):
@@ -490,14 +501,6 @@ if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")
 
     tests = TestCseLambdify()
-    # tests.test_spline_interpolate()
-    # tests.test_calc_chebyshev_nodes()
-    tests.test_broadcasting_wrapper()
+    tests.test_to_np()
 
-    tests.test_is_flat_sequence_of_numbers()
-    tests.test_cse_lambdify()
-    tests.test_sym2num_matrix()
-    tests.test_get_attributes_from_object()
-
-    understand_einsum()
-    tests.test_rhs_extended_factory()
+    # understand_einsum()
