@@ -71,10 +71,10 @@ class ConstraintHandler(object):
             Psi.append(expr1)
             Gamma.append(expr2)
 
-        nx = dynsys.n_states
-        nu = dynsys.n_inputs
+        self.nx = dynsys.n_states
+        self.nu = dynsys.n_inputs
 
-        assert len(Psi) == nx + nu
+        assert len(Psi) == self.nx + self.nu
         self.Psi = Psi = sp.Matrix(Psi)
         self.Jac_Psi = Psi.jacobian(self.z_tilde)
 
@@ -93,10 +93,10 @@ class ConstraintHandler(object):
         self._create_num_functions()
 
         # transformed boundary conditions
-        arg_xa = list(dynsys.xa) + [0]*nu
-        arg_xb = list(dynsys.xb) + [0]*nu
-        self.ya = self.Psi_fnc(*arg_xa).ravel()[:nx]
-        self.yb = self.Psi_fnc(*arg_xb).ravel()[:nx]
+        arg_xa = list(dynsys.xa) + [0]*self.nu
+        arg_xb = list(dynsys.xb) + [0]*self.nu
+        self.ya = self.Psi_fnc(*arg_xa).ravel()[:self.nx]
+        self.yb = self.Psi_fnc(*arg_xb).ravel()[:self.nx]
 
     def _create_num_functions(self):
         """
@@ -106,7 +106,7 @@ class ConstraintHandler(object):
         :return: None
         """
         tmp_fnc = sp.lambdify(self.z_tilde, self.Psi, modules="numpy")
-        self.Psi_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Psi.shape)
+        self.Psi_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Psi.shape, squeeze_axis=1)
 
         tmp_fnc = sp.lambdify(self.z_tilde, self.Jac_Psi)
         self.Jac_Psi_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Jac_Psi.shape)
@@ -119,10 +119,17 @@ class ConstraintHandler(object):
 
         # inverse transformation and Jacobian
         tmp_fnc = sp.lambdify(self.z, self.Gamma, modules="numpy")
-        self.Gamma_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Gamma.shape)
+        self.Gamma_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Gamma.shape, squeeze_axis=1)
 
         tmp_fnc = sp.lambdify(self.z, self.Jac_Gamma)
         self.Jac_Gamma_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Jac_Gamma.shape)
+
+        # From the Jacobian of the inverse only the part corresponding to the state is needed
+        # Background: y_dot = Jac_Gamma_fnc(z)[:nx, :nx] * xdot
+        # for the sake of simplicity we create a separate function for this
+
+        tmp_fnc = sp.lambdify(self.z, self.Jac_Gamma[:self.nx, :self.nx])
+        self.Jac_Gamma_state_fnc = aux.broadcasting_wrapper(tmp_fnc, (self.nx, self.nx))
 
     def _preprocess_constraints(self, constraints=None):
         """

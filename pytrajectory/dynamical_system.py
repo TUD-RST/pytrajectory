@@ -342,8 +342,8 @@ class DynamicalSystem(object):
         # the vector field function which is used by CollocationSystem.build()
         # to build the system of target-equations
         self.ff_vectorized = aux.sym2num_vectorfield(self.f_sym_full_matrix, self.states,
-                                                     self.inputs, self.par,
-                                                     vectorized=True, cse=True)
+                                                     self.inputs, self.par, vectorized=True,
+                                                     cse=True, squeeze_axis=1)
 
         all_symbols = sp.symbols(self.states + self.inputs + self.par)
 

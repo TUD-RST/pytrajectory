@@ -69,6 +69,13 @@ if __name__ == "__main__":
     # or: py.test -s --pdbcls=IPython.terminal.debugger:TerminalPdb %filename
 
     tests = TestExamples()
-    tests.test_di_con_u1_x2_projective_integrator()
-    tests.test_di_con_u1_x2_projective_integrator_with_ierr()
+
+    from pytrajectory import log
+    log.console_handler.setLevel(10)
+
+    tests.test_di_integrator_pure()
+    print "-"*10
+    # tests.test_di_con_u1_x2_projective_integrator()
+    # print "-"*10
+    # tests.test_di_con_u1_x2_projective_integrator_with_ierr()
 

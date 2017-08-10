@@ -60,7 +60,9 @@ class TestConstraintHandler(object):
         assert np.alltrue(chandler.ya == [0, 1.45])
         assert np.allclose(chandler.yb,  [ 0.9868766,  1.45     ])
 
-        nz = 3  # nx + nu
+        nx = 2
+        nu = 1
+        nz = nx + nu
         assert np.allclose(chandler.Jac_Psi_fnc(0, 0, 0), np.eye(nz, nz))
 
         # test values bigger than the bounds. Expect diag-Matrix with small positive values
@@ -80,11 +82,13 @@ class TestConstraintHandler(object):
         JJ = chandler.Jac_Psi_fnc(*zz_tilde)
         dJJ = chandler.dJac_Psi_fnc(*zz_tilde)
 
-        # squeeze is necessary here because result-shape is (nx, 1, n_points)
-        # because Psi-shape is (nx, 1) (thus it is a matrix)
-        zz = chandler.Psi_fnc(*zz_tilde).squeeze()  # now shape = (nx, n_points)
+        zz = chandler.Psi_fnc(*zz_tilde)
 
+        # Full Jacobian of inverse
         JJ_Gamma = chandler.Jac_Gamma_fnc(*zz)
+
+        # Part of Jacobian of inverse that corresponds to the state (i.e. without input)
+        JJ_Gamma_state = chandler.Jac_Gamma_state_fnc(*zz)
 
         assert zz.shape == zz_tilde.shape
         assert JJ_Gamma.shape == JJ.shape
@@ -97,22 +101,26 @@ class TestConstraintHandler(object):
             dJ = dJJ[:, :, :, i]  # 3d-array
 
             J_Gamma = JJ_Gamma[:, :, i]  # 2d-array
+            J_Gamma_state = JJ_Gamma_state[:, :, i]  # 2d-array
 
             assert np.alltrue(chandler.Jac_Psi_fnc(*z_tilde) == J)
             assert np.alltrue(chandler.dJac_Psi_fnc(*z_tilde) == dJ)
 
             # check broadcasting consistency
             z_values = chandler.Psi_fnc(*z_tilde)  # bounded values
-            assert np.allclose(z, z_values.squeeze())
+            assert np.allclose(z, z_values)
 
             # test whether inverse function works
-            z_tilde_values = chandler.Gamma_fnc(*z_values).ravel()
+            z_tilde_values = chandler.Gamma_fnc(*z_values)
             assert np.allclose(z_tilde_values, z_tilde)
 
             # test inverse matrices
-
             res = np.dot(J_Gamma, J)
             assert np.allclose(res, np.eye(res.shape[1]))
+
+            # test consistency of state-part of Jac_Gamma:
+
+            assert np.alltrue(J_Gamma_state == J_Gamma[:nx, :nx])
 
         # we only have "diagonal" entries
         assert np.count_nonzero(dJJ) == nz * n_points

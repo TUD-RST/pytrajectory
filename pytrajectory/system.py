@@ -838,7 +838,7 @@ class TransitionProblem(object):
         # get list of start values
         start = []
 
-        if self.constraints is not None:
+        if self.constraints not in (None, OrderedDict()):
             sys = self._dyn_sys_orig
         else:
             sys = self.dyn_sys

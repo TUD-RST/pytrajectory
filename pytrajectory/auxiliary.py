@@ -226,7 +226,8 @@ def find_integrator_chains(dyn_sys):
     return chains, eqind
 
 
-def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False, evalconstr=None):
+def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
+                        evalconstr=None, squeeze_axis=None):
     """
     This function takes a callable vector field of a dynamical system that is to be evaluated with
     symbols for the state and input variables and returns a corresponding function that can be
@@ -255,6 +256,8 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
     evalconstr : None (default) or bool
         Whether or not to include the constraint equations (which might be represented
         as the last part of the vf)
+
+    squeeze_axis : None or int, see function aux.broadcasting_wrapper for details
 
     Returns
     -------
@@ -342,7 +345,7 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
         shape = (len(F_sym), 1)
     else:
         shape = F_sym.shape
-    _f_num_bc = broadcasting_wrapper(_f_num, shape)
+    _f_num_bc = broadcasting_wrapper(_f_num, shape, squeeze_axis)
 
     def f_num(x, u, p):
         xup = stack((x, u, p))
@@ -559,7 +562,7 @@ def cse_lambdify(args, expr, **kwargs):
     return cse_fnc
 
 
-def broadcasting_wrapper(original_fnc, original_shape=None):
+def broadcasting_wrapper(original_fnc, original_shape=None, squeeze_axis=None):
     """
     Create a wrapper function which takes care of correctly broadcasting the result.
 
@@ -574,6 +577,7 @@ def broadcasting_wrapper(original_fnc, original_shape=None):
 
     :param original_fnc:
     :param original_shape:  tuple, or None (None means scalar)
+    :param squeeze_axis:    axis which will be squeezed before returning the result
     :return:
     """
 
@@ -591,6 +595,24 @@ def broadcasting_wrapper(original_fnc, original_shape=None):
         n_args = len(argspec.args)
 
     assert n_args > 0
+
+    def squeezer(res):
+        """
+        Optionally apply squeeze to a selected axis
+
+        Background: A vectorfield is a sympy matrix with shape (nx, 1)
+        Evaluated at nc different point we get an array with shape (nx, 1, nc)
+
+        However, an array with (nx, nc) is sometimes more practical.
+        :param res:
+        :return:
+        """
+        if squeeze_axis is None:
+            return res
+        else:
+            assert squeeze_axis in range(res.ndim)
+            assert res.shape[squeeze_axis] == 1
+            return np.squeeze(res, axis=squeeze_axis)
 
     def fnc(*args):
         """
@@ -616,7 +638,7 @@ def broadcasting_wrapper(original_fnc, original_shape=None):
             else:
                 res = np.array(res).reshape(original_shape)
 
-            return res
+            return squeezer(res)
 
         # do not allow too much felxibility (faster development)
         # first arg mus now be an array (which determines the length of the additional dimension)
@@ -651,7 +673,7 @@ def broadcasting_wrapper(original_fnc, original_shape=None):
         # stack along the last axis (should be 1 or 2)
 
         res = np.stack(res_list, axis=len(tmp_shape))
-        return res
+        return squeezer(res)
 
     return fnc
 

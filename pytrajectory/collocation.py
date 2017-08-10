@@ -201,7 +201,7 @@ class CollocationSystem(object):
             # Now apply the transformation Psi:
             Y, V = X, U
 
-            Z_tilde = np.row_stack(Y, V)
+            Z_tilde = np.row_stack((Y, V))
 
             # see also aux.broadcasting wrapper
             Z = self.sys.constraint_handler.Psi_fnc(*Z_tilde)
@@ -210,9 +210,6 @@ class CollocationSystem(object):
 
             X = Z[:n_states, :]
             U = Z[n_states:, :]
-
-
-
 
             return X, U, P
 
@@ -244,7 +241,7 @@ class CollocationSystem(object):
             if symbeq:
                 # reshape flattened X again to nx times nc Matrix
                 # nx: number of states, nc: number of collocation points
-                eq_list = []  # F(w) = 0
+                # eq_list = []  # this will hold the equations of F(w) = 0
                 F = ff_vec(X, U, P).ravel(order='F').take(take_indices, axis=0)[:,None]
                 dX = DMC.Mdx.dot(c)[:,None] + DMC.Mdx_abs
                 dX = dX.take(take_indices, axis=0)
@@ -261,10 +258,8 @@ class CollocationSystem(object):
                 # F0 = ff_vec(X, U, P).ravel(order='F').take(take_indices, axis=0)[:,None]
                 #:: F now numeric
 
-                F0 = ff_vec(X, U, P)  # shape: (ns + np)  x  nc
-                # ns: number of states
-                # np: number of penalty constraints
-                # nc: number of collocation points
+                F0 = ff_vec(X, U, P)
+                assert F0.shape == (n_states + n_par, n_cpts)
 
                 # now, this 2d array should be rearranged to a flattened vector
                 # the constraint-values should be handled separately
@@ -272,21 +267,40 @@ class CollocationSystem(object):
                 F1 = F0[:n_states, :]
                 C = F0[n_states:, :]
 
-                # ravel-docs:
+                # Perform the coordinate transformation to unbounded coordinates (ydot).
+                # Here F1 contains values for xdot
+                # we need values for ydot (y are the transformed unbounded coordinates)
+                Z = np.row_stack((X, U))
+                JJ_Gamma = self.sys.constraint_handler.Jac_Gamma_state_fnc(*Z)
+
+                assert JJ_Gamma.shape == (n_states, n_states, n_cpts)
+                F2 = np.einsum("ijk,jk->ik", JJ_Gamma, F1)
+
+                # now only use the relevant results (due to integrator chains) and rearrange the
+                # data
+
+                # background from ravel-docs:
                 # 'F' means to index the elements in column-major, Fortran-style order, with the
                 # first index changing fastest, and the last index changing slowest.
-                F = F1.ravel(order='F').take(take_indices, axis=0)[:, None]
+                # in other words: building one huge column vector consisting of all stacked columns
+                # matrix.ravel(order="F") = array([m_0_0, m_0_1, ..., m_1_0, ...])
+                F = F2.ravel(order="F").take(take_indices, axis=0)
 
-                # calculate xdot:
-                dX = SMC.Mdx.dot(c)[:, None] + SMC.Mdx_abs
+                # calculate xdot from the spline:
+                dX1 = SMC.Mdx.dot(c)[:, None] + SMC.Mdx_abs
                 # dX has shape (ns*nc) x 1
+
+                # to perform the transformation to Y-coordinates this vector has to be "unraveled"
+                dX = dX1.reshape(n_states, -1, order="F")
+                assert dX.shape == (n_states, n_cpts)
+                dY = np.einsum("ijk,jk->ik", JJ_Gamma, dX).ravel(order="F")
                 
-                dX = dX.take(take_indices, axis=0)
+                dY = dY.take(take_indices, axis=0)
                 #dX = np.array(dX).reshape((x_len, -1), order='F').take(eqind, axis=0)
 
-                G = F - dX
-                assert G.shape[1] == 1
-                
+                G = F - dY
+                assert G.ndim == 1
+
                 # now, append the values of the constraints
                 # res = np.asarray(G).ravel(order='F')
                 res = np.concatenate((np.asarray(G).ravel(order='F'), C.ravel(order='F')))
