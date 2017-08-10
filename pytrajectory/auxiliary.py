@@ -593,13 +593,21 @@ def broadcasting_wrapper(original_fnc, original_shape=None):
     assert n_args > 0
 
     def fnc(*args):
+        """
+        accept two calling-cases:
+        1: scalar args -> e.g. fnc(0, 3.5)
+        2: sequences of args (list, tuple, 1d-array) -> e.g. fnc([0, 1], [3.5])
+            each sequence has to have the same length as the first one
+        Note: calling fnc(*arr), where arr is a 2d array results in case 2
+            this could be interpreted as fnc(row0, row1, ...)
+            with arr = np.row_stack(row0, row1, ...)
 
-        # accept two calling-cases:
-        # 1: scalar args -> e.g. fnc(0, 3.5)
-        # 2: sequences of args (list, tuple, 1d-array) -> e.g. fnc([0, 1], [3.5])
-        # Note: calling fnc(*arr), where arr is a 2d array results in case 2
+            Typical meaning: nx, nc = arr.shape with nx: number of shapes, nc number of col. points
+        """
 
-        assert len(args) == n_args
+        if not len(args) == n_args:
+            msg1 = "len(args) should be {} but instead is {}".format(n_args, len(args))
+            raise ValueError(msg1)
 
         if is_flat_sequence_of_numbers(args):
             res = original_fnc(*args)
@@ -797,6 +805,18 @@ def unconstrain(var, vmin, vmax):
     dpsi = (4.*sp.exp(m*var))/(1. + sp.exp(m*var)) ** 2
 
     return m, psi, dpsi
+
+
+def psi_inv(var, vmin, vmax):
+    """
+
+    :param var:
+    :param vmin:
+    :param vmax:
+    :return:        inverse expression of the psi-function
+    """
+    q = sp.Rational(1, 4)
+    return (vmax - vmin)*sp.log((vmin/(-vmax + var) - var/(-vmax + var))**q)
 
 
 def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, par, npts=500, return_error_array=False):

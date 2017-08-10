@@ -75,20 +75,49 @@ class TestConstraintHandler(object):
 
         # ensure reproducible test results
         np.random.seed(200)
-        zz = (np.random.random((nz, n_points))-.5) * 20
-        JJ = chandler.Jac_Psi_fnc(*zz)
-        dJJ = chandler.dJac_Psi_fnc(*zz)
+
+        zz_tilde = (np.random.random((nz, n_points))-.5) * 20
+        JJ = chandler.Jac_Psi_fnc(*zz_tilde)
+        dJJ = chandler.dJac_Psi_fnc(*zz_tilde)
+
+        # squeeze is necessary here because result-shape is (nx, 1, n_points)
+        # because Psi-shape is (nx, 1) (thus it is a matrix)
+        zz = chandler.Psi_fnc(*zz_tilde).squeeze()  # now shape = (nx, n_points)
+
+        JJ_Gamma = chandler.Jac_Gamma_fnc(*zz)
+
+        assert zz.shape == zz_tilde.shape
+        assert JJ_Gamma.shape == JJ.shape
 
         for i in xrange(n_points):
-            z = zz[:, i]
+            z_tilde = zz_tilde[:, i]  # unbounded values
+            z = zz[:, i]  # bounded values (after transformation Psi)
+
             J = JJ[:, :, i]  # 2d-array
             dJ = dJJ[:, :, :, i]  # 3d-array
-            assert np.alltrue(chandler.Jac_Psi_fnc(*z) == J)
-            assert np.alltrue(chandler.dJac_Psi_fnc(*z) == dJ)
+
+            J_Gamma = JJ_Gamma[:, :, i]  # 2d-array
+
+            assert np.alltrue(chandler.Jac_Psi_fnc(*z_tilde) == J)
+            assert np.alltrue(chandler.dJac_Psi_fnc(*z_tilde) == dJ)
+
+            # check broadcasting consistency
+            z_values = chandler.Psi_fnc(*z_tilde)  # bounded values
+            assert np.allclose(z, z_values.squeeze())
+
+            # test whether inverse function works
+            z_tilde_values = chandler.Gamma_fnc(*z_values).ravel()
+            assert np.allclose(z_tilde_values, z_tilde)
+
+            # test inverse matrices
+
+            res = np.dot(J_Gamma, J)
+            assert np.allclose(res, np.eye(res.shape[1]))
 
         # we only have "diagonal" entries
         assert np.count_nonzero(dJJ) == nz * n_points
         assert dJJ.size == nz * nz * nz * n_points
+
 
 if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")

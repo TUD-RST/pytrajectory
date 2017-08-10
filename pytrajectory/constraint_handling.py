@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import sympy as sp
+from collections import OrderedDict
 
 import auxiliary as aux
 
@@ -10,13 +11,18 @@ from ipHelp import IPS
 # noinspection PyPep8Naming
 class ConstraintHandler(object):
     """
-    This class serves to handle the transformation based box constraints for the state and the
-    input. The Transformation is constructed and used in any case. If there are no constraints
-    present, the transformations are identical mappings
+    This class serves to handle the based box constraints (based on coordinate transformation )
+    for the state and the input. The Transformation is constructed and used in any case.
+    If there are no constraints present, the transformations are identical mappings
     """
 
     def __init__(self, masterobject, dynsys, constraints=None):
-        """
+        """The constructor creates the following functions (not methods) as attributes
+
+        Psi_fnc
+        Jac_Psi_fnc
+        dJac_Psi_fnc
+
 
         Parameters
         ----------
@@ -30,21 +36,21 @@ class ConstraintHandler(object):
         # this is mainly for debuging
         self.masterobject = masterobject
 
-        if constraints is None:
-            constraints = {}
-        self.constraints = constraints
+        self._preprocess_constraints(constraints)
+        assert isinstance(self.constraints, OrderedDict)
 
         self.dynsys = dynsys
-        self.allvars = dynsys.states + dynsys.inputs
-
+        self.z = dynsys.states + dynsys.inputs
 
         # assemble the coordinate transofomation z = Psi(z_tilde)
         # where z = (x, u) and z_tilde = (y, v) (new unconstraint variables)
         Psi = []
+        Gamma = []  # inverse of Psi
         self.z_tilde = []
 
-        for var in self.allvars:
-            current_constr = constraints.get(var)
+        for var in self.z:
+            current_constr = self.constraints.get(var)
+            var_symb = sp.Symbol(var)  # convert string to Symbol
 
             assert isinstance(var, basestring)
             new_name = var.replace('x', 'y').replace('u', 'v')
@@ -54,13 +60,16 @@ class ConstraintHandler(object):
             if current_constr is None:
 
                 # identical mapping
-                expr = new_var
+                expr1 = new_var
+                expr2 = var_symb
             else:
                 lb, ub = current_constr
 
-                _, expr, _ = aux.unconstrain(new_var, lb, ub)
+                _, expr1, _ = aux.unconstrain(new_var, lb, ub)
+                expr2 = aux.psi_inv(var_symb, lb, ub)
 
-            Psi.append(expr)
+            Psi.append(expr1)
+            Gamma.append(expr2)
 
         nx = dynsys.n_states
         nu = dynsys.n_inputs
@@ -68,6 +77,10 @@ class ConstraintHandler(object):
         assert len(Psi) == nx + nu
         self.Psi = Psi = sp.Matrix(Psi)
         self.Jac_Psi = Psi.jacobian(self.z_tilde)
+
+        # inverse of Psi (and its jacobian)
+        self.Gamma = Gamma = sp.Matrix(Gamma)
+        self.Jac_Gamma = Gamma.jacobian(self.z)
 
         # second order derivative of vector-valued transformation
         # this is a 3dim array (tensor)
@@ -104,6 +117,39 @@ class ConstraintHandler(object):
         tmp_fnc = sp.lambdify(self.z_tilde, expr_list)
         self.dJac_Psi_fnc = aux.broadcasting_wrapper(tmp_fnc, self.dJac_Psi.shape)
 
+        # inverse transformation and Jacobian
+        tmp_fnc = sp.lambdify(self.z, self.Gamma, modules="numpy")
+        self.Gamma_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Gamma.shape)
 
+        tmp_fnc = sp.lambdify(self.z, self.Jac_Gamma)
+        self.Jac_Gamma_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Jac_Gamma.shape)
+
+    def _preprocess_constraints(self, constraints=None):
+        """
+        Preprocessing of projective constraint-data provided by the user.
+        Ensure types and ordering
+
+        :return: None
+        """
+
+        if constraints is None:
+            constraints = OrderedDict()
+
+        con_x = OrderedDict()
+        con_u = OrderedDict()
+
+        for k, v in constraints.iteritems():
+            assert isinstance(k, str)
+            if k.startswith('x'):
+                con_x[k] = v
+            elif k.startswith('u'):
+                con_u[k] = v
+            else:
+                msg = "Unexpected key for constraint: %s: %s" % (k, v)
+                raise ValueError(msg)
+
+        self.constraints = OrderedDict()
+        self.constraints.update(sorted(con_x.iteritems()))
+        self.constraints.update(sorted(con_u.iteritems()))
 
 

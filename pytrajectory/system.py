@@ -15,6 +15,7 @@ import splines
 from log import logging
 import interfaceserver
 from dynamical_system import DynamicalSystem
+from constraint_handling import ConstraintHandler
 
 import matplotlib.pyplot as plt
 
@@ -179,6 +180,7 @@ class TransitionProblem(object):
         else:
             raise AttributeError("Invalid method parameter ({})".format(param))
 
+    # TODO: get rid of this method, because it is now implemented in ConstraintHandler
     def _preprocess_constraints(self, constraints=None):
         """
         Preprocessing of projective constraint-data provided by the user.
@@ -207,8 +209,6 @@ class TransitionProblem(object):
         self.constraints.update(sorted(con_x.iteritems()))
         self.constraints.update(sorted(con_u.iteritems()))
 
-        # now transform the constrained vectorfield into an unconstrained one
-        self.unconstrain()
 
         if self.use_chains:
             msg = "Currently not possible to make use of integrator chains together with " \
@@ -218,6 +218,14 @@ class TransitionProblem(object):
         # Note: it should be possible that just those chains are not used
         # which actually contain a constrained variable
 
+        self.constraint_handler = ConstraintHandler(self, self.dyn_sys, self.constraints)
+        self.dyn_sys.constraint_handler = self.constraint_handler
+
+        # This is the old/deprecated code
+        # now transform the constrained vectorfield into an unconstrained one
+        if 0:
+            self.unconstrain()
+
     def unconstrain(self):
         """
         This method is used to enable compliance with desired box constraints given by the user.
@@ -226,7 +234,7 @@ class TransitionProblem(object):
 
         """
 
-
+        # TODO: this limitation should be dropped
         if self.dyn_sys.f_sym.has_constraint_penalties and not len(self.constraints) == 0:
             msg = "Combination of both types of constraints not yet supported."
             raise NotImplementedError(msg)

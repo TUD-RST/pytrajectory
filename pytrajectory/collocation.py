@@ -79,6 +79,13 @@ class CollocationSystem(object):
         """
         This method is used to set up the equations for the collocation equation system
         and defines functions for the numerical evaluation of the system and its jacobian.
+
+        Notes on constraint handling:
+        The splines represent the unconstraint auxiliary variables (y, v)
+        From them the original coordinates (underlying box constraints) are obtained by the
+        transformation (x, u) = Psi(y, v).
+
+        Parameters p are not affected by this kind of constraints
         """
         logging.debug("Building Equation System")
         
@@ -91,13 +98,11 @@ class CollocationSystem(object):
         indic = self._get_index_dict()  ##:: e.g. {'x1': (0, 17), 'x2': (0, 17), ...},
         # from 0th to 16th coeff. belong to chain (x1,x2,x3), from 17 to 25 belong to chain(x3,x4)
 
-        # compute dependence matrices (sparse format)
-        # Mx, Mx_abs, Mdx, Mdx_abs, Mu, Mu_abs, Mp, Mp_abs = self._build_dependence_matrices(indic)
+        # compute dependence matrices (sparse format); SMC means Sparse Matrix Container
+        # attributes: SMC.Mx, Mx_abs, Mdx, Mdx_abs, Mu, Mu_abs, Mp, Mp_abs
         SMC = self._build_dependence_matrices(indic)
 
-        # TODO: self._build_dependence_matrices should already return this container
-
-        # in the later evaluation of the equation system `G` and its jacobian `DG`
+        # in the later evaluation of the equation system `F` and its jacobian `DF`
         # there will be created the matrices `F` and DF in which every nx rows represent the 
         # evaluation of the control systems vectorfield and its jacobian in a specific collocation
         # point, where nx is the number of state variables
@@ -163,6 +168,17 @@ class CollocationSystem(object):
         DdX = DdX.tocsr()
         
         def get_X_U_P(c, sparse=True):
+            """
+            Calculate values of X, U and P from the free (spline) parameters c
+
+            :param c:
+            :param sparse:
+            :return: tuple: X, U, P
+            """
+
+            # Note: Due to the temporal evolution of the code the naming scheme is not 100%
+            # consistent. X, U should be named Y, V at the beginning
+            # TODO: update name scheme
         
             if sparse: # for debug
                 C = SMC
@@ -173,14 +189,30 @@ class CollocationSystem(object):
             U = C.Mu.dot(c)[:, None] + C.Mu_abs  # :: U = [Su(t=0), Su(0.5), Su(1)]
             P = C.Mp.dot(c)[:, None] + C.Mp_abs  # :: init: P = [1.0,1.0,1.0]
 
-            X = np.array(X).reshape((n_states, -1),
-                                 order='F')
+            X = np.array(X).reshape((n_states, -1), order='F')
             U = np.array(U).reshape((n_inputs, -1), order='F')
 
             # TODO: this should be tested with systems with additional free parameters
             if not n_par == 0:
                 assert P.size % self.n_cpts == 0
             P = np.array(P).reshape((n_par, n_cpts), order='F')
+
+            # so far X, U are the unconstrained variables (which should be called Y, V instead)
+            # Now apply the transformation Psi:
+            Y, V = X, U
+
+            Z_tilde = np.row_stack(Y, V)
+
+            # see also aux.broadcasting wrapper
+            Z = self.sys.constraint_handler.Psi_fnc(*Z_tilde)
+
+            assert Z.shape == Z_tilde.shape
+
+            X = Z[:n_states, :]
+            U = Z[n_states:, :]
+
+
+
 
             return X, U, P
 

@@ -45,6 +45,9 @@ class DynamicalSystem(object):
         self.xb = xb
         self.tt = np.linspace(a, b, 1000)
 
+        # this will be set from outside
+        self.constraint_handler = None
+
         # TODO: see remark above; The following should be more general!!
         self.z_par = kwargs.get('k', [1.0])
 
