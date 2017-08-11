@@ -45,20 +45,20 @@ class TestConstraintHandler(object):
         assert chandler.Jac_Psi_fnc(*zz).shape == (nz, nz, n_points)
 
         # test dJac_Psi (second order derivative)
-        assert np.alltrue( chandler.dJac_Psi_fnc(0, 0, 0) == np.zeros((nz, nz, nz)) )
+        assert np.alltrue( chandler.dJac_Gamma_fnc(0, 0, 0) == np.zeros((nz, nz, nz)) )
 
         # result of call with flat arg-list is 3dim-array
         # -> call with several z-points results in 4dim-array
-        assert np.alltrue( chandler.dJac_Psi_fnc(*zz) == np.zeros((nz, nz, nz, n_points)) )
+        assert np.alltrue( chandler.dJac_Gamma_fnc(*zz) == np.zeros((nz, nz, nz, n_points)) )
 
     def test_di_constrain_all(self):
         dynsys = ds.DynamicalSystem(rhs_double_integrator, 0, 2, xa, xb)
         constraints = {'x1': [-5, 5], 'x2': [-.1, 3], 'u1': [-4, 4]}  # equivalent to {}
         chandler = ch.ConstraintHandler(None, dynsys, constraints)
 
-        # Note 1.45 is the image of 0 (due to asymmetric boundaries)
-        assert np.alltrue(chandler.ya == [0, 1.45])
-        assert np.allclose(chandler.yb,  [ 0.9868766,  1.45     ])
+        # Note: -2.63592797078817 is the image of 0 (due to asymmetric boundaries)
+        assert np.allclose(chandler.ya, np.array([0, -2.63592797078817]))
+        assert np.allclose(chandler.yb, np.array([ 1.01366277, -2.63592797078817]))
 
         nx = 2
         nu = 1
@@ -80,7 +80,6 @@ class TestConstraintHandler(object):
 
         zz_tilde = (np.random.random((nz, n_points))-.5) * 20
         JJ = chandler.Jac_Psi_fnc(*zz_tilde)
-        dJJ = chandler.dJac_Psi_fnc(*zz_tilde)
 
         zz = chandler.Psi_fnc(*zz_tilde)
 
@@ -89,6 +88,7 @@ class TestConstraintHandler(object):
 
         # Part of Jacobian of inverse that corresponds to the state (i.e. without input)
         JJ_Gamma_state = chandler.Jac_Gamma_state_fnc(*zz)
+        dJJ_Gamma = chandler.dJac_Gamma_fnc(*zz)
 
         assert zz.shape == zz_tilde.shape
         assert JJ_Gamma.shape == JJ.shape
@@ -98,13 +98,12 @@ class TestConstraintHandler(object):
             z = zz[:, i]  # bounded values (after transformation Psi)
 
             J = JJ[:, :, i]  # 2d-array
-            dJ = dJJ[:, :, :, i]  # 3d-array
 
             J_Gamma = JJ_Gamma[:, :, i]  # 2d-array
             J_Gamma_state = JJ_Gamma_state[:, :, i]  # 2d-array
+            dJ_Gamma = dJJ_Gamma[:, :, :, i]  # 3d-array
 
             assert np.alltrue(chandler.Jac_Psi_fnc(*z_tilde) == J)
-            assert np.alltrue(chandler.dJac_Psi_fnc(*z_tilde) == dJ)
 
             # check broadcasting consistency
             z_values = chandler.Psi_fnc(*z_tilde)  # bounded values
@@ -119,12 +118,13 @@ class TestConstraintHandler(object):
             assert np.allclose(res, np.eye(res.shape[1]))
 
             # test consistency of state-part of Jac_Gamma:
-
             assert np.alltrue(J_Gamma_state == J_Gamma[:nx, :nx])
 
+            assert np.alltrue(chandler.dJac_Gamma_fnc(*z) == dJ_Gamma)
+
         # we only have "diagonal" entries
-        assert np.count_nonzero(dJJ) == nz * n_points
-        assert dJJ.size == nz * nz * nz * n_points
+        assert np.count_nonzero(dJJ_Gamma) == nz * n_points
+        assert dJJ_Gamma.size == nz * nz * nz * n_points
 
 
 if __name__ == "__main__":

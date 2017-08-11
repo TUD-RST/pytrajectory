@@ -48,6 +48,8 @@ class ConstraintHandler(object):
         Gamma = []  # inverse of Psi
         self.z_tilde = []
 
+        self.z_middle = []  # save the middle points of the interval
+
         for var in self.z:
             current_constr = self.constraints.get(var)
             var_symb = sp.Symbol(var)  # convert string to Symbol
@@ -62,11 +64,13 @@ class ConstraintHandler(object):
                 # identical mapping
                 expr1 = new_var
                 expr2 = var_symb
+                self.z_middle.append(0)
             else:
                 lb, ub = current_constr
 
                 _, expr1, _ = aux.unconstrain(new_var, lb, ub)
                 expr2 = aux.psi_inv(var_symb, lb, ub)
+                self.z_middle.append(0.5*(lb + ub))
 
             Psi.append(expr1)
             Gamma.append(expr2)
@@ -82,21 +86,16 @@ class ConstraintHandler(object):
         self.Gamma = Gamma = sp.Matrix(Gamma)
         self.Jac_Gamma = Gamma.jacobian(self.z)
 
-        # second order derivative of vector-valued transformation
+        # second order derivative of vector-valued inverse transformation
         # this is a 3dim array (tensor)
-        tensor_shape = self.Jac_Psi.shape + (len(self.z_tilde),)
-        self.dJac_Psi = np.empty(tensor_shape, dtype=object)
-        for i, zi in enumerate(self.z_tilde):
-            tmp = self.Jac_Psi.diff(zi)
-            self.dJac_Psi[:, :, i] = aux.to_np(tmp, object)
+        tensor_shape = self.Jac_Gamma.shape + (len(self.z),)
+        self.dJac_Gamma = np.empty(tensor_shape, dtype=object)
+        for i, zi in enumerate(self.z):
+            tmp = self.Jac_Gamma.diff(zi)
+            self.dJac_Gamma[:, :, i] = aux.to_np(tmp, object)
 
         self._create_num_functions()
-
-        # transformed boundary conditions
-        arg_xa = list(dynsys.xa) + [0]*self.nu
-        arg_xb = list(dynsys.xb) + [0]*self.nu
-        self.ya = self.Psi_fnc(*arg_xa).ravel()[:self.nx]
-        self.yb = self.Psi_fnc(*arg_xb).ravel()[:self.nx]
+        self._create_boundary_value_dict()
 
     def _create_num_functions(self):
         """
@@ -113,9 +112,9 @@ class ConstraintHandler(object):
 
         # sp.lambdify cannot handle object arrays
         # the lost shape will later be restored by broadcasting wrapper
-        expr_list = list(self.dJac_Psi.ravel())
-        tmp_fnc = sp.lambdify(self.z_tilde, expr_list)
-        self.dJac_Psi_fnc = aux.broadcasting_wrapper(tmp_fnc, self.dJac_Psi.shape)
+        expr_list = list(self.dJac_Gamma.ravel())
+        tmp_fnc = sp.lambdify(self.z, expr_list)
+        self.dJac_Gamma_fnc = aux.broadcasting_wrapper(tmp_fnc, self.dJac_Gamma.shape)
 
         # inverse transformation and Jacobian
         tmp_fnc = sp.lambdify(self.z, self.Gamma, modules="numpy")
@@ -130,6 +129,51 @@ class ConstraintHandler(object):
 
         tmp_fnc = sp.lambdify(self.z, self.Jac_Gamma[:self.nx, :self.nx])
         self.Jac_Gamma_state_fnc = aux.broadcasting_wrapper(tmp_fnc, (self.nx, self.nx))
+
+    def _create_boundary_value_dict(self):
+
+        assert len(self.dynsys.xa) == len(self.dynsys.xb) == self.nx
+
+        # technical problem: how to elegantly "transform" None-entries (allowed for input signals)
+        ua = self.dynsys.ua
+        ub = self.dynsys.ub
+        if ua is None:
+            ua = [None]*self.nu
+        if ub is None:
+            ub = [None]*self.nu
+
+        # transformed boundary conditions
+        za = list(self.dynsys.xa)
+        zb = list(self.dynsys.xb)
+
+        for i, (ua_value, ub_value) in enumerate(zip(ua, ub)):
+            # for each None, use a save value (middle)
+            if ua_value is None:
+                ua_value = self.z_middle[self.nx + i]
+            if ub_value is None:
+                ub_value = self.z_middle[self.nx + i]
+            za.append(ua_value)
+            zb.append(ub_value)
+
+        # Reminder on name-scheme:
+        # z = (x, u)            (original bounded coordinates)
+        # z_tilde = (y, v)      (new unbounded coordinates)
+
+        z_tilde_a = self.Gamma_fnc(*za)
+        z_tilde_b = self.Gamma_fnc(*zb)
+
+        self.boundary_values = OrderedDict()
+
+        # add state boundary values
+        for i, x in enumerate(self.dynsys.states):
+            self.boundary_values[x] = (z_tilde_a[i], z_tilde_b[i])
+
+        # add input boundary values
+        for j, u in enumerate(self.dynsys.inputs):
+            self.boundary_values[u] = (z_tilde_a[self.nx + j], z_tilde_b[self.nx + j])
+
+        self.ya = z_tilde_a[:self.nx]
+        self.yb = z_tilde_b[:self.nx]
 
     def _preprocess_constraints(self, constraints=None):
         """
