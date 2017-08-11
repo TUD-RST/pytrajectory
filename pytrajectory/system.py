@@ -15,6 +15,7 @@ import splines
 from log import logging
 import interfaceserver
 from dynamical_system import DynamicalSystem
+from constraint_handling import ConstraintHandler
 
 import matplotlib.pyplot as plt
 
@@ -179,6 +180,7 @@ class TransitionProblem(object):
         else:
             raise AttributeError("Invalid method parameter ({})".format(param))
 
+    # TODO: get rid of this method, because it is now implemented in ConstraintHandler
     def _preprocess_constraints(self, constraints=None):
         """
         Preprocessing of projective constraint-data provided by the user.
@@ -207,8 +209,6 @@ class TransitionProblem(object):
         self.constraints.update(sorted(con_x.iteritems()))
         self.constraints.update(sorted(con_u.iteritems()))
 
-        # now transform the constrained vectorfield into an unconstrained one
-        self.unconstrain()
 
         if self.use_chains:
             msg = "Currently not possible to make use of integrator chains together with " \
@@ -218,21 +218,23 @@ class TransitionProblem(object):
         # Note: it should be possible that just those chains are not used
         # which actually contain a constrained variable
 
+        self.constraint_handler = ConstraintHandler(self, self.dyn_sys, self.constraints)
+        self.dyn_sys.constraint_handler = self.constraint_handler
+
+        # This is the old/deprecated code
+        # now transform the constrained vectorfield into an unconstrained one
+        if 0:
+            self.unconstrain()
+
     def unconstrain(self):
         """
         This method is used to enable compliance with desired box constraints given by the user.
-        It transforms the vectorfield by projecting the constrained state variables on
+        It transforms the vector-field by projecting the constrained state variables on
         new unconstrained ones.
-
-        Parameters
-        ----------
-
-        constraints : dict
-            The box constraints for the state variables
 
         """
 
-
+        # TODO: this limitation should be dropped
         if self.dyn_sys.f_sym.has_constraint_penalties and not len(self.constraints) == 0:
             msg = "Combination of both types of constraints not yet supported."
             raise NotImplementedError(msg)
@@ -384,41 +386,22 @@ class TransitionProblem(object):
                 assert idx < n + self.dyn_sys.n_inputs
                 self.eqs.trajectories.u_fnc[idx - n] = psi_y
 
-    def get_constrained_input_fnc(self):
+    def get_constrained_spline_fncs(self):
         """
-        If input-constraints have been specified, than this method maps the unconstrained
-        (auxiliary) input variable back to the constrained variable.
-
-        If no input-constraints are specified, return an identity map.
-
-        :return: function u(t)
+        Map the unconstrained coordinates (y, v) to the original constrained coordinats (x, u).
+        (Use identity map if no constrained was specified for a component)
+        :return: x_fnc, dx_fnc, u_fnc
         """
 
-        # OrderedDict
-        u_funcs_odict = self.eqs.trajectories.u_fnc.copy()
-        # iterate over all constraints
-        for vk, limits in self.constraints.items():
+        # TODO: the attribute names of the splines have to be adjusted
+        y_fncs = self.eqs.trajectories.x_fnc.values()
+        ydot_fncs = self.eqs.trajectories.dx_fnc.values()
+        # sequence of funcs vi(.)
+        v_fncs = self.eqs.trajectories.u_fnc.values()
 
-            if vk not in self.dyn_sys.inputs:
-                continue
-            idx = self.dyn_sys.inputs.index(vk)
-            y0, y1 = limits
+        return self.dyn_sys.constraint_handler.get_constrained_spline_fncs(y_fncs, ydot_fncs,
+                                                                           v_fncs)
 
-            # get the calculated solution function for the unconstrained variable and its derivative
-
-            y_fnc = u_funcs_odict[vk]
-
-            # create the composition (callable function)
-            psi_y_fnc = auxiliary.saturation_functions(y_fnc, None, y0, y1, first_deriv=False)
-
-            u_funcs_odict[vk] = psi_y_fnc
-
-        def constrained_u(t):
-
-            res = [u_func(t) for u_func in u_funcs_odict.itervalues()]
-            return np.array(res)
-
-        return constrained_u
 
     def check_refsol_consistency(self):
         """"
@@ -833,25 +816,16 @@ class TransitionProblem(object):
         ##:ck: obsolete comment?
         # Todo T = par[0] * T
 
+        sys = self.dyn_sys
+
         # get list of start values
-        start = []
-
-        if self.constraints is not None:
-            sys = self._dyn_sys_orig
-        else:
-            sys = self.dyn_sys
-
-        x_vars = sys.states  ##:: ('x1', 'x2', 'x3', 'x4')
-        start_dict = dict([(k, v[0]) for k, v in sys.boundary_values.items() if k in x_vars])  ##:: {'x2': start value of x2, 'x3': 1.256, 'x1': 0.0, 'x4': 0.0}
+        start = sys.xa
 
         ff = sys.f_num_simulation
 
-        for x in x_vars:
-            start.append(start_dict[x])
-
         par = self.get_par_values()
         # create simulation object
-        u_fnc = self.get_constrained_input_fnc()
+        u_fnc = self.get_constrained_spline_fncs()[2]
         S = Simulator(ff, T, start, u_fnc, z_par=par, dt=self._parameters['dt_sim'])
 
         logging.debug("start: %s" % str(start))
@@ -884,19 +858,9 @@ class TransitionProblem(object):
         b = self.sim_data[0][-1]
         xt = self.sim_data[1]
 
-        # TODO: remove obsolete line
-        # additional free parameters do not have any influence on accuracy
-        # par = self.get_par_values()
+        x_sym = self.dyn_sys.states
 
-        # get boundary values at right border of the interval
-        if self.constraints:
-            bv = self._dyn_sys_orig.boundary_values
-            x_sym = self._dyn_sys_orig.states 
-        else:
-            bv = self.dyn_sys.boundary_values
-            x_sym = self.dyn_sys.states
-
-        xb = dict([(k, v[1]) for k, v in bv.items() if k in x_sym])  ##:: end boundary value
+        xb = self.dyn_sys.xb
         
         # what is the error
         logging.debug(40*"-")
@@ -904,25 +868,26 @@ class TransitionProblem(object):
 
         err = np.empty(xt.shape[1])
         for i, xx in enumerate(x_sym):
-            err[i] = abs(xb[xx] - xt[-1][i]) ##:: error (x1, x2) at end time
-            logging.debug(str(xx)+" : %f     %f    %f"%(xt[-1][i], xb[xx], err[i]))
+            err[i] = abs(xb[i] - xt[-1][i]) ##:: error (x1, x2) at end time
+            logging.debug(str(xx)+" : %f     %f    %f" % (xt[-1][i], xb[i], err[i]))
         
         logging.debug(40*"-")
         
         # if self._ierr:
         ierr = self._parameters['ierr']
         eps = self._parameters['eps']
+
+        xfnc, dxfnc, ufnc = self.get_constrained_spline_fncs()
+
         if ierr:
             # calculate maximum consistency error on the whole interval
 
-            maxH = auxiliary.consistency_error((a, b),
-                                               self.eqs.trajectories.x, self.eqs.trajectories.u,
-                                               self.eqs.trajectories.dx,
+            maxH = auxiliary.consistency_error((a, b), xfnc, ufnc, dxfnc,
                                                self.dyn_sys.f_num_simulation,
                                                par=self.get_par_values())
             
             reached_accuracy = (maxH < ierr) and (max(err) < eps)
-            logging.debug('maxH = %f'%maxH)
+            logging.debug('maxH = %f' % maxH)
         else:
             # just check if tolerance for the boundary values is satisfied
             reached_accuracy = (max(err) < eps)

@@ -226,7 +226,8 @@ def find_integrator_chains(dyn_sys):
     return chains, eqind
 
 
-def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False, evalconstr=None):
+def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
+                        evalconstr=None, squeeze_axis=None):
     """
     This function takes a callable vector field of a dynamical system that is to be evaluated with
     symbols for the state and input variables and returns a corresponding function that can be
@@ -255,6 +256,8 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
     evalconstr : None (default) or bool
         Whether or not to include the constraint equations (which might be represented
         as the last part of the vf)
+
+    squeeze_axis : None or int, see function aux.broadcasting_wrapper for details
 
     Returns
     -------
@@ -342,7 +345,7 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
         shape = (len(F_sym), 1)
     else:
         shape = F_sym.shape
-    _f_num_bc = broadcasting_wrapper(_f_num, shape)
+    _f_num_bc = broadcasting_wrapper(_f_num, shape, squeeze_axis)
 
     def f_num(x, u, p):
         xup = stack((x, u, p))
@@ -559,7 +562,7 @@ def cse_lambdify(args, expr, **kwargs):
     return cse_fnc
 
 
-def broadcasting_wrapper(original_fnc, original_shape=None):
+def broadcasting_wrapper(original_fnc, original_shape=None, squeeze_axis=None):
     """
     Create a wrapper function which takes care of correctly broadcasting the result.
 
@@ -574,6 +577,7 @@ def broadcasting_wrapper(original_fnc, original_shape=None):
 
     :param original_fnc:
     :param original_shape:  tuple, or None (None means scalar)
+    :param squeeze_axis:    axis which will be squeezed before returning the result
     :return:
     """
 
@@ -592,14 +596,40 @@ def broadcasting_wrapper(original_fnc, original_shape=None):
 
     assert n_args > 0
 
+    def squeezer(res):
+        """
+        Optionally apply squeeze to a selected axis
+
+        Background: A vectorfield is a sympy matrix with shape (nx, 1)
+        Evaluated at nc different point we get an array with shape (nx, 1, nc)
+
+        However, an array with (nx, nc) is sometimes more practical.
+        :param res:
+        :return:
+        """
+        if squeeze_axis is None:
+            return res
+        else:
+            assert squeeze_axis in range(res.ndim)
+            assert res.shape[squeeze_axis] == 1
+            return np.squeeze(res, axis=squeeze_axis)
+
     def fnc(*args):
+        """
+        accept two calling-cases:
+        1: scalar args -> e.g. fnc(0, 3.5)
+        2: sequences of args (list, tuple, 1d-array) -> e.g. fnc([0, 1], [3.5])
+            each sequence has to have the same length as the first one
+        Note: calling fnc(*arr), where arr is a 2d array results in case 2
+            this could be interpreted as fnc(row0, row1, ...)
+            with arr = np.row_stack(row0, row1, ...)
 
-        # accept two calling-cases:
-        # 1: scalar args -> e.g. fnc(0, 3.5)
-        # 2: sequences of args (list, tuple, 1d-array) -> e.g. fnc([0, 1], [3.5])
-        # Note: calling fnc(*arr), where arr is a 2d array results in case 2
+            Typical meaning: nx, nc = arr.shape with nx: number of shapes, nc number of col. points
+        """
 
-        assert len(args) == n_args
+        if not len(args) == n_args:
+            msg1 = "len(args) should be {} but instead is {}".format(n_args, len(args))
+            raise ValueError(msg1)
 
         if is_flat_sequence_of_numbers(args):
             res = original_fnc(*args)
@@ -608,7 +638,7 @@ def broadcasting_wrapper(original_fnc, original_shape=None):
             else:
                 res = np.array(res).reshape(original_shape)
 
-            return res
+            return squeezer(res)
 
         # do not allow too much felxibility (faster development)
         # first arg mus now be an array (which determines the length of the additional dimension)
@@ -643,7 +673,7 @@ def broadcasting_wrapper(original_fnc, original_shape=None):
         # stack along the last axis (should be 1 or 2)
 
         res = np.stack(res_list, axis=len(tmp_shape))
-        return res
+        return squeezer(res)
 
     return fnc
 
@@ -797,6 +827,18 @@ def unconstrain(var, vmin, vmax):
     dpsi = (4.*sp.exp(m*var))/(1. + sp.exp(m*var)) ** 2
 
     return m, psi, dpsi
+
+
+def psi_inv(var, vmin, vmax):
+    """
+
+    :param var:
+    :param vmin:
+    :param vmax:
+    :return:        inverse expression of the psi-function
+    """
+    q = sp.Rational(1, 4)
+    return (vmax - vmin)*sp.log((vmin/(-vmax + var) - var/(-vmax + var))**q)
 
 
 def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, par, npts=500, return_error_array=False):
@@ -1017,202 +1059,6 @@ def ensure_colstack(seq, nrows):
     else:
         msg = "Unexpected dimensionality of array"
         raise ValueError(msg)
-
-
-# noinspection PyPep8Naming
-def extended_rhs_factory(fnc_rhs, fnc_uref, fnc_duref, penalty_u, nx, nu, npar):
-    """Based on xdot = f(x, u), create a new rhs-function:
-     zdot = f_new(z, u_new) with z = [x, t], zdot = [xdot, 1] and u_new = uref(t) + u_correction
-
-     This serves for the approximate reproduction of known solutions, because u_corr
-     can be penalized separately.
-
-     To be applicable in pytrajectory, the Jacobian is also needed (create and return)
-
-     This function assumes that there is a penalty-term returned by f
-
-    :param fnc_rhs:
-    :param fnc_uref:
-    :param fnc_duref:
-    :param penalty_u:   penalty function for u_corr (or number)
-    :param nx:              number of state components (without time)
-    :param nu:
-    :param npar:
-
-    :return:            f_new and Df_new
-    """
-
-    assert isinstance(fnc_uref(0), np.ndarray)
-
-    # assume that the provided function has penalty terms
-    argspec = inspect.getargspec(fnc_rhs)
-    assert argspec.args[-1] == 'evalconstr'
-
-    # convenience: create an ad hoc penaltization of corrective input (u_corr)
-    if isinstance(penalty_u, Number):
-        u_penalty_scale = penalty_u
-
-        def fnc_penalty_u(xx, input, par, t):
-            res = 0
-            for u in input:
-                res += u**2
-            return res*u_penalty_scale
-    else:
-        assert callable(penalty_u)
-        fnc_penalty_u = penalty_u
-
-    xx = sp.symbols('x1:{}'.format(nx+1))
-    uu = sp.symbols('u1:{}'.format(nu+1))
-    uu_corr = sp.symbols('u_corr_1:{}'.format(nu+1))
-    uu_ref = sp.symbols('u_ref_1:{}'.format(nu+1))
-    uu = sp.symbols('u1:{}'.format(nu+1))
-
-    duu = sp.symbols('du1:{}'.format(nu+1))
-    pp = sp.symbols('p1:{}'.format(npar + 1))
-
-    f_sym = sp.Matrix(fnc_rhs(xx, uu, pp))
-
-    Jx = f_sym.jacobian(xx)
-    Ju = f_sym.jacobian(uu)
-    Jp = f_sym.jacobian(pp)
-
-    # now assume u = uref(t) + u (no further time-dependence)
-    Jt = Ju*duu
-
-    Jx_fnc = sym2num_vectorfield(Jx, xx, uu, pp, cse=True, vectorized=True)
-    Ju_fnc = sym2num_vectorfield(Ju, xx, uu, pp, cse=True, vectorized=True)
-    Jp_fnc = sym2num_vectorfield(Jp, xx, uu, pp, cse=True, vectorized=True)
-
-    dbg = Container(Jx=Jx, Jp=Jp, Jt=Jt, f_sym=f_sym)
-
-    def rhs_extended(state, input, par, evalconstr=True):
-
-        xx = state[:-1]
-        t = state[-1]
-
-        u_num = fnc_uref(t) + np.array(input)
-        res = np.empty(nx + 1 + 1*evalconstr)  # + 1 for d t/dt = 1 and optionally +1 for constr
-
-        f_res_original = fnc_rhs(xx, u_num, par, evalconstr)
-
-        if not len(f_res_original) in (nx, nx+1):
-            msg = "unexpected length for return value of orignial rhs function "
-            raise ValueError(msg)
-
-        res[:nx] = f_res_original[:nx]
-
-        # TODO: if we have a time transformation this must be changed
-        # account for pseudostate t (dt/dt = 1)
-        res[nx] = 1
-
-        if evalconstr:
-            res[nx+1] = f_res_original[nx]
-            # add special penalty for u_corr
-            res[nx+1] += fnc_penalty_u(xx, input, par, t)
-        return res
-
-    def rhs_simulation(state, input, par):
-        return rhs_extended(state, input, par, evalconstr=False)
-
-    # create the function of the jacobian
-    # noinspection PyPep8Naming
-    def DF(state, input, par):
-
-        c = dbg
-
-        zzn = ensure_colstack(state, nx + 1)
-        xxn = zzn[:-1, :]
-        ttn = zzn[-1:, :]  # last row
-
-        uun = ensure_colstack(input, nu)
-        ppn = ensure_colstack(par, npar)
-
-        u_ref = fnc_uref(ttn)
-        du_ref = fnc_duref(ttn)
-
-        Jx = Jx_fnc(xxn, uun, ppn)
-        Ju = Ju_fnc(xxn, uun, ppn)
-        Jp = Jp_fnc(xxn, uun, ppn)
-
-        # now calculate the jacobian columns w.r.t  to t (time)
-        # "scalar case" would be: Jt = np.dot(Ju, du_ref)
-        # however we have multiple values for x and u and therefore need to do some
-        # tensor magic with numpy einsum
-        # for background information https://stackoverflow.com/questions/45440984/
-
-        Jt = np.einsum("ijk,jk->ik", Ju, du_ref)
-
-        # Jt is now a stack of matrix-vector-products
-        # we need it to be rearranged (see below for meaning of axes)
-        Jt = Jt.reshape(Jt.shape + (-1,)).swapaxes(1, 2)  # add extra dimension and "transpose"
-
-        assert Jx.ndim == 3
-        # meaning of the dimensions (m, n, r):
-        # (m, n): normal Jacobian (m: elements of f, n: elements of [x1, x2, ..., xn])
-        # r: 2nd axis of state-array (its a stack of r columns,
-        # each representing a point in state-space)
-
-        # Ju, Jp, Jt are also 3-dimensional
-        assert Ju.ndim == Jp.ndim == Jt.ndim == 3
-
-        # Background: we want a big Jacobian w.r.t to [x,t,u,p]
-        # -> concatenate all together along the 'argument-axis' (index=1, above labeld `n`)
-
-        J_all = np.concatenate((Jx, Jt, Ju, Jp), axis=1)
-
-        return J_all
-
-    def vf_f(state, input, par):
-        """
-        return only the drift part of the vector-field (including u_ref, excluding u_corr)
-
-        Note: This is only needed for scientific interest and not for the actual calculation of a
-        solution
-
-        :param state:
-        :param input:
-        :param par:
-        :return:
-        """
-        assert isinstance(input, np.ndarray)
-        return rhs_extended(state=state, input=input*0, par=par)
-
-    def vf_g(state, input, par):
-        """
-        return only the input-dependent vector-field
-
-        Note: This is only needed for scientific interest and not for the actual calculation of a
-        solution
-
-        :param state:
-        :param input:
-        :param par:
-        :return:
-        """
-
-        # this could be done faster but we would need df/du for that
-        input = np.ones_like(input)
-        res = rhs_extended(state, input, par) - rhs_extended(state=state, input=input*0, par=par)
-        return res
-
-    assert isinstance(f_sym, sp.MatrixBase)
-    # assert getattr(f_sym, 'has_eval_constr', False)
-    f_sym_extended = sp.Matrix([0]*(nx+2))
-    f_sym_extended[:nx, :] = f_sym[:nx, :]
-    f_sym_extended[nx, 0] = 1  # extension with pseudostate t
-
-    t = sp.Symbol('t')
-    f_sym_extended[nx+1, 0] = f_sym[nx, 0]  # copy penalty-terms
-    f_sym_extended[nx+1, 0] += fnc_penalty_u(xx, uu_corr, pp, t)  # more penalty-terms
-
-    uu_rplmts = zip(uu, sp.Matrix(uu_corr) + sp.Matrix(uu_ref))
-    f_sym = f_sym.subs(uu_rplmts)
-    f_sym_extended = f_sym_extended.subs(uu_rplmts)
-
-    res = Container(ff_vectorized=rhs_extended, f_num_simulation=rhs_simulation, Df_vectorized=DF,
-                    vf_f=vf_f, vf_g=vf_g, f_sym_matrix=f_sym, f_sym_full_matrix=f_sym_extended)
-
-    return res
 
 
 def calc_gramian(A, B, T, info=False):
@@ -1462,16 +1308,24 @@ def to_np(spobj, dtype=float):
     """
     Convert a sympy object to a numpy array
     :param spobj:       sympy object to convert
-    :param dtype:       dtype-arg for the resulting array
+    :param dtype:       dtype-arg for the resulting array (float should be used for numbers)
     :return:
     """
 
-    # this is copied from symbtools package
+    # this is copied (and adapted) from symbtools package
 
-    # because np.int can not understand sp.Integer
-    # we temporarily convert to float
-    arr_float = np.vectorize(float)
-    arr1 = arr_float(np.array(spobj))
+    if dtype is float:
+        # because np.int can not understand sp.Integer
+        # we temporarily convert to float
+        arr_float = np.vectorize(float)
+        arr1 = arr_float(np.array(spobj))  # the inner array is with dtype: object
+    else:
+        arr1 = spobj
+
+    if isinstance(arr1, sp.MatrixBase):
+        # this avoids strange numpy behavior: __array__() takes exactly  1 argument (2 given)
+        arr1 = arr1.tolist()
+
     return np.array(arr1, dtype)
 
 

@@ -291,6 +291,17 @@ class TestCseLambdify(object):
         for obj, res in tests_:
             assert aux.is_flat_sequence_of_numbers(obj) == res
 
+    def test_to_np(self):
+        a = sp.Matrix([7, 8, 9, 10.3])
+        A = a.reshape(2, 2)
+        assert np.alltrue( aux.to_np(a) == np.array(list(a)).reshape(-1, 1) )
+        assert np.alltrue( aux.to_np(A) == np.array(list(a)).reshape(A.shape) )
+
+        x1, x2 = sp.symbols("x1, x2")
+
+        B = sp.Matrix(3, 3, lambda i, j: x1*i + x2*j)
+        assert np.alltrue( aux.to_np(B, dtype=object) == np.array(list(B)).reshape(B.shape) )
+
     # new_interpolate is currently not used because it tends to unwanted oscillations
     @pytest.mark.xfail(reason='this only works for the method Spline.new_interpolate')
     def test_spline_interpolate(self):
@@ -414,43 +425,6 @@ class TestCseLambdify(object):
             plt.plot(pts_noborders, pts_noborders*0, '.' )
             plt.show()
 
-    def test_rhs_extended_factory(self):
-
-        def rhs_di(state, u, pp, evalconstr=True):
-            pp  # ignored parameters
-            x1, x2 = state
-            u1, = u
-            u1_all = u1
-
-            ff = [x2**2, u1]
-            if evalconstr:
-                c = 0
-                ff.append(c)
-            return np.array(ff)
-
-        fnc_u = lambda t: np.atleast_1d(t*0)
-        fnc_du = lambda t: np.atleast_1d(t*0)
-
-        xa = [0, 0]
-        za = [0, 0, 0]
-        ua = [0]
-        pa = [1]
-
-        rC = aux.extended_rhs_factory(rhs_di, fnc_u, fnc_du,  penalty_u=.1, nx=2, nu=1, npar=1)
-
-        ff_vectorized, Df_vectorized = aux.get_attributes_from_object(rC)
-
-        J1 = Df_vectorized(za, ua, pa)
-
-        z2 = np.column_stack((za, [1, 2, 3]))
-        u2 = np.column_stack(([0], [1]))
-        p2 = np.column_stack(([1], [1]))
-
-        J2 = Df_vectorized(z2, u2, p2)
-
-        assert ff_vectorized(za, ua, pa, evalconstr=False).size == len(za)
-        assert ff_vectorized(za, ua, pa).size == len(za) + 1
-
     def test_get_attributes_from_object(self):
         c = aux.Container(x=0, y=1.0, z="abc")
         c.a = 10
@@ -527,14 +501,6 @@ if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")
 
     tests = TestCseLambdify()
-    # tests.test_spline_interpolate()
-    # tests.test_calc_chebyshev_nodes()
-    tests.test_broadcasting_wrapper()
+    tests.test_to_np()
 
-    tests.test_is_flat_sequence_of_numbers()
-    tests.test_cse_lambdify()
-    tests.test_sym2num_matrix()
-    tests.test_get_attributes_from_object()
-
-    understand_einsum()
-    tests.test_rhs_extended_factory()
+    # understand_einsum()

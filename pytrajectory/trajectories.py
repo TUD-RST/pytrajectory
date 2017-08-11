@@ -177,8 +177,8 @@ class Trajectory(object):
         if self.splines is not None:
             assert not list(self.splines.values())[0]._prov_flag
 
-        bv = self.sys.boundary_values
-        
+        bv = self.sys.constraint_handler.boundary_values
+
         # dictionaries for splines and callable solution function for x,u and dx
         splines = OrderedDict()
         x_fnc = OrderedDict()
