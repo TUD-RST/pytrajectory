@@ -186,21 +186,66 @@ class ConstraintHandler(object):
         if constraints is None:
             constraints = OrderedDict()
 
-        con_x = OrderedDict()
-        con_u = OrderedDict()
+        self.con_x = OrderedDict()
+        self.con_u = OrderedDict()
 
         for k, v in constraints.iteritems():
             assert isinstance(k, str)
             if k.startswith('x'):
-                con_x[k] = v
+                self.con_x[k] = v
             elif k.startswith('u'):
-                con_u[k] = v
+                self.con_u[k] = v
             else:
                 msg = "Unexpected key for constraint: %s: %s" % (k, v)
                 raise ValueError(msg)
 
         self.constraints = OrderedDict()
-        self.constraints.update(sorted(con_x.iteritems()))
-        self.constraints.update(sorted(con_u.iteritems()))
+        self.constraints.update(sorted(self.con_x.iteritems()))
+        self.constraints.update(sorted(self.con_u.iteritems()))
+
+    def get_constrained_spline_fncs(self, y_fncs, ydot_fncs, v_fncs):
+        """converts the unconstrained spline-functions for yi, ydot_i, vi (3 lists) to 3 single
+        functions which calculate the values of the constrained variables x, xdot, u.
+        This is done by evaluating the transformation Psi.
+
+        :param y_fncs:    list of unbounded function objects
+        :param ydot_fncs: list of unbounded function objects
+        :param v_fncs:    list of unbounded function objects
+        :return:
+        """
+
+        def constrained_x(t):
+            y_values = [y_fnc(t) for y_fnc in y_fncs]
+
+            # use only the state-relevant part of the transformation
+            arg = self.z_middle*1
+            arg[:self.nx] = y_values
+            res = self.Psi_fnc(*arg)[:self.nx]
+            return res
+
+        def constrained_xdot(t):
+            y_values = [y_fnc(t) for y_fnc in y_fncs]
+            ydot_values = [ydot_fnc(t) for ydot_fnc in ydot_fncs]
+
+            # use only the state-relevant part of the transformation
+            arg = self.z_middle*1
+            arg[:self.nx] = y_values
+            Jac_Psi = self.Jac_Psi_fnc(*arg)[:self.nx, :self.nx]
+            res = np.dot(Jac_Psi, ydot_values)
+            return res
+
+        def constrained_u(t):
+
+            v_values = [v_fnc(t) for v_fnc in v_fncs]
+
+            # use only the input-relevant part of the transformation
+            arg = self.z_middle*1
+            arg[-self.nu:] = v_values
+            res = self.Psi_fnc(*arg)[-self.nu]
+            return res
+
+        return constrained_x, constrained_xdot, constrained_u
+
+
 
 

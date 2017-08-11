@@ -299,7 +299,7 @@ class Solver:
 
             if i > 1 and self.res > self.res_old:
                 logging.warn("res_old > res  (should not happen)")
-            spaces = " " * 10
+            spaces = " " * 20
             msg = "sp=%d  nIt=%d   k=%f  %s res=%f"
             logging.debug(msg % (n_spln_prts, i, xs[-1], spaces, self.res))
             
