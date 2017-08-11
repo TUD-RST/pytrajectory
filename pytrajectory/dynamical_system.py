@@ -3,6 +3,7 @@
 import numpy as np
 import sympy as sp
 import inspect
+from collections import OrderedDict
 
 import auxiliary as aux
 from log import logging
@@ -55,11 +56,6 @@ class DynamicalSystem(object):
         # analyse the given system  (set self.n_pos_args, n_states, n_inputs, n_par, n_pconstraints)
         self._determine_system_dimensions()
 
-        if ua is None:
-            ua = [None]*self.n_inputs
-        if ub is None:
-            ub = [None]*self.n_inputs
-
         # handle the case where f_sym does not depend on additional free parameters
         if self.n_pos_args == 2:
             if f_sym.has_constraint_penalties:
@@ -94,8 +90,16 @@ class DynamicalSystem(object):
         self.uus = sp.symbols(self.inputs)
         self.pps = sp.symbols(self.par)
 
+
+        self._preprocess_boundary_values(xa, xb, ua, ub)
+
         # init dictionary for boundary values
-        self.boundary_values = self._get_boundary_dict_from_lists(xa, xb, ua, ub)
+        # self.boundary_values = self._get_boundary_dict_from_lists(xa, xb, ua, ub)
+        # Todo: remove the obsolete code above
+
+        # boundary values are now handled by self.constraint_handler
+        # (which will be initialized from outside)
+        # the access is implemented via the property boundary_values
 
         self._create_f_and_Df_objects()
 
@@ -245,6 +249,24 @@ class DynamicalSystem(object):
 
         return
 
+    def _preprocess_boundary_values(self, xa, xb, ua, ub):
+        """
+        Save the original boundary values
+
+        :param xa:
+        :param xb:
+        :param ua:
+        :param ub:
+        :return:        None
+        """
+        if ua is None:
+            ua = [None]*self.n_inputs
+        if ub is None:
+            ub = [None]*self.n_inputs
+
+        self.xa, self.xb, self.ua, self.ub = xa, xb, ua, ub
+
+    # TODO: remove this obsolete function (now handled by constraint_handler)
     def _get_boundary_dict_from_lists(self, xa, xb, ua, ub):
         """
         Creates a dictionary of boundary values for the state and input variables
@@ -258,7 +280,7 @@ class DynamicalSystem(object):
             ub = [None] * self.n_inputs
 
         # init dictionary
-        boundary_values = dict()
+        boundary_values = OrderedDict()
 
         # add state boundary values
         for i, x in enumerate(self.states):

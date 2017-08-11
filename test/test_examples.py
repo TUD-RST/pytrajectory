@@ -37,6 +37,7 @@ class TestExamples(object):
         assert S1.reached_accuracy
 
     def test_di_constraint_x2_projective(self):
+        con = {'x2': [-1, 10]}
         con = {'x2': [-0.1, 0.65]}
         S1 = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=0, ub=0, constraints=con,
                                show_ir=False,
@@ -73,7 +74,9 @@ if __name__ == "__main__":
     from pytrajectory import log
     log.console_handler.setLevel(10)
 
-    tests.test_di_integrator_pure()
+    # tests.test_di_integrator_pure()
+    # print "-"*10
+    tests.test_di_constraint_x2_projective()
     print "-"*10
     # tests.test_di_con_u1_x2_projective_integrator()
     # print "-"*10
