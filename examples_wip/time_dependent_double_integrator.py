@@ -74,15 +74,16 @@ u_ref_num = my_lambdify(t, ref.subs(sol).diff(t, 2), modules="numpy", original_s
 du_ref_num = my_lambdify(t, ref.subs(sol).diff(t, 3), modules="numpy", original_shape=(1,))
 
 
-def rhs1(state, u, pp, evalconstr=True):
+def rhs1(state, u, t, pp):
     pp  # ignored parameters
     x1, x2 = state
     u1, = u
 
     ff = [x2, u1]
-    if evalconstr:
-        c = 0
-        ff.append(c)
+
+    # penalty
+    c = 0
+    ff.append(c)
     return np.array(ff)
 
 if 0:

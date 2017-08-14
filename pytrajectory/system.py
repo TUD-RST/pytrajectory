@@ -646,12 +646,10 @@ class TransitionProblem(object):
         ##:ck: obsolete comment?
         # Todo T = par[0] * T
 
-        sys = self.dyn_sys
-
         # get list of start values
-        start = sys.xa
+        start = self.dyn_sys.xa
 
-        ff = sys.f_num_simulation
+        ff = self.dyn_sys.f_num_simulation
 
         par = self.get_par_values()
         # create simulation object

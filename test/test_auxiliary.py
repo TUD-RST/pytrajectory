@@ -167,34 +167,78 @@ class TestCseLambdify(object):
         assert res1.shape == (3, 1, N)
         assert res2.shape == (3, 1, N)
 
-    def test_sym2num2(self):
-        x, u, p = sp.symbols('x, u, p')
-        f1 = [x, u, p]
-        f2 = [x, u, 0*p]
+    def test_sym2num_new(self):
+        x1, x2, x3, u, t, p = sp.symbols('x1, x2, x3, u, t, p')
+        f1 = [x1, u, p]
+        f2 = [x1, u, 0*p]
 
-        ts = sp.Symbol('t')
+        f3 = [x1, x2*x3*u, p*x3, t, 2, 4]
+
         factory = pytrajectory.auxiliary.sym2num_vectorfield_new
-        fnc1a = factory(expr=f1, xxs=[x], uus=[u], ts=ts, pps=[p], vectorized=True, cse=True)
-        fnc1b = factory(expr=f1, xxs=[x], uus=[u], ts=ts, pps=[p], vectorized=True, cse=True,
+        fnc1a = factory(expr=f1, xxs=[x1], uus=[u], ts=t, pps=[p], vectorized=True, cse=True)
+        fnc1b = factory(expr=f1, xxs=[x1], uus=[u], ts=t, pps=[p], vectorized=True, cse=True,
                         desired_shape=(3, 1))
-        fnc2 = factory(expr=f2, xxs=[x], uus=[u], ts=ts, pps=[p], vectorized=True, cse=True)
+        fnc2 = factory(expr=f2, xxs=[x1], uus=[u], ts=t, pps=[p], vectorized=True, cse=True)
+
+        fnc3 = factory(expr=f3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True,
+                       cse=True)
+
+        fnc3_croped = factory(expr=f3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True,
+                              cse=True, crop_result_idx=4)
+
+        xutp = [x1, x2, x3, u, t, p]
+        Jf3 = sp.Matrix(f3).jacobian(xutp)
+
+        with pytest.raises(UserWarning):
+            fnc4 = factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True,
+                           cse=True)
+
+        fnc4 = factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True,
+                       cse=True, desired_shape=Jf3.shape)
+        fnc4_croped = factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True,
+                              cse=True, crop_result_idx=4, desired_shape=(4, len(xutp)))
 
         N = 4
-        xx = np.zeros((1, N)) + 1
-        uu = np.zeros((1, N)) + 0.2
-        tt = np.zeros((1, N)) + 0
-        pp = np.zeros((1, N)) + 0.03
+        np.random.seed(1749)
+        xx1 = np.random.random((1, N)) + 1
+        xx3 = np.random.random((3, N)) + 1
+        uu = np.random.random((1, N)) + 0.2
+        tt = np.random.random((1, N)) + 0
+        pp = np.random.random((1, N)) + 0.03
 
-        res1a = fnc1a(xx, uu, tt, pp)
-        res1b = fnc1b(xx, uu, tt, pp)
-        res2 = fnc2(xx, uu,tt, pp)
+        res1a = fnc1a(xx1, uu, tt, pp)
+        res1b = fnc1b(xx1, uu, tt, pp)
+        res2 = fnc2(xx1, uu, tt, pp)
 
-        # results shall have shape (len(f), 1, N)
-        # middle 1 due to the fact that f is interpreted as a (n x 1)-matrix (column-vector)
+        res3 = fnc3(xx3, uu, tt, pp)
+        res3_croped = fnc3_croped(xx3, uu, tt, pp)
 
         assert res1a.shape == (3, N)
         assert res1b.shape == (3, 1, N)
         assert res2.shape == (3, N)
+
+        assert res3.shape == (6, N)
+        assert res3_croped.shape == (4, N)
+
+        res4 = fnc4(xx3, uu, tt, pp)
+        res4_croped = fnc4_croped(xx3, uu, tt, pp)
+
+        na = len(xutp)
+        assert res4.shape == (6, na, N)
+        assert res4_croped.shape == (4, na, N)
+
+        assert np.alltrue(res4[:4, :] == res4_croped)
+
+        for i in xrange(N):
+            xn = xx3[:, i]
+            un = uu[:, i]
+            tn = tt[:, i]
+            pn = pp[:, i]
+
+            rplmts = zip([x1, x2, x3], xn) + zip([u], un) + zip([t], tn) + zip([p], pn)
+            tmp_res = aux.to_np(Jf3.subs(rplmts).evalf())
+
+            assert np.allclose(tmp_res, res4[:, :, i])
 
     def test_cse_lambdify(self):
 
@@ -434,7 +478,7 @@ class TestCseLambdify(object):
         fnc = sp.lambdify(t, swo, modules="numpy")
         tt = np.linspace(-3, 3, 1e3)
 
-        if 1:
+        if 0:
             plt.plot(tt, fnc(tt))
             plt.show()
 

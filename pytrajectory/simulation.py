@@ -72,7 +72,7 @@ class Simulator(object):
         """
         u = self.u(t)
         p = self.pt
-        dx = self.ff(x, u, p)
+        dx = self.ff(x, u, t, p)
         
         return dx
 

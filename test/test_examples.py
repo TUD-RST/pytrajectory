@@ -13,7 +13,6 @@ from pytrajectory import log
 from ipHelp import IPS
 
 
-# define the vectorfield
 def rhs_di(x, u, t, p):
     x1, x2 = x
     u1, = u
@@ -25,6 +24,15 @@ def rhs_di(x, u, t, p):
 # system state boundary values for a = 0.0 [s] and b = 2.0 [s]
 xa_di = [0.0, 0.0]
 xb_di = [1.0, 0.0]
+
+
+def rhs_di_penalties(x, u, t, p):
+    x1, x2 = x
+    u1, = u
+
+    ff = [x2, u1, 0]
+
+    return ff
 
 
 def rhs_inv_pend(x, u, t, p):
@@ -53,6 +61,14 @@ class TestExamples(object):
 
     def test_di_integrator_pure(self):
         S1 = TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
+                               show_ir=False,
+                               ierr=None,
+                               use_chains=False)
+        S1.solve()
+        assert S1.reached_accuracy
+
+    def test_di_integrator_pure_with_penalties(self):
+        S1 = TransitionProblem(rhs_di_penalties, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
                                show_ir=False,
                                ierr=None,
                                use_chains=False)
@@ -125,7 +141,7 @@ if __name__ == "__main__":
     # print "-"*10
     # tests.test_di_constraint_x2_projective()
     # print "-"*10
-    # tests.test_di_con_u1_x2_projective_integrator()
+    # tests.test_di_integrator_pure_with_penalties()
     print "-"*10
-    tests.test_constr_inv_pendulum()
+    tests.test_di_con_u1_x2_projective_integrator()
 

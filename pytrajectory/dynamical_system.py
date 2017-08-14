@@ -322,29 +322,42 @@ class DynamicalSystem(object):
             logging.warn("System is not input affine. -> VF g has no meaning.")
 
         # vf_f and vf_g are not really neccessary, just for scientific playing
-        self.vf_f = aux.sym2num_vectorfield(f_sym=ff, x_sym=self.states,
-                                            u_sym=self.inputs, p_sym=self.par,
-                                            vectorized=False, cse=False, evalconstr=None)
+        fnc_factory = aux.sym2num_vectorfield_new
 
-        self.vf_g = aux.sym2num_vectorfield(f_sym=gg, x_sym=self.states,
-                                            u_sym=self.inputs, p_sym=self.par,
-                                            vectorized=False, cse=False, evalconstr=None)
+        # self.vf_f = aux.sym2num_vectorfield(f_sym=ff, x_sym=self.states,
+        #                                     u_sym=self.inputs, p_sym=self.par,
+        #                                     vectorized=False, cse=False, evalconstr=None)
+        # self.vf_g = aux.sym2num_vectorfield(f_sym=gg, x_sym=self.states,
+        #                                     u_sym=self.inputs, p_sym=self.par,
+        #                                     vectorized=False, cse=False, evalconstr=None)
+
+        nx = self.n_states
+        self.vf_f = fnc_factory(expr=ff, xxs=self.states, uus=self.inputs, ts=None, pps=self.par,
+                                vectorized=False, cse=False, crop_result_idx=nx)
+
+        self.vf_g = fnc_factory(expr=gg, xxs=self.states, uus=self.inputs, ts=None, pps=self.par,
+                                vectorized=False, cse=False, crop_result_idx=nx)
 
         # This function is used for plotting:
         # TODO: also use vectorized form there
-        self.f_num = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-                                             u_sym=self.inputs, p_sym=self.par,
-                                             vectorized=False, cse=False, evalconstr=True)
+        # self.f_num = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
+        #                                      u_sym=self.inputs, p_sym=self.par,
+        #                                      vectorized=False, cse=False, evalconstr=True)
 
         # to handle penalty contraints it is necessary to distinguish between
         # the extended vectorfield (state equations + constraints) and
         # the basic vectorfiled (only state equations)
         # for simulation, only the the basic vf shall be used
 
-        self.f_num_simulation = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-                                                        u_sym=self.inputs, p_sym=self.par,
-                                                        vectorized=False, cse=False,
-                                                        evalconstr=False)
+        # self.f_num_simulation = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
+        #                                                 u_sym=self.inputs, p_sym=self.par,
+        #                                                 vectorized=False, cse=False,
+        #                                                 evalconstr=False)
+
+        self.f_num_simulation = fnc_factory(expr=self.f_sym_matrix, xxs=self.states,
+                                            uus=self.inputs, ts=None,
+                                            pps=self.par, vectorized=False, cse=False,
+                                            crop_result_idx=nx)
 
         # ---
         # these objects were formerly defined in the class CollocationSystem:

@@ -248,20 +248,31 @@ def sym2num_vectorfield_new(expr, xxs, uus, ts, pps, cse=False, squeeze_axis=Non
         expr_list = [expr]
         assert crop_result_idx is None, "crop result for scalar expression does not make sense"
 
-    elif isinstance(expr, (list, tuple, np.array)):
+    elif isinstance(expr, (list, tuple, np.ndarray)):
         expr_list = list(expr)
 
         for i, e in enumerate(expr_list):
-            msg = "Element #{} must be a sympy expression, but is {}".format(i, type(e))
-            assert isinstance(e, sp.Basic), msg
 
-        assert crop_result_idx in [None] + list(range(len(expr_list)))
+            msg = "Element #{} must be a number or sympy expression, but is {}".format(i, type(e))
+            assert isinstance(e, (sp.Basic, Number)), msg
+
+        assert crop_result_idx in [None] + list(range(len(expr_list) + 1))
         expr_list = expr_list[:crop_result_idx]
 
     elif isinstance(expr, sp.MatrixBase):
-        assert crop_result_idx in [None] + list(range(expr.shape[0]))
+        assert crop_result_idx in [None] + list(range(expr.shape[0] + 1))
         expr_list = list(expr[:crop_result_idx, :])
 
+        if expr.shape[1] > 1 and desired_shape is None:
+            msg = "It is strongly recommended to explicitly provide a desired_shape if <expr> " \
+                  " is not a column vector"
+            raise UserWarning(msg)
+    else:
+        msg = "Unexpected type of expr: {}".format(type(expr))
+        raise TypeError(msg)
+
+    if ts is None:
+        ts = sp.Symbol("t")
     assert isinstance(ts, sp.Symbol)
 
     # now we can create the numeric function
@@ -270,7 +281,10 @@ def sym2num_vectorfield_new(expr, xxs, uus, ts, pps, cse=False, squeeze_axis=Non
     else:
         factory = sp.lambdify
 
-    _f_num = factory(xxs + uus + [ts] + pps,  expr_list,
+    args = []
+    for elt in (xxs, uus, [ts], pps):
+        args.extend(elt)
+    _f_num = factory(args, expr_list,
                      modules=[{'ImmutableMatrix': np.array}, 'numpy'])
 
     # create a wrapper as the actual function due to the behaviour
@@ -964,7 +978,7 @@ def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, par, npts=500, return_err
         x = x_fnc(t)
         u = u_fnc(t)
 
-        ff = ff_fnc(x, u, par).ravel()
+        ff = ff_fnc(x, u, t, par).ravel()
         dx = dx_fnc(t)
 
         error.append(ff - dx)
