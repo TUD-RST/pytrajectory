@@ -221,171 +221,6 @@ class TransitionProblem(object):
         self.constraint_handler = ConstraintHandler(self, self.dyn_sys, self.constraints)
         self.dyn_sys.constraint_handler = self.constraint_handler
 
-        # This is the old/deprecated code
-        # now transform the constrained vectorfield into an unconstrained one
-        if 0:
-            self.unconstrain()
-
-    def unconstrain(self):
-        """
-        This method is used to enable compliance with desired box constraints given by the user.
-        It transforms the vector-field by projecting the constrained state variables on
-        new unconstrained ones.
-
-        """
-
-        # TODO: this limitation should be dropped
-        if self.dyn_sys.f_sym.has_constraint_penalties and not len(self.constraints) == 0:
-            msg = "Combination of both types of constraints not yet supported."
-            raise NotImplementedError(msg)
-
-        # backup the original constrained system
-        self._dyn_sys_orig = copy.deepcopy(self.dyn_sys)
-
-        # get symbolic vectorfield
-        # (as sympy matrix toenable replacement method)
-        x = sp.symbols(self.dyn_sys.states)
-        u = sp.symbols(self.dyn_sys.inputs)
-        par = sp.symbols(self.dyn_sys.par)
-
-        # full matrix including penalty_constraints
-        ff_mat = sp.Matrix(self.dyn_sys.f_sym(x, u, par))
-
-        # get neccessary information form the dynamical system
-        a = self.dyn_sys.a
-        b = self.dyn_sys.b
-        boundary_values = self.dyn_sys.boundary_values
-        
-        # handle the constraints by projecting the constrained state variables
-        # on new unconstrained variables using saturation functions
-        allvars = self.dyn_sys.states + self.dyn_sys.inputs
-        for vname, limits in self.constraints.iteritems():
-            # check if boundary values are within saturation limits
-            assert vname in allvars, "variable name `%s` not found" % vname
-            idx = allvars.index(vname)
-            va, vb = self.dyn_sys.boundary_values[vname]
-
-            if None not in (va, vb):
-                # this is the usual case
-                if not ( limits[0] < va < limits[1] ) or not ( limits[0] < vb < limits[1] ):
-                    errmsg = "Boundary values must be strictly within the saturation limits!"
-                    logging.error(errmsg)
-                    logging.info("See docs, (e.g., example of constrained double intgrator.")
-                    raise ValueError(errmsg)
-            else:
-                # only one free boundary is not yet supported
-                # python keyword `is` does not work here
-                assert (va, vb) == (None, None)
-
-            # calculate saturation function expression and its derivative
-            yk = sp.Symbol(vname)
-
-            m, psi, dpsi = auxiliary.unconstrain(yk, *limits)
-
-            # replace constrained variables in vectorfield with saturation expression
-            # x(t) = psi(y(t))
-            ff_mat = ff_mat.replace(sp.Symbol(vname), psi)
-            
-            # update vectorfield to represent differential equation for new
-            # unconstrained state variable
-            #
-            #      d/dt x(t) = (d/dy psi(y(t))) * d/dt y(t)
-            # <==> d/dt y(t) = d/dt x(t) / (d/dy psi(y(t)))
-            # when vk is a component of the state
-            if idx < self.dyn_sys.n_states:
-                ff_mat[idx] /= dpsi
-            # update boundary values for new unconstrained variable
-            if None not in (va, vb):
-                boundary_values[vname] = ( (1./m) * np.log((va - limits[0]) / (limits[1] - va)),
-                                         (1./m) * np.log((vb - limits[0]) / (limits[1] - vb)) )
-        
-        # create a callable function for the new symbolic vectorfield
-        ff = np.asarray(ff_mat).flatten().tolist()
-        xup = self.dyn_sys.states + self.dyn_sys.inputs + self.dyn_sys.par
-        _f_sym = sp.lambdify(xup, ff, modules='sympy')
-
-        # handle additional penalty constraint expressions
-        n_pconstraints = self.dyn_sys.n_pconstraints
-        if n_pconstraints > 0:
-            def f_sym(x, u, p, evalconstr=True):
-                xup = np.hstack((x, u, p))
-                res = _f_sym(*xup)
-                if evalconstr:
-                    # full result
-                    return res
-                else:
-                    return res[:-n_pconstraints]
-        else:
-            def f_sym(x, u, p):
-                xup = np.hstack((x, u, p))
-                return _f_sym(*xup)
-
-        f_sym.n_par = self.dyn_sys.n_par
-        f_sym.has_constraint_penalties = n_pconstraints > 0
-
-        # create a new unconstrained system
-        xa = [boundary_values[x][0] for x in self.dyn_sys.states]
-        xb = [boundary_values[x][1] for x in self.dyn_sys.states]
-        ua = [boundary_values[u][0] for u in self.dyn_sys.inputs]
-        ub = [boundary_values[u][1] for u in self.dyn_sys.inputs]
-
-        self.dyn_sys = DynamicalSystem(f_sym, a, b, xa, xb, ua, ub)
-
-    def constrain(self):
-        """
-        This method is used to determine the solution of the original constrained
-        state variables by creating a composition of the saturation functions and
-        the calculated solution for the introduced unconstrained variables.
-        """
-        
-        # get a copy of the current function dictionaries
-        # (containing functions for unconstrained variables y_i)
-
-        # x_fnc = copy.deepcopy(self.eqs.trajectories.x_fnc)
-        # dx_fnc = copy.deepcopy(self.eqs.trajectories.dx_fnc)
-
-        all_fncs = copy.deepcopy(self.eqs.trajectories.x_fnc)
-        all_fncs.update(copy.deepcopy(self.eqs.trajectories.u_fnc))
-
-        def dummy_fnc(*args):
-            msg = "This function shall not be called. Derivative of input is not provided."
-            raise ValueError(msg)
-
-        all_fncs_d = copy.deepcopy(self.eqs.trajectories.dx_fnc)
-        du_fncs = OrderedDict((u_name, dummy_fnc) for u_name in self.dyn_sys.inputs)
-        all_fncs_d.update(du_fncs)
-
-        allvars = self.dyn_sys.states + self.dyn_sys.inputs
-        # iterate over all constraints
-        for vk, limits in self.constraints.items():
-
-            # TODO: is this still valid?
-            # get symbols of original constrained variable x_k,
-            # the introduced unconstrained variable y_k
-            # and the saturation limits y0, y1
-
-            idx = allvars.index(vk)
-            y0, y1 = limits
-            
-            # get the calculated solution function for the unconstrained variable and its derivative
-            y_fnc = all_fncs[vk]
-            dy_fnc = all_fncs_d[vk]
-            
-            # create the compositions
-            psi_y, dpsi_dy = auxiliary.saturation_functions(y_fnc, dy_fnc, y0, y1)
-
-            n = self.dyn_sys.n_states
-
-            if idx < n:
-                # state component
-                # -> put created compositions into dictionaries of solution functions
-                self.eqs.trajectories.x_fnc[idx] = psi_y
-                self.eqs.trajectories.dx_fnc[idx] = dpsi_dy
-            else:
-                # input component
-                assert idx < n + self.dyn_sys.n_inputs
-                self.eqs.trajectories.u_fnc[idx - n] = psi_y
-
     def get_constrained_spline_fncs(self):
         """
         Map the unconstrained coordinates (y, v) to the original constrained coordinats (x, u).
@@ -401,7 +236,6 @@ class TransitionProblem(object):
 
         return self.dyn_sys.constraint_handler.get_constrained_spline_fncs(y_fncs, ydot_fncs,
                                                                            v_fncs)
-
 
     def check_refsol_consistency(self):
         """"
@@ -478,11 +312,6 @@ class TransitionProblem(object):
             # increment iteration number
             self.nIt += 1
 
-        # as a last, if there were any constraints to be taken care of,
-        # we project the unconstrained variables back on the original constrained ones
-        if self.constraints:
-            self.constrain()
-        
         self.T_sol = time.time() - T_start
         # return the found solution functions
 
