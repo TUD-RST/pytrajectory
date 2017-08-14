@@ -178,8 +178,6 @@ class DynamicalSystem(object):
         xx = np.zeros(n_states)
 
         for n_inputs, n_par in dim_combinations:
-            print n_inputs, n_par
-
             if n_inputs == 0:
                 continue
 
@@ -188,7 +186,6 @@ class DynamicalSystem(object):
             t_value = 0
 
             try:
-                # print u
                 return_value = self.f_sym(xx, uu, t_value, pp)
                 # if no ValueError is raised we have found valid values
                 finished = True
