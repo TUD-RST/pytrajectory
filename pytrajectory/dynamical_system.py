@@ -4,6 +4,9 @@ import numpy as np
 import sympy as sp
 import inspect
 from collections import OrderedDict
+import itertools
+
+from ipHelp import IPS
 
 import auxiliary as aux
 from log import logging
@@ -56,22 +59,6 @@ class DynamicalSystem(object):
         # analyse the given system  (set self.n_pos_args, n_states, n_inputs, n_par, n_pconstraints)
         self._determine_system_dimensions()
 
-        # handle the case where f_sym does not depend on additional free parameters
-        if self.n_pos_args == 2:
-            if f_sym.has_constraint_penalties:
-                def f_sym_wrapper(xx, uu, pp, evalconstr=True):
-                    pp  # ignore pp
-                    return f_sym(xx, uu, evalconstr)
-                self.f_sym = f_sym_wrapper
-
-            else:
-                def f_sym_wrapper(xx, uu, pp):
-                    pp  # ignore pp
-                    return f_sym(xx, uu)
-
-            f_sym_wrapper.has_constraint_penalties = f_sym.has_constraint_penalties
-            self.f_sym = f_sym_wrapper
-
         self.f_sym.n_par = self.n_par
         # set names of the state and input variables
         # (will be used as keys in various dictionaries)
@@ -122,30 +109,34 @@ class DynamicalSystem(object):
         # TODO: It should be possible to get rid of evalconstr argument
         # every result-component which has an index >= xn could be considered as penalty term
 
-        msg = "Unexpected number of arguments in f_sym"
-        assert 2 <= n_all_args <= 4, msg
+        if not n_all_args == 4:
+            msg = "Expecting signature: xdot = f(x, u, t, p), i.e. (state, input, time, parameters)"
+            raise TypeError(msg)
 
-        if n_all_args == 4:
-            assert argspec.args[-1] == 'evalconstr'
-            msg = "unexpected numbers or values for default arguments in f_sym"
-            assert argspec.defaults == (True,), msg
+        # TODO: this attribute should be replaced by self.n_pconstraints
+        self.f_sym.has_constraint_penalties = True
 
-            # this flag is stored as attribute of the function
-            # -> easier access, where ever the function occurs
-            self.f_sym.has_constraint_penalties = True
-        else:
-            self.f_sym.has_constraint_penalties = False
-            self.n_pconstraints = 0
-
-        if n_all_args in (3, 4):
-            # number of arguments which must be passed to f_sym
-            self.n_pos_args = 3
-        else:
-            assert n_all_args == 2
-            self.n_pos_args = 2
+        # TODO: remove obsolete code
+        # if n_all_args == 4:
+        #     assert argspec.args[-1] == 'evalconstr'
+        #     msg = "unexpected numbers or values for default arguments in f_sym"
+        #     assert argspec.defaults == (True,), msg
+        #
+        #     # this flag is stored as attribute of the function
+        #     # -> easier access, where ever the function occurs
+        #     self.f_sym.has_constraint_penalties = True
+        # else:
+        #     self.f_sym.has_constraint_penalties = False
+        #     self.n_pconstraints = 0
+        #
+        # if n_all_args in (3, 4):
+        #     # number of arguments which must be passed to f_sym
+        #     self.n_pos_args = 3
+        # else:
+        #     assert n_all_args == 2
+        #     self.n_pos_args = 2
 
     def _determine_system_dimensions(self):
-        # TODO comment on additional free parameters in the docstring
         """
         Determines the following parameters:
         self.n_states
@@ -153,6 +144,7 @@ class DynamicalSystem(object):
         self.n_par              number of additional free parameters (afp)
         self.n_pcontraints      number of penalty-constraint-equations
 
+        The variables n_inputs and n_par can only be retrieved by trial and error.
 
         Parameters
         ----------
@@ -168,84 +160,82 @@ class DynamicalSystem(object):
         # of the boundary value lists
         n_states = len(self.xa)
 
-        assert self.n_pos_args in (2, 3)
-        if self.n_pos_args == 3:
-            # f_sym expects a third argument
+        # now we want to determine the dimension (>=1) of the input and the free parameters (>=0)
+        # steps:
+        # 1. create a mapping integers  to valid combinations of dimensions
+        # 2. interatively try to call the vectorfield-function
+        # 3. stop if no exception occurs or if maximum number is reached
 
-            # if there is no additional information provided assume that
-            # the present argument means 1 free parameter
-            # Note: n_par might also be 0 (due to "wrapping-generalization")
-            n_par = getattr(self.f_sym, 'n_par', 1)
-            par_arg = [[1]*n_par]
-        else:
-            n_par = 0
-            par_arg = []
+        max_dim = 100
+        # create a sequence like ([0, 0], [0, 1], ... [0, 99], [1, 1,], ...)
+        dim_combinations = itertools.product(xrange(max_dim), xrange(max_dim))
 
-        # now we want to determine the input dimension
-        # therefore we iteratively increase the inputs dimension and try to call
-        # the vectorfield-function
-        found_n_inputs = False
-        x = np.ones(n_states)
+        # get most likely combinations first:
+        dim_combinations = sorted(dim_combinations, key=sum)
 
-        j = 0
-        while not found_n_inputs:
-            u = np.ones(j)
+        finished = False
+        return_value = None
+        xx = np.zeros(n_states)
 
-            if j > 100:
-                msg = "Unexpected unpacking Error inside rhs-function.\n " \
-                      "Probable reasons for this error:\n" \
-                      " - Wrong size of initial value (xa)\n" \
-                      " - System with > 100 input components (not supported)\n" \
-                      " - interal algortihmic error"
+        for n_inputs, n_par in dim_combinations:
+            print n_inputs, n_par
 
-                raise ValueError(msg)
+            if n_inputs == 0:
+                continue
+
+            uu = np.zeros(n_inputs)
+            pp = np.ones(n_par)
+            t_value = 0
 
             try:
                 # print u
-                self.f_sym(x, u, *par_arg)
-                # if no ValueError is raised j is the dimension of the inputs
-                n_inputs = j
-                found_n_inputs = True
+                return_value = self.f_sym(xx, uu, t_value, pp)
+                # if no ValueError is raised we have found valid values
+                finished = True
+                break
             except ValueError as err:
                 if "values to unpack" not in err.message:
                     logging.error("unexpected ValueError")
                     raise err
-                # unpacking error inside f_sym
-                # (that means the dimensions don't match)
-                j += 1
+                else:
+                    # unpacking error inside f_sym
+                    # (that means the dimensions don't match)
+                    continue
             except TypeError as err:
                 flag = "<lambda>() takes" in err.message and \
                        "arguments" in err.message and "given" in err.message
                 if not flag:
                     logging.error("unexpected TypeError")
                     raise err
-                # calling error for lambda -> dimensions do not match
-                j += 1
+                else:
+                    # calling error for lambda -> dimensions do not match
+                    continue
 
-        # determine n_pconstraints
+        if not finished:
+            msg = "Unexpected unpacking Error inside rhs-function.\n " \
+                  "Probable reasons for this error:\n" \
+                  " - Wrong size of initial value (xa)\n" \
+                  " - System with >= {} input / parameter components (not supported)\n" \
+                  " - interal algortihmic error".format(max_dim)
+
+            raise ValueError(msg)
+
+        # determine n_penalties
         # if getattr(self.f_sym, 'has_constraint_penalties', False):
-        if self.f_sym.has_constraint_penalties:
-            testargs = [self.xa, [0]*n_inputs]
-            if n_par > 0:
-                testargs.append([1]*n_par)
 
-            # number of returned values - number of states
-            n_pconstraints = len(self.f_sym(*testargs, evalconstr=True)) - n_states
-            if n_pconstraints < 1:
-                msg = "No constraint equations found, but signature of f_sym indicates such."
-                raise ValueError(msg)
-        else:
-            n_pconstraints = 0
+        assert return_value is not None
+
+        n_penalties = len(return_value) - n_states
 
         logging.debug("--> state: {}".format(n_states))
         logging.debug("--> input: {}".format(n_inputs))
         logging.debug("--> a.f.p.: {}".format(n_par))
-        logging.debug("--> p.constraint-expr.: {}".format(n_pconstraints))
+        logging.debug("--> penalties: {}".format(n_penalties))
 
         self.n_states = n_states
         self.n_inputs = n_inputs
         self.n_par = n_par
-        self.n_pconstraints = n_pconstraints
+        self.n_pconstraints = n_penalties
 
         return
 
@@ -318,10 +308,11 @@ class DynamicalSystem(object):
         :return:
         """
         # TODO: to enable time dependency inside the systems equation
-        # Expected rhs-signature: rhs(x, u, t, p, evalconstr))
+        # Expected rhs-signature: rhs(x, u, t, p))
 
-        # with (penalty-) constraints (if present)
-        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, self.pps))
+        ts = sp.Symbol('t')
+
+        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, ts, self.pps))
 
         # without (penalty-) constraints
         self.f_sym_matrix = self.f_sym_full_matrix[:self.n_states, :]

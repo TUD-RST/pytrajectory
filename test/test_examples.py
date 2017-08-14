@@ -11,7 +11,7 @@ import pytest
 
 
 # define the vectorfield
-def f(x, u):
+def f(x, u, t, p):
     x1, x2 = x
     u1, = u
 
