@@ -167,6 +167,35 @@ class TestCseLambdify(object):
         assert res1.shape == (3, 1, N)
         assert res2.shape == (3, 1, N)
 
+    def test_sym2num2(self):
+        x, u, p = sp.symbols('x, u, p')
+        f1 = [x, u, p]
+        f2 = [x, u, 0*p]
+
+        ts = sp.Symbol('t')
+        factory = pytrajectory.auxiliary.sym2num_vectorfield_new
+        fnc1a = factory(expr=f1, xxs=[x], uus=[u], ts=ts, pps=[p], vectorized=True, cse=True)
+        fnc1b = factory(expr=f1, xxs=[x], uus=[u], ts=ts, pps=[p], vectorized=True, cse=True,
+                        desired_shape=(3, 1))
+        fnc2 = factory(expr=f2, xxs=[x], uus=[u], ts=ts, pps=[p], vectorized=True, cse=True)
+
+        N = 4
+        xx = np.zeros((1, N)) + 1
+        uu = np.zeros((1, N)) + 0.2
+        tt = np.zeros((1, N)) + 0
+        pp = np.zeros((1, N)) + 0.03
+
+        res1a = fnc1a(xx, uu, tt, pp)
+        res1b = fnc1b(xx, uu, tt, pp)
+        res2 = fnc2(xx, uu,tt, pp)
+
+        # results shall have shape (len(f), 1, N)
+        # middle 1 due to the fact that f is interpreted as a (n x 1)-matrix (column-vector)
+
+        assert res1a.shape == (3, N)
+        assert res1b.shape == (3, 1, N)
+        assert res2.shape == (3, N)
+
     def test_cse_lambdify(self):
 
         xx, uu, pp, xxn, uun, ppn, Jx1, Jx2, allargs, N = aux.get_attributes_from_object(self)
@@ -501,6 +530,6 @@ if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")
 
     tests = TestCseLambdify()
-    tests.test_to_np()
+    tests.test_sym2num2()
 
     # understand_einsum()

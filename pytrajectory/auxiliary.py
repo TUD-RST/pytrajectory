@@ -226,8 +226,78 @@ def find_integrator_chains(dyn_sys):
     return chains, eqind
 
 
+def sym2num_vectorfield_new(expr, xxs, uus, ts, pps, cse=False, squeeze_axis=None,
+                            crop_result_idx=None, desired_shape=None, vectorized=True):
+    """
+    converts sympy expression into a fast evaluable function
+
+    :param expr:
+    :param xxs:
+    :param uus:
+    :param ts:
+    :param pps:
+    :param cse:
+    :param squeeze_axis:
+    :param crop_result_idx:
+    :return:
+    """
+
+    assert isinstance(crop_result_idx, (int, type(None)))
+
+    if isinstance(expr, sp.Basic):
+        expr_list = [expr]
+        assert crop_result_idx is None, "crop result for scalar expression does not make sense"
+
+    elif isinstance(expr, (list, tuple, np.array)):
+        expr_list = list(expr)
+
+        for i, e in enumerate(expr_list):
+            msg = "Element #{} must be a sympy expression, but is {}".format(i, type(e))
+            assert isinstance(e, sp.Basic), msg
+
+        assert crop_result_idx in [None] + list(range(len(expr_list)))
+        expr_list = expr_list[:crop_result_idx]
+
+    elif isinstance(expr, sp.MatrixBase):
+        assert crop_result_idx in [None] + list(range(expr.shape[0]))
+        expr_list = list(expr[:crop_result_idx, :])
+
+    assert isinstance(ts, sp.Symbol)
+
+    # now we can create the numeric function
+    if cse:
+        factory = cse_lambdify
+    else:
+        factory = sp.lambdify
+
+    _f_num = factory(xxs + uus + [ts] + pps,  expr_list,
+                     modules=[{'ImmutableMatrix': np.array}, 'numpy'])
+
+    # create a wrapper as the actual function due to the behaviour
+    # of lambdify()
+    # TODO: get rid of this case distinction
+    if vectorized:
+        stack = np.vstack
+    else:
+        stack = np.hstack
+
+    if desired_shape is None:
+        shape = (len(expr_list), )
+    else:
+        shape = desired_shape
+
+    _f_num_bc = broadcasting_wrapper(_f_num, shape, squeeze_axis)
+
+    def f_num(xx, uu, tt, pp):
+        xutp = stack((xx, uu, tt, pp))
+        res = _f_num_bc(*xutp)
+        return res
+
+    return f_num
+
+
 def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
-                        evalconstr=None, squeeze_axis=None):
+                        evalconstr=None, squeeze_axis=None, crop_result=None):
     """
     This function takes a callable vector field of a dynamical system that is to be evaluated with
     symbols for the state and input variables and returns a corresponding function that can be
@@ -253,11 +323,13 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
     cse : bool
         Whether or not to make use of common subexpressions in vector field
 
-    evalconstr : None (default) or bool
+    evalconstr : None (default) or bool [obsolete!]
         Whether or not to include the constraint equations (which might be represented
         as the last part of the vf)
 
     squeeze_axis : None or int, see function aux.broadcasting_wrapper for details
+
+    crop_result : None or int (k), crop the resulting sequence after k elements
 
     Returns
     -------
@@ -317,11 +389,13 @@ def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
         # created function also returns a list which then
         # can be easily transformed into an 1d-array
         F_sym = np.array(F_sym).ravel(order='F').tolist()
+
     elif sym_dim == 2:
         # if the the original dimension was equal to two
         # we pass the expression as a matrix
         # then the created function returns an 2d-array
         F_sym = sp.Matrix(F_sym)
+
     else:
         msg = "unexpected number of dimensions: {}".format(F_sym)
         raise ValueError(msg)
