@@ -71,11 +71,12 @@ class TransitionProblem(object):
         ierr          1e-1            Tolerance for the error on the whole interval
         tol           1e-5            Tolerance for the solver of the equation system
         dt_sim        1e-2            Sample time for integration (initial value problem)
-        reltol        2e-5            Rel. tolerance (for LM A. to be confident with local minimum)
+        reltol        2e-5            Rel. tolerance (for LM-Algorithm to be confident with local
+                                      minimum)
         localEsc      0               How often try to escape local minimum without increasing
                                       number of spline parts
         use_chains    True            Whether or not to use integrator chains
-        sol_steps     50             Maximum number of iteration steps for the eqs solver
+        sol_steps     50              Maximum number of iteration steps for the eqs solver
         accIt         5               How often resume the iteration after sol_steps limit
                                       (just have a look, in case the ivp is already satisfied)
         show_ir       False           Show intermediate result. Plot splines and simulation result
