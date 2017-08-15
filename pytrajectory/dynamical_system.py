@@ -54,7 +54,6 @@ class DynamicalSystem(object):
         self.b = b
         self.tt = np.linspace(a, b, 1000)
 
-
         self._analyze_f_sym_signature()
         # analyse the given system  (set self.n_pos_args, n_states, n_inputs, n_par, n_pconstraints)
         self._determine_system_dimensions(xa)
@@ -111,12 +110,10 @@ class DynamicalSystem(object):
         # TODO: It should be possible to get rid of evalconstr argument
         # every result-component which has an index >= xn could be considered as penalty term
 
-        if not n_all_args == 4:
-            msg = "Expecting signature: xdot = f(x, u, t, p), i.e. (state, input, time, parameters)"
+        if not n_all_args == 5:
+            msg = "Expecting signature: xdot = f(x, u, uref, t, p)," \
+                  "i.e. (state, input, reference_input, time, parameters)"
             raise TypeError(msg)
-
-        # TODO: this attribute should be replaced by self.n_pconstraints
-        self.f_sym.has_constraint_penalties = True
 
     def _determine_system_dimensions(self, xa):
         """
@@ -168,11 +165,12 @@ class DynamicalSystem(object):
                 continue
 
             uu = np.zeros(n_inputs)
+            uuref = uu
             pp = np.ones(n_par)
             t_value = 0
 
             try:
-                return_value = self.f_sym(xx, uu, t_value, pp)
+                return_value = self.f_sym(xx, uu, uuref, t_value, pp)
                 # if no ValueError is raised we have found valid values
                 finished = True
                 break
@@ -202,9 +200,6 @@ class DynamicalSystem(object):
                   " - interal algortihmic error".format(max_dim)
 
             raise ValueError(msg)
-
-        # determine n_penalties
-        # if getattr(self.f_sym, 'has_constraint_penalties', False):
 
         assert return_value is not None
 
@@ -239,20 +234,23 @@ class DynamicalSystem(object):
 
         self.xa, self.xb, self.ua, self.ub = xa, xb, ua, ub
 
-    def _preprocess_uref(self, uref):
+    def _preprocess_uref(self, uref_fnc):
         """
-        :param uref:    None or callable
+        :param uref_fnc:    None or callable
         :return:
         """
-        if uref is not None:
-            t0 = self.a
-            npts = 10
-            tt = np.linspace(self.a, self.b, npts)
+        if uref_fnc is None:
+            # define zero-reference if nothing else was provided
+            uref_fnc = aux.zero_func_like(self.n_inputs)
 
-            assert uref(t0).shape == (self.n_inputs, )
-            assert uref(tt).shape == (self.n_inputs, npts)
+        t0 = self.a
+        npts = 10
+        tt = np.linspace(self.a, self.b, npts)
 
-        self.uref = uref
+        assert uref_fnc(t0).shape == (self.n_inputs,)
+        assert uref_fnc(tt).shape == (self.n_inputs, npts)
+
+        self.uref_fnc = uref_fnc
 
     def _create_f_and_Df_objects(self):
         """
@@ -280,7 +278,10 @@ class DynamicalSystem(object):
         """
         ts = sp.Symbol('t')
 
-        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, ts, self.pps))
+        # for symbolic evaluation uref(t) does not matter
+        uuref = [0]*len(self.uus)
+
+        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, uuref, ts, self.pps))
 
         for i, elt in enumerate(self.f_sym_full_matrix):
             msg = "element #{} (i.e., `{}`) should be sp.Expr, not {}".format(i, elt, type(elt))
@@ -300,11 +301,13 @@ class DynamicalSystem(object):
         fnc_factory = aux.expr2callable
 
         nx = self.n_states
-        self.vf_f = fnc_factory(expr=ff, xxs=self.states, uus=self.inputs, ts=None, pps=self.par,
+        self.vf_f = fnc_factory(expr=ff, xxs=self.states, uus=self.inputs, uref_fnc=self.uref_fnc,
+                                ts=None, pps=self.par,
                                 vectorized=False, cse=False, crop_result_idx=nx)
 
-        self.vf_g = fnc_factory(expr=gg, xxs=self.states, uus=self.inputs, ts=None, pps=self.par,
-                                vectorized=False, cse=False, crop_result_idx=nx)
+        self.vf_g = fnc_factory(expr=gg, xxs=self.states, uus=self.inputs, uref_fnc=self.uref_fnc,
+                                ts=None, pps=self.par, vectorized=False, cse=False,
+                                crop_result_idx=nx)
 
         # to handle penalty contraints it is necessary to distinguish between
         # the extended vectorfield (state equations + penalties) and
@@ -312,7 +315,7 @@ class DynamicalSystem(object):
         # for simulation, only the the basic vf shall be used -> crop_result
 
         self.f_num_simulation = fnc_factory(expr=self.f_sym_matrix, xxs=self.states,
-                                            uus=self.inputs, ts=None,
+                                            uus=self.inputs, uref_fnc=self.uref_fnc, ts=None,
                                             pps=self.par, vectorized=False, cse=False,
                                             crop_result_idx=nx)
 
@@ -324,12 +327,14 @@ class DynamicalSystem(object):
 
         assert self.f_sym_full_matrix.shape == (self.n_states + self.n_pconstraints, 1)
         self.ff_vectorized = fnc_factory(expr=self.f_sym_full_matrix, xxs=self.states,
-                                         uus=self.inputs, ts=None, pps=self.par, vectorized=True,
+                                         uus=self.inputs, uref_fnc=self.uref_fnc,
+                                         ts=None, pps=self.par, vectorized=True,
                                          cse=True, desired_shape=(len(self.f_sym_full_matrix), ) )
 
         all_symbols = sp.symbols(self.states + self.inputs + self.par)
         self.Df_expr = sp.Matrix(self.f_sym_full_matrix).jacobian(all_symbols)
 
         self.Df_vectorized = fnc_factory(expr=self.Df_expr, xxs=self.states, uus=self.inputs,
-                                         ts=None, pps=self.par, vectorized=True, cse=True,
+                                         uref_fnc=self.uref_fnc, ts=None, pps=self.par,
+                                         vectorized=True, cse=True,
                                          desired_shape=self.Df_expr.shape)

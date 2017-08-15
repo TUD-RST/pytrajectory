@@ -125,29 +125,28 @@ class TestCseLambdify(object):
 
         f3 = [x1, x2*x3*u, p*x3, t, 2, 4]
 
+        uref_fnc = aux.zero_func_like(1)
+        kwargs = dict(uref_fnc=uref_fnc, ts=t, pps=[p], vectorized=True, cse=True)
+
         factory = pytrajectory.auxiliary.expr2callable
-        fnc1a = factory(expr=f1, xxs=[x1], uus=[u], ts=t, pps=[p], vectorized=True, cse=True)
-        fnc1b = factory(expr=f1, xxs=[x1], uus=[u], ts=t, pps=[p], vectorized=True, cse=True,
-                        desired_shape=(3, 1))
-        fnc2 = factory(expr=f2, xxs=[x1], uus=[u], ts=t, pps=[p], vectorized=True, cse=True)
+        fnc1a = factory(expr=f1, xxs=[x1], uus=[u], **kwargs)
+        fnc1b = factory(expr=f1, xxs=[x1], uus=[u], desired_shape=(3, 1), **kwargs)
+        fnc2 = factory(expr=f2, xxs=[x1], uus=[u], **kwargs)
 
-        fnc3 = factory(expr=f3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True,
-                       cse=True)
+        fnc3 = factory(expr=f3, xxs=[x1, x2, x3], uus=[u], **kwargs)
 
-        fnc3_croped = factory(expr=f3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True,
-                              cse=True, crop_result_idx=4)
+        fnc3_croped = factory(expr=f3, xxs=[x1, x2, x3], uus=[u], crop_result_idx=4, **kwargs)
 
         xutp = [x1, x2, x3, u, t, p]
         Jf3 = sp.Matrix(f3).jacobian(xutp)
 
         with pytest.raises(UserWarning):
             # ensure warning if desired_shape is missing
-            factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True, cse=True)
+            factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], **kwargs)
 
-        fnc4 = factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True,
-                       cse=True, desired_shape=Jf3.shape)
-        fnc4_croped = factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True,
-                              cse=True, crop_result_idx=4, desired_shape=(4, len(xutp)))
+        fnc4 = factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], desired_shape=Jf3.shape, **kwargs)
+        fnc4_croped = factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], crop_result_idx=4,
+                              desired_shape=(4, len(xutp)), **kwargs)
 
         N = 4
         np.random.seed(1749)

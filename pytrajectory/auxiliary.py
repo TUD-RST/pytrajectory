@@ -226,7 +226,30 @@ def find_integrator_chains(dyn_sys):
     return chains, eqind
 
 
-def expr2callable(expr, xxs, uus, ts, pps, uref_fnc=None, cse=False, squeeze_axis=None,
+def zero_func_like(arg):
+    """Shortcut to create a function of one argument which alway returns np.zeros((n,)),
+     where either n=len(arg) or n=arg
+
+    :param arg: sequence or int
+    :return:
+    """
+    if hasattr(arg, '__len__'):
+        n = len(arg)
+    else:
+        assert isinstance(arg, int)
+        n = arg
+    assert n > 0
+
+    zeros = np.zeros((n,))
+
+    def tmp_fnc(t):
+        return zeros
+
+    fnc = broadcasting_wrapper(tmp_fnc, zeros.shape)
+    return fnc
+
+
+def expr2callable(expr, xxs, uus, uref_fnc, ts, pps, cse=False, squeeze_axis=None,
                   crop_result_idx=None, desired_shape=None, vectorized=True):
     """
     converts sympy expression(s) into a fast evaluable function
@@ -287,13 +310,14 @@ def expr2callable(expr, xxs, uus, ts, pps, uref_fnc=None, cse=False, squeeze_axi
         factory = sp.lambdify
 
     args = []
-    for elt in (xxs, uus, [ts], pps):
+    # ad hoc creation of symbols for reference input
+    uurefs = sp.symbols("uref1:{}".format(len(uus) + 1))
+    for elt in (xxs, uus, uurefs, [ts], pps):
         args.extend(elt)
     _f_num = factory(args, expr_list,
                      modules=[{'ImmutableMatrix': np.array}, 'numpy'])
 
-    # create a wrapper as the actual function due to the behaviour
-    # of lambdify()
+    # create a wrapper (background: see broadcasting_wrapper.__doc__)
     # TODO: get rid of this case distinction
     if vectorized:
         stack = np.vstack
@@ -308,15 +332,6 @@ def expr2callable(expr, xxs, uus, ts, pps, uref_fnc=None, cse=False, squeeze_axi
     _f_num_bc = broadcasting_wrapper(_f_num, shape, squeeze_axis)
 
     nu = len(uus)
-    # define zero-reference if nothing else was provided
-    if uref_fnc is None:
-        zeros = np.zeros((nu,))
-
-        def tmp_fnc(t):
-            return zeros
-
-        uref_fnc = broadcasting_wrapper(tmp_fnc, zeros.shape)
-
     # test shape compatibility
     t0 = 0
     npts = 10
@@ -326,7 +341,7 @@ def expr2callable(expr, xxs, uus, ts, pps, uref_fnc=None, cse=False, squeeze_axi
     assert uref_fnc(tt).shape == (nu, npts)
 
     def f_num(xx, uu, tt, pp):
-        xutp = stack((xx, uu + uref_fnc(tt), tt, pp))
+        xutp = stack((xx, uu, uref_fnc(tt), tt, pp))
         res = _f_num_bc(*xutp)
         return res
 

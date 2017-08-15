@@ -13,7 +13,7 @@ from pytrajectory import log
 from ipHelp import IPS
 
 
-def rhs_di(x, u, t, p):
+def rhs_di(x, u, uref, t, p):
     x1, x2 = x
     u1, = u
 
@@ -26,7 +26,7 @@ xa_di = [0.0, 0.0]
 xb_di = [1.0, 0.0]
 
 
-def rhs_di_penalties(x, u, t, p):
+def rhs_di_penalties(x, u, uref, t, p):
     x1, x2 = x
     u1, = u
 

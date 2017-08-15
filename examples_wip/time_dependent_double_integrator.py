@@ -90,17 +90,20 @@ if 0:
 
 # This factor adjusts how strong a deviation from the standard input is penalized.
 # Experience: 1 is much too strong
-input_penalty_scale = 0.01
+input_penalty_scale = 0.1
 
 
-def rhs2(state, usum, t, pp,):
+def rhs2(state, ua, uref, t, pp,):
     pp  # ignored parameters
     x1, x2 = state
-    u1, = usum
+    ua1, = ua
+    uref1, = uref
+
+    u1 = ua1 + uref1
 
     ff = [x2, u1]
 
-    c = 0*input_penalty_scale*u1**2 + 0*aux.switch_on(t, -1, Tb/2)*u1**2
+    c = input_penalty_scale*u1**2 + 0*aux.switch_on(t, -1, Tb/2)*u1**2
     ff.append(c)
     return np.array(ff)
 
