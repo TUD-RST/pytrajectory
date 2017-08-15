@@ -75,12 +75,11 @@ class TestCseLambdify(object):
 
         M = sp.Matrix([0.5*(x + y), sp.asin(sp.sin(0.5*(x+y))), sp.sin(x+y)**2 + sp.cos(x+y)**2])
 
-        f = pytrajectory.auxiliary.cse_lambdify(args=(x, y), expr=M, modules=self.modules_arg)
+        f = aux.cse_lambdify(args=(x, y), expr=M, modules=self.modules_arg)
 
         F = f(1., 1.)
 
-        assert type(F) == np.ndarray
-        assert not isinstance(F, np.matrix)
+        assert isinstance(F, np.ndarray)
         assert F.shape == (3, 1)
         assert np.allclose(F, np.ones((3, 1)))
 

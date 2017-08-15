@@ -358,7 +358,7 @@ def preprocess_expression(expr):
 
     else:
         expr = sp.sympify(expr)
-        if not isinstance(expr, (sp.Expr, sp.Matrix)):
+        if not isinstance(expr, (sp.Expr, sp.MatrixBase)):
             raise TypeError("Not a sympy expression!")
         return expr
 
