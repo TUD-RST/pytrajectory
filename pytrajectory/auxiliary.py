@@ -156,7 +156,7 @@ def find_integrator_chains(dyn_sys):
     chaindict = {}
     for i in xrange(len(f)):
         # substitution because of sympy difference betw. 1.0 and 1
-        if isinstance(f[i], sp.Basic):
+        if isinstance(f[i], sp.Expr):
             f[i] = f[i].subs(1.0, 1)
 
         for xx in state_sym:
@@ -249,7 +249,7 @@ def expr2callable(expr, xxs, uus, ts, pps, uref_fnc=None, cse=False, squeeze_axi
 
     assert isinstance(crop_result_idx, (int, type(None)))
 
-    if isinstance(expr, sp.Basic):
+    if isinstance(expr, sp.Expr):
         expr_list = [expr]
         assert crop_result_idx is None, "crop result for scalar expression does not make sense"
 
@@ -259,7 +259,7 @@ def expr2callable(expr, xxs, uus, ts, pps, uref_fnc=None, cse=False, squeeze_axi
         for i, e in enumerate(expr_list):
 
             msg = "Element #{} must be a number or sympy expression, but is {}".format(i, type(e))
-            assert isinstance(e, (sp.Basic, Number)), msg
+            assert isinstance(e, (sp.Expr, Number)), msg
 
         assert crop_result_idx in [None] + list(range(len(expr_list) + 1))
         expr_list = expr_list[:crop_result_idx]
@@ -358,7 +358,7 @@ def preprocess_expression(expr):
 
     else:
         expr = sp.sympify(expr)
-        if not isinstance(expr, (sp.Basic, sp.Matrix)):
+        if not isinstance(expr, (sp.Expr, sp.Matrix)):
             raise TypeError("Not a sympy expression!")
         return expr
 

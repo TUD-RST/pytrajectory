@@ -3,7 +3,7 @@
 import numpy as np
 import sympy as sp
 import inspect
-from collections import OrderedDict
+from numbers import Number
 import itertools
 
 from ipHelp import IPS
@@ -281,6 +281,9 @@ class DynamicalSystem(object):
         ts = sp.Symbol('t')
 
         self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, ts, self.pps))
+
+        for elt in self.f_sym_full_matrix:
+            assert isinstance(elt, (sp.Expr, Number))
 
         # without (penalty-) constraints
         self.f_sym_matrix = self.f_sym_full_matrix[:self.n_states, :]

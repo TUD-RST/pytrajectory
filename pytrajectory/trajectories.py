@@ -168,7 +168,7 @@ class Trajectory(object):
             # self.old_splines = auxiliary.copy_splines(self.splines)
             self.old_splines = copy.deepcopy(self.splines)
 
-        if self.old_splines is not None and isinstance(self.old_splines['x1'].f(0), sp.Basic):
+        if self.old_splines is not None and isinstance(self.old_splines['x1'].f(0), sp.Expr):
             msg = "Unexpectedly got an provisional spline for saving."
             # coeffs not set properly
             raise ValueError(msg)
