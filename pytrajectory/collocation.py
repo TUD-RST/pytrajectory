@@ -902,10 +902,12 @@ class CollocationSystem(object):
         for fnc, (k, v) in zip(fnc_list, self.trajectories.indep_vars.items()):
             logging.debug("Get guess from refsol for spline {}".format(k))
             s_new = self.trajectories.splines[k]
-            # free_coeffs_guess = s_new.interpolate(fnc)
 
-            # use Chebyshev nodes to increase approximation quality
-            free_coeffs_guess = s_new.new_interpolate(fnc, method='cheby')
+            free_coeffs_guess = s_new.interpolate(fnc)
+
+            # use Chebyshev nodes to increase approximation quality (currently does not work)
+            # free_coeffs_guess = s_new.new_interpolate(fnc, method='cheby')
+
             guess = np.hstack((guess, free_coeffs_guess))
 
             if 'u' in k:

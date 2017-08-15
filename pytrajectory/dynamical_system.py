@@ -282,8 +282,9 @@ class DynamicalSystem(object):
 
         self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, ts, self.pps))
 
-        for elt in self.f_sym_full_matrix:
-            assert isinstance(elt, (sp.Expr, Number))
+        for i, elt in enumerate(self.f_sym_full_matrix):
+            msg = "element #{} (i.e., `{}`) should be sp.Expr, not {}".format(i, elt, type(elt))
+            assert isinstance(elt, (sp.Expr, Number)), msg
 
         # without (penalty-) constraints
         self.f_sym_matrix = self.f_sym_full_matrix[:self.n_states, :]

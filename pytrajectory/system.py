@@ -338,7 +338,8 @@ class TransitionProblem(object):
         else:
             return self.eqs.trajectories.x, self.eqs.trajectories.u, self.get_par_values()
         ##:: self.eqs.trajectories.x, self.eqs.trajectories.u are functions,
-        ##:: variable is t.  x(t), u(t) (value of x and u at t moment, not all the values (not a list with values for all the time))
+        ##:: variable is t.  x(t), u(t) (value of x and u at t moment,
+        # not all the values (not a list with values for all the time))
 
     def get_spline_values(self, sol, plot=False):
         """
@@ -600,11 +601,13 @@ class TransitionProblem(object):
         par = par.repeat(n_tt, axis=1)
 
         # input part of the vectorfiled
-        gg = self.eqs.Df_vectorized(self.sim_data_xx.T, self.sim_data_uu.T, par).transpose(2, 0, 1)
+        gg = self.eqs.Df_vectorized(self.sim_data_xx.T, self.sim_data_uu.T,
+                                    self.sim_data_tt.T, par).transpose(2, 0, 1)
         gg = gg[:, :-1, -1]
 
         # drift part of the vf
-        ff = self.eqs.ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0, par).T[:, :-1]
+        ff = self.eqs.ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0,
+                                    self.sim_data_tt.T, par).T[:, :-1]
 
         labels = self.dyn_sys.states + self.dyn_sys.inputs
 
