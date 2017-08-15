@@ -324,13 +324,6 @@ class DynamicalSystem(object):
         # vf_f and vf_g are not really neccessary, just for scientific playing
         fnc_factory = aux.sym2num_vectorfield_new
 
-        # self.vf_f = aux.sym2num_vectorfield(f_sym=ff, x_sym=self.states,
-        #                                     u_sym=self.inputs, p_sym=self.par,
-        #                                     vectorized=False, cse=False, evalconstr=None)
-        # self.vf_g = aux.sym2num_vectorfield(f_sym=gg, x_sym=self.states,
-        #                                     u_sym=self.inputs, p_sym=self.par,
-        #                                     vectorized=False, cse=False, evalconstr=None)
-
         nx = self.n_states
         self.vf_f = fnc_factory(expr=ff, xxs=self.states, uus=self.inputs, ts=None, pps=self.par,
                                 vectorized=False, cse=False, crop_result_idx=nx)
@@ -349,11 +342,6 @@ class DynamicalSystem(object):
         # the basic vectorfiled (only state equations)
         # for simulation, only the the basic vf shall be used
 
-        # self.f_num_simulation = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-        #                                                 u_sym=self.inputs, p_sym=self.par,
-        #                                                 vectorized=False, cse=False,
-        #                                                 evalconstr=False)
-
         self.f_num_simulation = fnc_factory(expr=self.f_sym_matrix, xxs=self.states,
                                             uus=self.inputs, ts=None,
                                             pps=self.par, vectorized=False, cse=False,
@@ -364,15 +352,25 @@ class DynamicalSystem(object):
 
         # the vector field function which is used by CollocationSystem.build()
         # to build the system of target-equations
-        self.ff_vectorized = aux.sym2num_vectorfield(self.f_sym_full_matrix, self.states,
-                                                     self.inputs, self.par, vectorized=True,
-                                                     cse=True, squeeze_axis=1)
+
+        # self.ff_vectorized = aux.sym2num_vectorfield(self.f_sym_full_matrix, self.states,
+        #                                              self.inputs, self.par, vectorized=True,
+        #                                              cse=True, squeeze_axis=1)
+
+        assert self.f_sym_full_matrix.shape == (self.n_states + self.n_pconstraints, 1)
+        self.ff_vectorized = fnc_factory(expr=self.f_sym_full_matrix, xxs=self.states,
+                                         uus=self.inputs, ts=None, pps=self.par, vectorized=True,
+                                         cse=True, desired_shape=(len(self.f_sym_full_matrix), ) )
 
         all_symbols = sp.symbols(self.states + self.inputs + self.par)
-
         self.Df_expr = sp.Matrix(self.f_sym_full_matrix).jacobian(all_symbols)
-        self.Df_vectorized = aux.sym2num_vectorfield(self.Df_expr, self.states, self.inputs,
-                                                     self.par, vectorized=True, cse=True)
+
+        # self.Df_vectorized = aux.sym2num_vectorfield(self.Df_expr, self.states, self.inputs,
+        #                                              self.par, vectorized=True, cse=True)
+
+        self.Df_vectorized = fnc_factory(expr=self.Df_expr, xxs=self.states, uus=self.inputs,
+                                         ts=None, pps=self.par, vectorized=True, cse=True,
+                                         desired_shape=self.Df_expr.shape)
 
     # TODO: handle additional free parameters (if needed). Or at least raise NotImplementedError
     # Note: the lienarization approach did not yield promising results, therefore this code is

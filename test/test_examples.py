@@ -141,7 +141,7 @@ if __name__ == "__main__":
     # print "-"*10
     # tests.test_di_constraint_x2_projective()
     # print "-"*10
-    # tests.test_di_integrator_pure_with_penalties()
+    # tests.test_di_con_u1_x2_projective_integrator()
     print "-"*10
-    tests.test_di_con_u1_x2_projective_integrator()
+    tests.test_di_integrator_pure_with_penalties()
 

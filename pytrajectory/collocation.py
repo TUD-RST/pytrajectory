@@ -93,14 +93,11 @@ class CollocationSystem(object):
         states = self.sys.states  ##:: ('x1', 'x2', 'x3', 'x4')
         inputs = self.sys.inputs
         
-        # determine for each spline the index range of its free coeffs in the concatenated
-        # vector of all free coeffs
-        indic = self._get_index_dict()  ##:: e.g. {'x1': (0, 17), 'x2': (0, 17), ...},
         # from 0th to 16th coeff. belong to chain (x1,x2,x3), from 17 to 25 belong to chain(x3,x4)
 
         # compute dependence matrices (sparse format); SMC means Sparse Matrix Container
         # attributes: SMC.Mx, Mx_abs, Mdx, Mdx_abs, Mu, Mu_abs, Mp, Mp_abs
-        SMC = self._build_dependence_matrices(indic)
+        SMC = self._build_cpts_and_dep_matrices()
 
         # in the later evaluation of the equation system `F` and its jacobian `DF`
         # there will be created the matrices `F` and DF in which every nx rows represent the 
@@ -238,6 +235,8 @@ class CollocationSystem(object):
             cXUP = get_X_U_P(c, sparseflag)  # Container
             X, U, P = cXUP.X, cXUP.U, cXUP.P
 
+            T = self.cpts
+
             # TODO_ok: check if both spline approaches result in same values here
 
             # evaluate system equations and select those related
@@ -249,7 +248,7 @@ class CollocationSystem(object):
                 # reshape flattened X again to nx times nc Matrix
                 # nx: number of states, nc: number of collocation points
                 # eq_list = []  # this will hold the equations of F(w) = 0
-                F = ff_vec(X, U, P).ravel(order='F').take(take_indices, axis=0)[:,None]
+                F = ff_vec(X, U, T, P).ravel(order='F').take(take_indices, axis=0)[:,None]
                 dX = DMC.Mdx.dot(c)[:,None] + DMC.Mdx_abs
                 dX = dX.take(take_indices, axis=0)
                 F2 = F - dX
@@ -260,12 +259,10 @@ class CollocationSystem(object):
                 return resC
 
             else:
-
                 # original line. split up for separation of penalty terms and better readability
                 # F0 = ff_vec(X, U, P).ravel(order='F').take(take_indices, axis=0)[:,None]
-                #:: F now numeric
 
-                F0 = ff_vec(X, U, P)
+                F0 = ff_vec(X, U, T, P)
                 assert F0.shape == (n_states + n_pconstraints, n_cpts)
 
                 # now, this 2d array should be rearranged to a flattened vector
@@ -311,7 +308,7 @@ class CollocationSystem(object):
                 # debug:
                 if info:
                     # see Container docstring for motivation
-                    iC = Container(X=X, U=U, F=F, P=P, dY=dY, res=res, MC=SMC,
+                    iC = Container(X=X, U=U, T=T, P=P, F=F, dY=dY, res=res, MC=SMC,
                                    ff=ff_vec, Df=Df_vec)
                     res = iC
 
@@ -347,13 +344,15 @@ class CollocationSystem(object):
             cXUP = get_X_U_P(c, sparseflag)  # Container
             X, U, P = cXUP.X, cXUP.U, cXUP.P
 
+            T = self.cpts
+
             if symbeq:
                 raise NotImplementedError("this is obsolete debug code" )
 
                 msg= "this is for debugging and is not yet adapted to the presence" \
                      "of penalty constraints. Should not be hard."
                 raise NotImplementedError(msg)
-                DF_blocks = Df_vec(X,U,P).transpose([2, 0, 1])
+                DF_blocks = Df_vec(X, U, T, P).transpose([2, 0, 1])
                 DF_sym = linalg.block_diag(*DF_blocks).dot(realDXUP.toarray())  # :: array(dtype=object)
                 if self.trajectories._parameters['use_chains']:
                     DF_sym = DF_sym.take(take_indices, axis=0)
@@ -384,7 +383,7 @@ class CollocationSystem(object):
                 # Df_vec means Jac_f
 
                 # get the Jacobian blocks and turn them into the right shape
-                DF_blocks0 = Df_vec(X, U, P).transpose([2, 0, 1])
+                DF_blocks0 = Df_vec(X, U, T, P).transpose([2, 0, 1])
 
                 # TODO: do not transpose here but later
                 # however this requires to change some details in the nan-handling algorithm below
@@ -426,7 +425,7 @@ class CollocationSystem(object):
 
                 # Note this is redundant because it has been called already above (function F)
                 # but this way it is easier to implement
-                F0 = ff_vec(X, U, P)
+                F0 = ff_vec(X, U, T, P)
                 assert F0.shape == (n_states + n_pconstraints, n_cpts)
                 # (they are not part of ff(x)-xdot)
                 F1 = F0[:n_states, :]
@@ -533,7 +532,7 @@ class CollocationSystem(object):
         :return:    dict of index-pairs
         """
         # see below for explanation
-        indic = dict()
+        idx_dict = dict()
         i = 0
         j = 0
 
@@ -543,7 +542,7 @@ class CollocationSystem(object):
         for k, v in self.trajectories.indep_vars.items():
             # increase j by the number of indep coeffs on which it depends
             j += len(v)
-            indic[k] = (i, j)
+            idx_dict[k] = (i, j)
             i = j
 
         # TODO: Do we have to take care of additional parameters here ??
@@ -555,24 +554,29 @@ class CollocationSystem(object):
                     if sq in ic:
                         msg = "Not sure whether self.all_free_parametes is affected."
                         raise NotImplementedError(msg)
-                        indic[sq] = indic[ic.upper]
+                        idx_dict[sq] = idx_dict[ic.upper]
     
         # explanation:
         #
-        # now, the dictionary 'indic' looks something like
+        # now, the dictionary 'idx_dict' looks something like
         #
-        # indic = {u1 : (0, 6), x3 : (18, 24), x4 : (24, 30), x1 : (6, 12), x2 : (12, 18)}
+        # idx_dict = {u1 : (0, 6), x3 : (18, 24), x4 : (24, 30), x1 : (6, 12), x2 : (12, 18)}
         #
         # which means, that in the vector of all independent parameters of all splines
         # the 0th up to the 5th item [remember: Python starts indexing at 0 and leaves out the last]
         # belong to the spline created for u1, the items with indices from 6 to 11 belong to the
         # spline created for x1 and so on...
 
-        return indic
+        return idx_dict
 
-    def _build_dependence_matrices(self, indic):
+    def _build_cpts_and_dep_matrices(self):
+        """Create the collocation points and the so called dependence matrices which will later
+        serve to calculate the spline values from the free parameters
+
+        :return:
+        """
         # first we compute the collocation points
-        cpts = collocation_nodes(a=self.sys.a, b=self.sys.b,
+        self.cpts = collocation_nodes(a=self.sys.a, b=self.sys.b,
                                  npts=self.trajectories.n_parts_x * 2 + 1,
                                  coll_type=self._parameters['coll_type'])
 
@@ -593,12 +597,12 @@ class CollocationSystem(object):
         n_dof = len(free_param)
 
         # store internal information:
-        self.dbgC = Container(cpts=cpts, indic=indic, dx_fnc=dx_fnc, x_fnc=x_fnc, u_fnc=u_fnc)
+        self.dbgC = Container(cpts=self.cpts, dx_fnc=dx_fnc, x_fnc=x_fnc, u_fnc=u_fnc)
         self.dbgC.free_param = free_param
 
-        lx = len(cpts) * self.sys.n_states  # number of points * number of states
-        lu = len(cpts) * self.sys.n_inputs
-        lp = len(cpts) * self.sys.n_par
+        lx = len(self.cpts) * self.sys.n_states  # number of points * number of states
+        lu = len(self.cpts) * self.sys.n_inputs
+        lp = len(self.cpts) * self.sys.n_par
         
         # initialize sparse dependence matrices
         Mx = sparse.lil_matrix((lx, n_dof))
@@ -612,12 +616,16 @@ class CollocationSystem(object):
         
         Mp = sparse.lil_matrix((lp, n_dof))
         Mp_abs = sparse.lil_matrix((lp, 1))
+
+        # determine for each spline the index range of its free coeffs in the concatenated
+        # vector of all free coeffs
+        idx_dict = self._get_index_dict()  ##:: e.g. {'x1': (0, 17), 'x2': (0, 17), ...},
         
-        for ip, p in enumerate(cpts):
+        for ip, p in enumerate(self.cpts):
             for ix, xx in enumerate(states):
                 # get index range of `xx` in vector of all indep variables
-                i, j = indic[xx]
-                # :: indic = {'x2': (0, 17), 'x3': (17, 26), 'x1': (0, 17),
+                i, j = idx_dict[xx]
+                # :: idx_dict = {'x2': (0, 17), 'x3': (17, 26), 'x1': (0, 17),
                 # 'u1': (0, 17), 'x4': (17, 26)}
 
                 # determine derivation order according to integrator chains
@@ -639,7 +647,7 @@ class CollocationSystem(object):
                 
             for iu, uu in enumerate(self.sys.inputs):
                 # get index range of `xx` in vector of all indep vars
-                i,j = indic[uu]
+                i,j = idx_dict[uu]
 
                 dorder_fu = _get_derivation_order(u_fnc[uu])
 
@@ -653,7 +661,7 @@ class CollocationSystem(object):
 
             for ipar, ppar in enumerate(par):
                 # get index range of `xx` in vector of all indep vars
-                i, j = indic[ppar]
+                i, j = idx_dict[ppar]
 
                 # get the afp dependence vector for the collocation point and spline variable
                 # only implemented as function for consistency reasons

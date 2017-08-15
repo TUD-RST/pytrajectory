@@ -12,7 +12,7 @@ from ipHelp import IPS
 
 
 # define the vectorfield
-def rhs_double_integrator(x, u):
+def rhs_double_integrator(x, u, t, p):
     x1, x2 = x
     u1, = u
 
