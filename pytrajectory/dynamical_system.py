@@ -118,30 +118,8 @@ class DynamicalSystem(object):
         # TODO: this attribute should be replaced by self.n_pconstraints
         self.f_sym.has_constraint_penalties = True
 
-        # TODO: remove obsolete code
-        # if n_all_args == 4:
-        #     assert argspec.args[-1] == 'evalconstr'
-        #     msg = "unexpected numbers or values for default arguments in f_sym"
-        #     assert argspec.defaults == (True,), msg
-        #
-        #     # this flag is stored as attribute of the function
-        #     # -> easier access, where ever the function occurs
-        #     self.f_sym.has_constraint_penalties = True
-        # else:
-        #     self.f_sym.has_constraint_penalties = False
-        #     self.n_pconstraints = 0
-        #
-        # if n_all_args in (3, 4):
-        #     # number of arguments which must be passed to f_sym
-        #     self.n_pos_args = 3
-        # else:
-        #     assert n_all_args == 2
-        #     self.n_pos_args = 2
-
     def _determine_system_dimensions(self, xa):
         """
-
-
         Determines the following parameters:
         self.n_states
         self.n_inputs
@@ -261,32 +239,6 @@ class DynamicalSystem(object):
 
         self.xa, self.xb, self.ua, self.ub = xa, xb, ua, ub
 
-    # TODO: remove this obsolete function (now handled by constraint_handler)
-    def _get_boundary_dict_from_lists(self, xa, xb, ua, ub):
-        """
-        Creates a dictionary of boundary values for the state and input variables
-        for easier access.
-        """
-
-        # consistency check
-        assert len(xa) == len(xb) == self.n_states
-        if ua is None and ub is None:
-            ua = [None] * self.n_inputs
-            ub = [None] * self.n_inputs
-
-        # init dictionary
-        boundary_values = OrderedDict()
-
-        # add state boundary values
-        for i, x in enumerate(self.states):
-            boundary_values[x] = (xa[i], xb[i])  # :: bv = {'x1':(xa[0],xb[0]),...}
-
-        # add input boundary values
-        for j, u in enumerate(self.inputs):
-            boundary_values[u] = (ua[j], ub[j])
-
-        return boundary_values
-
     def _preprocess_uref(self, uref):
         """
         :param uref:    None or callable
@@ -326,9 +278,6 @@ class DynamicalSystem(object):
 
         :return:
         """
-        # TODO: to enable time dependency inside the systems equation
-        # Expected rhs-signature: rhs(x, u, t, p))
-
         ts = sp.Symbol('t')
 
         self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, ts, self.pps))
@@ -353,16 +302,10 @@ class DynamicalSystem(object):
         self.vf_g = fnc_factory(expr=gg, xxs=self.states, uus=self.inputs, ts=None, pps=self.par,
                                 vectorized=False, cse=False, crop_result_idx=nx)
 
-        # This function is used for plotting:
-        # TODO: remove this comment and squash commit
-        # self.f_num = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-        #                                      u_sym=self.inputs, p_sym=self.par,
-        #                                      vectorized=False, cse=False, evalconstr=True)
-
         # to handle penalty contraints it is necessary to distinguish between
-        # the extended vectorfield (state equations + constraints) and
+        # the extended vectorfield (state equations + penalties) and
         # the basic vectorfiled (only state equations)
-        # for simulation, only the the basic vf shall be used
+        # for simulation, only the the basic vf shall be used -> crop_result
 
         self.f_num_simulation = fnc_factory(expr=self.f_sym_matrix, xxs=self.states,
                                             uus=self.inputs, ts=None,
@@ -386,39 +329,3 @@ class DynamicalSystem(object):
         self.Df_vectorized = fnc_factory(expr=self.Df_expr, xxs=self.states, uus=self.inputs,
                                          ts=None, pps=self.par, vectorized=True, cse=True,
                                          desired_shape=self.Df_expr.shape)
-
-    # TODO: handle additional free parameters (if needed). Or at least raise NotImplementedError
-    # Note: the lienarization approach did not yield promising results, therefore this code is
-    # obsolete
-    def get_linearization(self, xref, uref=None):
-        """
-        return A, B matrices of the Jacobian Linearization
-
-        :param xref:
-        :param uref:
-        :return:
-        """
-
-        if uref is None:
-            uref = np.zeros(self.n_inputs)
-
-        xx = sp.symbols(self.states)
-        uu = sp.symbols(self.inputs)
-
-        n = self.n_states
-        assert len(xref) == n
-        assert len(uref) == self.n_inputs
-
-        f_sym_martix = sp.Matrix(self.f_sym(xx, uu))[:n, :]
-        Dfdx = f_sym_martix.jacobian(self.states)
-        Dfdu = f_sym_martix.jacobian(self.inputs)
-
-        replacements = zip(self.states, xref) + zip(self.inputs, uref)
-
-        # for some strange reason np.array has to be called twice to get
-        # float arrays instead of object-arrays
-        npa = np.array
-        A = npa( npa(Dfdx.subs(replacements)), dtype=np.float)
-        B = npa( npa(Dfdu.subs(replacements)), dtype=np.float)
-
-        return A, B
