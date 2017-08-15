@@ -226,20 +226,22 @@ def find_integrator_chains(dyn_sys):
     return chains, eqind
 
 
-def sym2num_vectorfield_new(expr, xxs, uus, ts, pps, cse=False, squeeze_axis=None,
-                            crop_result_idx=None, desired_shape=None, vectorized=True):
+def expr2callable(expr, xxs, uus, ts, pps, cse=False, squeeze_axis=None,
+                  crop_result_idx=None, desired_shape=None, vectorized=True):
     """
-    converts sympy expression into a fast evaluable function
+    converts sympy expression(s) into a fast evaluable function
 
-    :param expr:
-    :param xxs:
-    :param uus:
-    :param ts:
-    :param pps:
-    :param cse:
-    :param squeeze_axis:
-    :param crop_result_idx:
-    :return:
+    :param expr:    sympy expression or flat sequence of such or matrix
+    :param xxs:     state variables
+    :param uus:     input variables
+    :param ts:      time variable (or None)
+    :param pps:     parameter variables (empty sequence allowed)
+    :param cse:     flag for common subexpression simplification
+    :param squeeze_axis:    None or int, which axis of the result should be squeezed
+    :param crop_result_idx: None or int, after which row-index the result should be croped
+                            (used, e.g., to crop the penalty terms of the vf where not needed)
+
+    :return:        callable
     """
 
     assert isinstance(crop_result_idx, (int, type(None)))
@@ -305,139 +307,6 @@ def sym2num_vectorfield_new(expr, xxs, uus, ts, pps, cse=False, squeeze_axis=Non
     def f_num(xx, uu, tt, pp):
         xutp = stack((xx, uu, tt, pp))
         res = _f_num_bc(*xutp)
-        return res
-
-    return f_num
-
-
-def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False,
-                        evalconstr=None, squeeze_axis=None, crop_result=None):
-    """
-    This function takes a callable vector field of a dynamical system that is to be evaluated with
-    symbols for the state and input variables and returns a corresponding function that can be
-    evaluated with numeric values for these variables.
-
-    Parameters
-    ----------
-
-    f_sym : callable or array_like
-        The callable ("symbolic") vector field of the control system.
-
-    x_sym : iterable
-        The symbols for the state variables of the control system.
-
-    u_sym : iterable
-        The symbols for the input variables of the control system.
-
-    p_sym : np.array
-
-    vectorized : bool
-        Whether or not to return a vectorized function.
-
-    cse : bool
-        Whether or not to make use of common subexpressions in vector field
-
-    evalconstr : None (default) or bool [obsolete!]
-        Whether or not to include the constraint equations (which might be represented
-        as the last part of the vf)
-
-    squeeze_axis : None or int, see function aux.broadcasting_wrapper for details
-
-    crop_result : None or int (k), crop the resulting sequence after k elements
-
-    Returns
-    -------
-
-    callable
-        The callable ("numeric") vector field of the control system.
-    """
-
-    # get a representation of the symbolic vector field
-    if callable(f_sym):
-
-        # ensure data type of arguments
-        if all(isinstance(s, str) for s in x_sym + u_sym + p_sym):
-            x_sym = sp.symbols(x_sym)
-            u_sym = sp.symbols(u_sym)
-            p_sym = sp.symbols(p_sym)
-
-        if not all(isinstance(s, sp.Symbol) for s in x_sym + u_sym + p_sym):
-            msg = "unexpected types in {}".format(x_sym + u_sym + p_sym)
-            raise TypeError(msg)
-
-        # construct the arguments
-        args = [x_sym, u_sym, p_sym]
-        if f_sym.has_constraint_penalties:
-            assert evalconstr is not None
-            args.append(evalconstr)
-
-        # get the the symbolic expression by evaluation
-        F_sym = f_sym(*args)
-
-    else:
-        # f_sym was not a callable
-        if evalconstr is not None:
-            msg = "expected a callable for usage with the flag evalconstr"
-            raise ValueError(msg)
-        F_sym = f_sym
-
-    sym_type = type(F_sym)
-
-    # first we determine the dimension of the symbolic expression
-    # to ensure that the created numeric vectorfield function
-    # returns an array of same dimension
-    if sym_type == np.ndarray:
-        sym_dim = F_sym.ndim
-    elif sym_type == list:
-        # if it is a list we have to determine if it consists
-        # of nested lists
-        sym_dim = np.array(F_sym).ndim
-    elif sym_type == sp.Matrix:
-        sym_dim = 2
-    else:
-        raise TypeError(str(sym_type))
-
-    if sym_dim == 1:
-        # if the original dimension was equal to one
-        # we pass the expression as a list so that the
-        # created function also returns a list which then
-        # can be easily transformed into an 1d-array
-        F_sym = np.array(F_sym).ravel(order='F').tolist()
-
-    elif sym_dim == 2:
-        # if the the original dimension was equal to two
-        # we pass the expression as a matrix
-        # then the created function returns an 2d-array
-        F_sym = sp.Matrix(F_sym)
-
-    else:
-        msg = "unexpected number of dimensions: {}".format(F_sym)
-        raise ValueError(msg)
-
-    # now we can create the numeric function
-    if cse:
-        _f_num = cse_lambdify(x_sym + u_sym + p_sym, F_sym,
-                              modules=[{'ImmutableMatrix': np.array}, 'numpy'])
-    else:
-        _f_num = sp.lambdify(x_sym + u_sym + p_sym, F_sym,
-                             modules=[{'ImmutableMatrix': np.array}, 'numpy'])
-
-    # create a wrapper as the actual function due to the behaviour
-    # of lambdify()
-    if vectorized:
-        stack = np.vstack
-    else:
-        stack = np.hstack
-
-    if isinstance(F_sym, (tuple, list)):
-        shape = (len(F_sym), 1)
-    else:
-        shape = F_sym.shape
-    _f_num_bc = broadcasting_wrapper(_f_num, shape, squeeze_axis)
-
-    def f_num(x, u, p):
-        xup = stack((x, u, p))
-        res = _f_num_bc(*xup)
         return res
 
     return f_num

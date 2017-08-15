@@ -5,11 +5,11 @@ from scipy import sparse
 from collections import OrderedDict
 from scipy import linalg
 
-from log import logging, Timer
+from log import logging
 from trajectories import Trajectory
 from solver import Solver
 
-from auxiliary import sym2num_vectorfield, Container, NanError
+from auxiliary import Container, NanError
 import auxiliary as aux
 
 from ipHelp import IPS

@@ -46,41 +46,32 @@ class TestCseLambdify(object):
 
         e = 0.5*(x + y) + sp.asin(sp.sin(0.5*(x+y))) + sp.sin(x+y)**2 + sp.cos(x+y)**2
 
-        f = pytrajectory.auxiliary.cse_lambdify(args=(x,y), expr=e, modules='numpy')
+        f = pytrajectory.auxiliary.cse_lambdify(args=(x, y), expr=e, modules='numpy')
 
         assert f(1., 1.) == 3.
 
     def test_list(self):
         x, y = sp.symbols('x, y')
-        ones = np.ones(10)
 
         l = [0.5*(x + y), sp.asin(sp.sin(0.5*(x+y))), sp.sin(x+y)**2 + sp.cos(x+y)**2]
 
-        f = pytrajectory.auxiliary.cse_lambdify(args=(x,y), expr=l, modules='numpy')
+        f = pytrajectory.auxiliary.cse_lambdify(args=(x, y), expr=l, modules='numpy')
 
         assert f(1., 1.) == [1., 1., 1.]
 
-        # TODO: test this with broadcast_wrapper
-        if 0:
-            for i in f(ones, ones):
-                assert np.allclose(i, ones)
-
-    @pytest.mark.xfail(reason="maybe irrelevant test")
+    @pytest.mark.xfail(reason="maybe irrelevant test", strict=True)
     def test_matrix_to_matrix(self):
         x, y = sp.symbols('x, y')
-        ones = np.ones(10)
 
         M = sp.Matrix([0.5*(x + y), sp.asin(sp.sin(0.5*(x+y))), sp.sin(x+y)**2 + sp.cos(x+y)**2])
 
-        f = pytrajectory.auxiliary.cse_lambdify(args=(x,y), expr=M,
-                                                modules='numpy')
+        f = aux.cse_lambdify(args=(x, y), expr=M, modules='numpy')
 
         assert type(f(1., 1.)) == np.matrix
-        assert np.allclose(f(1. ,1.), np.ones((3,1)))
+        assert np.allclose(f(1., 1.), np.ones((3, 1)))
 
     def test_matrix_to_array(self):
         x, y = sp.symbols('x, y')
-        ones = np.ones(10)
 
         M = sp.Matrix([0.5*(x + y), sp.asin(sp.sin(0.5*(x+y))), sp.sin(x+y)**2 + sp.cos(x+y)**2])
 
@@ -92,21 +83,6 @@ class TestCseLambdify(object):
         assert not isinstance(F, np.matrix)
         assert F.shape == (3, 1)
         assert np.allclose(F, np.ones((3, 1)))
-
-    #@pytest.xfail(reason="Not implemented, yet")
-    #def test_1d_array_input(self):
-    #    x, y = sp.symbols('x, y')
-    #
-    #    A = np.array([0.5*(x + y), sp.asin(sp.sin(0.5*(x+y))), sp.sin(x+y)**2 + sp.cos(x+y)**2])
-    #
-    #    f = pytrajectory.auxiliary.cse_lambdify(args=(x,y), expr=A,
-    #                                            modules=[{'ImmutableMatrix' : np.array}, 'numpy'])
-    #
-    #    F = f(1., 1.)
-    #
-    #    assert type(F) == np.ndarray
-    #    assert F.shape == (3,)
-    #    assert F == np.ones(3)
 
     def test_lambdify_returns_numpy_array_with_dummify_true(self):
         x, y = sp.symbols('x, y')
@@ -120,19 +96,19 @@ class TestCseLambdify(object):
         assert isinstance(f_arr(1, 1), np.ndarray)
         assert not isinstance(f_arr(1, 1), np.matrix)
 
-    # following test is not relevant for pytrajectory
-    # but might be for an outsourcing of the cse_lambdify function
-    @pytest.mark.xfail(reason='..')
     def test_lambdify_returns_numpy_array_with_dummify_false(self):
+        # this test is not relevant for pytrajectory
+        # but might be for an outsourcing of the cse_lambdify function
         x, y = sp.symbols('x, y')
 
         M = sp.Matrix([[x],
                        [y]])
 
-        f_arr = sp.lambdify(args=(x,y), expr=M, dummify=False, modules=[{'ImmutableMatrix' : np.array}, 'numpy'])
+        f_arr = sp.lambdify(args=(x, y), expr=M, dummify=False,
+                            modules=[{'ImmutableMatrix': np.array}, 'numpy'])
 
-        assert isinstance(f_arr(1,1), np.ndarray)
-        assert not isinstance(f_arr(1,1), np.matrix)
+        assert isinstance(f_arr(1, 1), np.ndarray)
+        assert not isinstance(f_arr(1, 1), np.matrix)
 
     def test_orig_args_in_reduced_expr(self):
         x, y = sp.symbols('x, y')
@@ -143,38 +119,14 @@ class TestCseLambdify(object):
 
         assert f(0., 0.) == 1.
 
-    def test_sym2num(self):
-        x, u, p = sp.symbols('x, u, p')
-        f1 = [x, u, p]
-        f2 = [x, u, 0*p]
-
-        fnc1 = pytrajectory.auxiliary.sym2num_vectorfield(f_sym=f1, x_sym=[x], u_sym=[u],
-                                                          p_sym=[p], vectorized=True, cse=True)
-        fnc2 = pytrajectory.auxiliary.sym2num_vectorfield(f_sym=f2, x_sym=[x], u_sym=[u],
-                                                          p_sym=[p], vectorized=True, cse=True)
-
-        N = 4
-        xx = np.zeros((1, N)) + 1
-        uu = np.zeros((1, N)) + 0.2
-        pp = np.zeros((1, N)) + 0.03
-
-        res1 = fnc1(xx, uu, pp)
-        res2 = fnc2(xx, uu, pp)
-
-        # results shall have shape (len(f), 1, N)
-        # middle 1 due to the fact that f is interpreted as a (n x 1)-matrix (column-vector)
-
-        assert res1.shape == (3, 1, N)
-        assert res2.shape == (3, 1, N)
-
-    def test_sym2num_new(self):
+    def test_expr2callable(self):
         x1, x2, x3, u, t, p = sp.symbols('x1, x2, x3, u, t, p')
         f1 = [x1, u, p]
         f2 = [x1, u, 0*p]
 
         f3 = [x1, x2*x3*u, p*x3, t, 2, 4]
 
-        factory = pytrajectory.auxiliary.sym2num_vectorfield_new
+        factory = pytrajectory.auxiliary.expr2callable
         fnc1a = factory(expr=f1, xxs=[x1], uus=[u], ts=t, pps=[p], vectorized=True, cse=True)
         fnc1b = factory(expr=f1, xxs=[x1], uus=[u], ts=t, pps=[p], vectorized=True, cse=True,
                         desired_shape=(3, 1))
@@ -190,8 +142,8 @@ class TestCseLambdify(object):
         Jf3 = sp.Matrix(f3).jacobian(xutp)
 
         with pytest.raises(UserWarning):
-            fnc4 = factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True,
-                           cse=True)
+            # ensure warning if desired_shape is missing
+            factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True, cse=True)
 
         fnc4 = factory(expr=Jf3, xxs=[x1, x2, x3], uus=[u], ts=t, pps=[p], vectorized=True,
                        cse=True, desired_shape=Jf3.shape)
@@ -261,10 +213,12 @@ class TestCseLambdify(object):
         assert np.allclose(r2, Jx2_num)
 
         with pytest.raises(AssertionError):
-            r1 = fnc1(*allargs)
+            # test refusal of array-args
+            _ = fnc1(*allargs)
 
         with pytest.raises(AssertionError):
-            r2 = fnc2(*allargs)
+            # test refusal of array-args
+            _ = fnc2(*allargs)
 
         for i in xrange(N):
             ai = allargs[:, i]
@@ -328,30 +282,6 @@ class TestCseLambdify(object):
             assert np.allclose(w1[:, :, i], Jx1_num)
             assert np.allclose(w2[:, :, i], Jx2_num)
 
-    def test_sym2num_matrix(self):
-
-        xx, uu, pp, xxn, uun, ppn, Jx1, Jx2, allargs, N = aux.get_attributes_from_object(self)
-
-        fnc1_cse = aux.sym2num_vectorfield(Jx1, xx, uu, pp, vectorized=True, cse=True,
-                                           evalconstr=None)
-
-        fnc2_cse = aux.sym2num_vectorfield(Jx2, xx, uu, pp, vectorized=True, cse=True,
-                                           evalconstr=None)
-
-        w1 = fnc1_cse(xxn, uun, ppn)
-        w2 = fnc2_cse(xxn, uun, ppn)
-
-        assert w1.shape == Jx1.shape + (N,)
-        assert w2.shape == Jx2.shape + (N,)
-
-        for i in xrange(N):
-            rplmts = zip(xx + uu + pp, allargs[:, i])
-            Jx1_num = aux.to_np(Jx1.subs(rplmts))
-            Jx2_num = aux.to_np(Jx2.subs(rplmts))
-
-            assert np.allclose(w1[:, :, i], Jx1_num)
-            assert np.allclose(w2[:, :, i], Jx2_num)
-
     def test_is_flat_sequence_of_numbers(self):
 
         tests_ = [(list(range(10)), True),
@@ -376,7 +306,7 @@ class TestCseLambdify(object):
         assert np.alltrue( aux.to_np(B, dtype=object) == np.array(list(B)).reshape(B.shape) )
 
     # new_interpolate is currently not used because it tends to unwanted oscillations
-    @pytest.mark.xfail(reason='this only works for the method Spline.new_interpolate')
+    @pytest.mark.xfail(reason='this only works for the method Spline.new_interpolate', strict=True)
     def test_spline_interpolate(self):
         # TODO: This test should live in a separate spline-related file
 
@@ -434,7 +364,9 @@ class TestCseLambdify(object):
             plt.axis([-.1, 1.1, -2, 2])
             plt.show()
 
-    @pytest.mark.xfail(reason="for some reasons, there is a small numerical difference")
+    reason = "for some reasons, there is a small numerical difference"
+
+    @pytest.mark.xfail(reason=reason, strict=True)
     def test_spline_interpolate2(self):
         from pytrajectory.splines import Spline
         u_values = np.r_[0, -16, - 14, -11, -4, 3]*1.0
@@ -457,7 +389,7 @@ class TestCseLambdify(object):
         vv2 = aux.vector_eval(S.f, tt)
         plt.plot(tt, vv2)
 
-        nodes_t = aux.calc_chebyshev_nodes(Ta, Tb, (n_parts)*.7-1, include_borders=True)
+        # nodes_t = aux.calc_chebyshev_nodes(Ta, Tb, (n_parts)*.7-1, include_borders=True)
         nodes_t = tt2  # aux.calc_chebyshev_nodes(Ta, Tb, (n_parts)*.7-1, include_borders=True)
         nodes_x = aux.vector_eval(S.f, nodes_t)
 
@@ -476,7 +408,7 @@ class TestCseLambdify(object):
         t = sp.Symbol('t')
         swo = aux.switch_on(t, 0, 0.5)
         fnc = sp.lambdify(t, swo, modules="numpy")
-        tt = np.linspace(-3, 3, 1e3)
+        tt = np.linspace(-3, 3, 1000)
 
         if 0:
             plt.plot(tt, fnc(tt))
@@ -515,6 +447,7 @@ class TestCseLambdify(object):
             K = aux.get_attributes_from_object(c)
 
 
+# noinspection PyPep8Naming
 def understand_einsum():
     """
     This code serves to play arround interactively with np.einsum
@@ -539,7 +472,7 @@ def understand_einsum():
         return r
 
     AA = symbolic_tensor('a', Na)
-    bb = symbolic_tensor('b', Nb)
+    # bb = symbolic_tensor('b', Nb)
 
     res_shape = AA.shape[0], AA.shape[2]
     # use numbers anyway (because einsum does not work with symbols)
@@ -567,13 +500,11 @@ def understand_einsum():
 
     # maybe better with np.einsum
 
-    rr = np.einsum("ijk,jk->ik", AA, bb)
+    _ = np.einsum("ijk,jk->ik", AA, bb)
 
 
 if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")
 
     tests = TestCseLambdify()
-    tests.test_sym2num2()
-
-    # understand_einsum()
+    print "no test run."

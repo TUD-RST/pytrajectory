@@ -757,15 +757,14 @@ class TransitionProblem(object):
             sys = self.dyn_sys
             
         # calculate the error functions H_i(t)
-        max_con_err, error = auxiliary.consistency_error((sys.a, sys.b), 
-                                                          self.eqs.trajectories.x,
-                                                          self.eqs.trajectories.u, 
-                                                          self.eqs.trajectories.dx, 
-                                                          sys.f_num, len(self.sim_data[0]), True)
+        ace = auxiliary.consistency_error
+        max_con_err, error = ace((sys.a, sys.b), self.eqs.trajectories.x, self.eqs.trajectories.u,
+                                 self.eqs.trajectories.dx, sys.f_num_simulation,
+                                 len(self.sim_data[0]), True)
         
         H = dict()
         for i in self.eqs.trajectories._eqind:
-            H[i] = error[:,i]
+            H[i] = error[:, i]
 
         visualisation.plot_simulation(self.sim_data, H)
 

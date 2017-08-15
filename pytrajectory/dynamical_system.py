@@ -296,7 +296,6 @@ class DynamicalSystem(object):
         self.vf_f       # drift part
         self.vf_g       # input vf
 
-        self.f_num
         self.f_num_simulation
         self.ff_vectorized
         self.Df_vectorized
@@ -322,7 +321,7 @@ class DynamicalSystem(object):
             logging.warn("System is not input affine. -> VF g has no meaning.")
 
         # vf_f and vf_g are not really neccessary, just for scientific playing
-        fnc_factory = aux.sym2num_vectorfield_new
+        fnc_factory = aux.expr2callable
 
         nx = self.n_states
         self.vf_f = fnc_factory(expr=ff, xxs=self.states, uus=self.inputs, ts=None, pps=self.par,
@@ -353,10 +352,6 @@ class DynamicalSystem(object):
         # the vector field function which is used by CollocationSystem.build()
         # to build the system of target-equations
 
-        # self.ff_vectorized = aux.sym2num_vectorfield(self.f_sym_full_matrix, self.states,
-        #                                              self.inputs, self.par, vectorized=True,
-        #                                              cse=True, squeeze_axis=1)
-
         assert self.f_sym_full_matrix.shape == (self.n_states + self.n_pconstraints, 1)
         self.ff_vectorized = fnc_factory(expr=self.f_sym_full_matrix, xxs=self.states,
                                          uus=self.inputs, ts=None, pps=self.par, vectorized=True,
@@ -364,9 +359,6 @@ class DynamicalSystem(object):
 
         all_symbols = sp.symbols(self.states + self.inputs + self.par)
         self.Df_expr = sp.Matrix(self.f_sym_full_matrix).jacobian(all_symbols)
-
-        # self.Df_vectorized = aux.sym2num_vectorfield(self.Df_expr, self.states, self.inputs,
-        #                                              self.par, vectorized=True, cse=True)
 
         self.Df_vectorized = fnc_factory(expr=self.Df_expr, xxs=self.states, uus=self.inputs,
                                          ts=None, pps=self.par, vectorized=True, cse=True,
