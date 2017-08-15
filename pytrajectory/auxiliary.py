@@ -226,20 +226,23 @@ def find_integrator_chains(dyn_sys):
     return chains, eqind
 
 
-def expr2callable(expr, xxs, uus, ts, pps, cse=False, squeeze_axis=None,
+def expr2callable(expr, xxs, uus, ts, pps, uref_fnc=None, cse=False, squeeze_axis=None,
                   crop_result_idx=None, desired_shape=None, vectorized=True):
     """
     converts sympy expression(s) into a fast evaluable function
 
-    :param expr:    sympy expression or flat sequence of such or matrix
-    :param xxs:     state variables
-    :param uus:     input variables
-    :param ts:      time variable (or None)
-    :param pps:     parameter variables (empty sequence allowed)
+    :param expr:        sympy expression or flat sequence of such or matrix
+    :param xxs:         state variables
+    :param uus:         input variables
+    :param ts:          time variable (or None)
+    :param pps:         parameter variables (empty sequence allowed)
+    :param uref_fnc:    None or callable (reference input)
     :param cse:     flag for common subexpression simplification
     :param squeeze_axis:    None or int, which axis of the result should be squeezed
     :param crop_result_idx: None or int, after which row-index the result should be croped
                             (used, e.g., to crop the penalty terms of the vf where not needed)
+    :param desired_shape:   desired shape of the target (extra dimensions are possible)
+    :param vectorized:      bool
 
     :return:        callable
     """
@@ -304,8 +307,26 @@ def expr2callable(expr, xxs, uus, ts, pps, cse=False, squeeze_axis=None,
 
     _f_num_bc = broadcasting_wrapper(_f_num, shape, squeeze_axis)
 
+    nu = len(uus)
+    # define zero-reference if nothing else was provided
+    if uref_fnc is None:
+        zeros = np.zeros((nu,))
+
+        def tmp_fnc(t):
+            return zeros
+
+        uref_fnc = broadcasting_wrapper(tmp_fnc, zeros.shape)
+
+    # test shape compatibility
+    t0 = 0
+    npts = 10
+    tt = np.linspace(0, 1, npts)
+
+    assert uref_fnc(t0).shape == (nu,)
+    assert uref_fnc(tt).shape == (nu, npts)
+
     def f_num(xx, uu, tt, pp):
-        xutp = stack((xx, uu, tt, pp))
+        xutp = stack((xx, uu + uref_fnc(tt), tt, pp))
         res = _f_num_bc(*xutp)
         return res
 

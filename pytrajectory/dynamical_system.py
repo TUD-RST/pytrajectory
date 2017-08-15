@@ -32,32 +32,45 @@ class DynamicalSystem(object):
 
     ua, ub : iterables
         The initial and final conditions for the input variables
+
+    uref : None or callable
+        Vectorized function of reference input, i.e. uref(t).
+        The complete input signal is then uref(t) + ua(t), where ua is the
+        (vector-) spline that is searched.
     """
 
     # TODO: improve interface w.r.t additional free parameters
-    def __init__(self, f_sym, a=0., b=1., xa=None, xb=None, ua=None, ub=None, **kwargs):
+    def __init__(self, f_sym, a=0., b=1., xa=None, xb=None, ua=None, ub=None, uref=None,
+                 **kwargs):
 
         if xa is None:
             msg = "Initial value required."
             raise ValueError(msg)
         if xb is None:
+            # TODO: is there a usecase for this?
             xb = []
         self.f_sym = f_sym
         self.a = a
         self.b = b
-        self.xa = xa
-        self.xb = xb
         self.tt = np.linspace(a, b, 1000)
 
+
+        self._analyze_f_sym_signature()
+        # analyse the given system  (set self.n_pos_args, n_states, n_inputs, n_par, n_pconstraints)
+        self._determine_system_dimensions(xa)
+        self._preprocess_uref(uref)
+
+        self._preprocess_boundary_values(xa, xb, ua, ub)
+        # Note: boundary values are now handled by self.constraint_handler
+        # (which will be initialized from outside)
+        # the access is implemented via the property boundary_values
+
+        # TODO: make this process more clean/intuitive
         # this will be set from outside
         self.constraint_handler = None
 
         # TODO: see remark above; The following should be more general!!
-        self.z_par = kwargs.get('k', [1.0])
-
-        self._analyze_f_sym_signature()
-        # analyse the given system  (set self.n_pos_args, n_states, n_inputs, n_par, n_pconstraints)
-        self._determine_system_dimensions()
+        self.z_par = kwargs.get('k', [1.0]*self.n_par)
 
         self.f_sym.n_par = self.n_par
         # set names of the state and input variables
@@ -76,17 +89,6 @@ class DynamicalSystem(object):
         self.xxs = sp.symbols(self.states)
         self.uus = sp.symbols(self.inputs)
         self.pps = sp.symbols(self.par)
-
-
-        self._preprocess_boundary_values(xa, xb, ua, ub)
-
-        # init dictionary for boundary values
-        # self.boundary_values = self._get_boundary_dict_from_lists(xa, xb, ua, ub)
-        # Todo: remove the obsolete code above
-
-        # boundary values are now handled by self.constraint_handler
-        # (which will be initialized from outside)
-        # the access is implemented via the property boundary_values
 
         self._create_f_and_Df_objects()
 
@@ -136,8 +138,10 @@ class DynamicalSystem(object):
         #     assert n_all_args == 2
         #     self.n_pos_args = 2
 
-    def _determine_system_dimensions(self):
+    def _determine_system_dimensions(self, xa):
         """
+
+
         Determines the following parameters:
         self.n_states
         self.n_inputs
@@ -145,6 +149,8 @@ class DynamicalSystem(object):
         self.n_pcontraints      number of penalty-constraint-equations
 
         The variables n_inputs and n_par can only be retrieved by trial and error.
+
+        :param xa:          initial value -> gives n_states
 
         Parameters
         ----------
@@ -158,7 +164,7 @@ class DynamicalSystem(object):
 
         # the number of system variables can be determined via the length
         # of the boundary value lists
-        n_states = len(self.xa)
+        n_states = len(xa)
 
         # now we want to determine the dimension (>=1) of the input and the free parameters (>=0)
         # steps:
@@ -176,6 +182,8 @@ class DynamicalSystem(object):
         finished = False
         return_value = None
         xx = np.zeros(n_states)
+
+        n_inputs, n_par = None, None
 
         for n_inputs, n_par in dim_combinations:
             if n_inputs == 0:
@@ -279,6 +287,21 @@ class DynamicalSystem(object):
 
         return boundary_values
 
+    def _preprocess_uref(self, uref):
+        """
+        :param uref:    None or callable
+        :return:
+        """
+        if uref is not None:
+            t0 = self.a
+            npts = 10
+            tt = np.linspace(self.a, self.b, npts)
+
+            assert uref(t0).shape == (self.n_inputs, )
+            assert uref(tt).shape == (self.n_inputs, npts)
+
+        self.uref = uref
+
     def _create_f_and_Df_objects(self):
         """
         Pytrajectory needs several types of the systems vectorfield and its jacobians:
@@ -331,7 +354,7 @@ class DynamicalSystem(object):
                                 vectorized=False, cse=False, crop_result_idx=nx)
 
         # This function is used for plotting:
-        # TODO: also use vectorized form there
+        # TODO: remove this comment and squash commit
         # self.f_num = aux.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
         #                                      u_sym=self.inputs, p_sym=self.par,
         #                                      vectorized=False, cse=False, evalconstr=True)

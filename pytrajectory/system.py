@@ -55,6 +55,11 @@ class TransitionProblem(object):
     ub : list
         Boundary values of the input variables at right border.
 
+    uref : None or callable
+        Vectorized function of reference input, i.e. uref(t).
+        The complete input signal is then uref(t) + ua(t), where ua is the
+        (vector-) spline that is searched.
+
     constraints : dict
         Box-constraints of the state variables.
 
@@ -86,7 +91,8 @@ class TransitionProblem(object):
         ============= =============   ============================================================
     """
 
-    def __init__(self, ff, a=0., b=1., xa=None, xb=None, ua=None, ub=None, constraints=None, **kwargs):
+    def __init__(self, ff, a=0., b=1., xa=None, xb=None, ua=None, ub=None, uref=None,
+                 constraints=None, **kwargs):
 
         if xa is None:
             xa = []
@@ -116,7 +122,8 @@ class TransitionProblem(object):
         self.tmp_sol = None  # place to store the result of the server
 
         # create an object for the dynamical system
-        self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub, **kwargs)
+        self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub, uref=uref,
+                                       **kwargs)
 
         # TODO: change default behavior to False (including examples)
         self.use_chains = kwargs.get('use_chains', True)

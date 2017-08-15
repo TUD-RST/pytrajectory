@@ -155,7 +155,7 @@ class TestCseLambdify(object):
         xx1 = np.random.random((1, N)) + 1
         xx3 = np.random.random((3, N)) + 1
         uu = np.random.random((1, N)) + 0.2
-        tt = np.random.random((1, N)) + 0
+        tt = np.random.random((N,)) + 0  # time is expected as 1d-array
         pp = np.random.random((1, N)) + 0.03
 
         res1a = fnc1a(xx1, uu, tt, pp)
@@ -184,10 +184,10 @@ class TestCseLambdify(object):
         for i in xrange(N):
             xn = xx3[:, i]
             un = uu[:, i]
-            tn = tt[:, i]
+            tn = tt[i]
             pn = pp[:, i]
 
-            rplmts = zip([x1, x2, x3], xn) + zip([u], un) + zip([t], tn) + zip([p], pn)
+            rplmts = zip([x1, x2, x3], xn) + zip([u], un) + [(t, tn)] + zip([p], pn)
             tmp_res = aux.to_np(Jf3.subs(rplmts).evalf())
 
             assert np.allclose(tmp_res, res4[:, :, i])
