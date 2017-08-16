@@ -60,9 +60,9 @@ limit = .7
 
 
 # nicht lineares partiell linarisiertes Modell
-def model_rhs(state, u):
-    x1, x2, x3, x4, x5, x6, x7, x8 = state # q1, q2, q3, q4, q1d, q2d, q3d, q4d
-    stell, = u
+def model_rhs(xx, uu, uuref, t, pp):
+    x1, x2, x3, x4, x5, x6, x7, x8 = xx # q1, q2, q3, q4, q1d, q2d, q3d, q4d
+    stell, = uu
     x1d = x5
     x2d = x6
     x3d = x7

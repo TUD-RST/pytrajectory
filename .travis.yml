@@ -11,15 +11,16 @@ before_install:
   - export DEPS="sympy=0.7.5 numpy=1.8 scipy=0.13 matplotlib ipython pytest"
   - conda update --yes --no-deps conda
   - pip install enum34
-  # for some strange reason the following pip-command 1. fails (therfore it is wrapped by echo) but 2. enables the following conda command to succeed
+  # for some strange reason the following pip-command 1. fails (therefor it is wrapped by echo) but 2. enables the following conda command to succeed
   - echo `pip install ruamel_yaml==0.11.14`
   - conda install --yes ruamel_yaml
   - conda update --yes conda
 
 install:
- - conda install --yes -c conda conda-env
- - conda create -n testenv --yes $DEPS pip python=$TRAVIS_PYTHON_VERSION
- - source activate testenv
+ - conda install --yes -c conda conda-env sympy numpy pytest ipython scipy matplotlib
+# - conda create -n testenv --yes $DEPS pip python=$TRAVIS_PYTHON_VERSION
+# - source activate testenv
+ - python -c "import sympy; print(sympy.__version__)"
  - python setup.py install
 
 # command to run tests
