@@ -340,8 +340,13 @@ def expr2callable(expr, xxs, uus, uref_fnc, ts, pps, cse=False, squeeze_axis=Non
     assert uref_fnc(t0).shape == (nu,)
     assert uref_fnc(tt).shape == (nu, npts)
 
+    # noinspection PyShadowingNames
     def f_num(xx, uu, tt, pp):
-        xutp = stack((xx, uu, uref_fnc(tt), tt, pp))
+        uref = uref_fnc(tt)
+        if not uref.shape == uu.shape:
+            # IPS()
+            assert False
+        xutp = stack((xx, uu, uref, tt, pp))
         res = _f_num_bc(*xutp)
         return res
 
