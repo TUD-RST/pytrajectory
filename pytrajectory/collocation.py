@@ -12,7 +12,8 @@ from solver import Solver
 from auxiliary import Container, NanError
 import auxiliary as aux
 
-from ipHelp import IPS
+# from ipHelp import IPS
+from IPython import embed
 
 np.set_printoptions(threshold='nan') ##??
 
@@ -770,7 +771,7 @@ class CollocationSystem(object):
                             try:
                                 free_coeffs_guess = s_new.interpolate(s_old.f, m0=df0, mn=dfn)
                             except TypeError as e:
-                                IPS()
+                                # IPS()
                                 raise e
                         # end of probably obsolete code
 
@@ -851,12 +852,12 @@ class CollocationSystem(object):
 
                 guess = np.hstack((guess, free_vars_guess))
 
-                msg = "Invalid length of initial guess."
-                assert len(guess) == len(self.all_free_parameters), msg
+            msg = "Invalid length of initial guess."
+            assert len(guess) == len(self.all_free_parameters), msg
 
-                # overwrite the suitable entries
-                # with the provided estimations of additional free parameters
-                guess[self._afp_index:] = self._parameters['z_par']
+            # overwrite the suitable entries
+            # with the provided estimations of additional free parameters
+            guess[self._afp_index:] = self._parameters['z_par']
 
         elif self.masterobject.refsol is not None:
             # TODO: handle free parameters

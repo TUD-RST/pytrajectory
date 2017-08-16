@@ -55,6 +55,11 @@ xa_inv_pend = [0.0, 0.0, np.pi, 0.0]
 # b = 3.0
 xb_inv_pend = [0.0, 0.0, 0.0, 0.0]
 
+import sys
+from IPython.core import ultratb
+sys.excepthook = ultratb.FormattedTB(mode='Verbose',
+     color_scheme='Linux', call_pdb=1)
+
 
 # noinspection PyPep8Naming
 class TestExamples(object):
@@ -63,6 +68,16 @@ class TestExamples(object):
         S1 = TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
                                show_ir=False,
                                ierr=None,
+                               use_chains=False)
+        S1.solve()
+        assert S1.reached_accuracy
+
+    def test_di_integrator_pure_with_random_guess(self):
+        first_guess = {'seed': 20}
+        S1 = TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
+                               show_ir=False,
+                               ierr=None,
+                               first_guess=first_guess,
                                use_chains=False)
         S1.solve()
         assert S1.reached_accuracy
@@ -142,6 +157,7 @@ if __name__ == "__main__":
     # tests.test_di_constraint_x2_projective()
     # print "-"*10
     # tests.test_di_con_u1_x2_projective_integrator()
+    # tests.test_di_integrator_pure_with_penalties()
     print "-"*10
-    tests.test_di_integrator_pure_with_penalties()
+    tests.test_di_integrator_pure_with_random_guess()
 
