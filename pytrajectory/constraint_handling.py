@@ -220,7 +220,7 @@ class ConstraintHandler(object):
             # use only the state-relevant part of the transformation
             arg = self.z_middle*1
             arg[:self.nx] = y_values
-            res = self.Psi_fnc(*arg)[:self.nx]
+            res = np.atleast_1d(self.Psi_fnc(*arg)[:self.nx])
             return res
 
         def constrained_xdot(t):
@@ -231,7 +231,7 @@ class ConstraintHandler(object):
             arg = self.z_middle*1
             arg[:self.nx] = y_values
             Jac_Psi = self.Jac_Psi_fnc(*arg)[:self.nx, :self.nx]
-            res = np.dot(Jac_Psi, ydot_values)
+            res = np.atleast_1d( np.dot(Jac_Psi, ydot_values) )
             return res
 
         def constrained_u(t):
@@ -241,7 +241,7 @@ class ConstraintHandler(object):
             # use only the input-relevant part of the transformation
             arg = self.z_middle*1
             arg[-self.nu:] = v_values
-            res = self.Psi_fnc(*arg)[-self.nu]
+            res = np.atleast_1d( self.Psi_fnc(*arg)[-self.nu] )
             return res
 
         return constrained_x, constrained_xdot, constrained_u

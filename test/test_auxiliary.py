@@ -444,6 +444,16 @@ class TestCseLambdify(object):
         with pytest.raises(NameError):
             K = aux.get_attributes_from_object(c)
 
+    def test_zero_func_like(self):
+        n = 3
+        npts = 31
+        f1 = aux.zero_func_like(n)
+
+        assert np.alltrue( f1(10) == np.zeros((n, )))
+
+        tt = np.linspace(10, 100, npts)
+        assert np.alltrue( f1(tt) == np.zeros((n, npts)))
+
 
 # noinspection PyPep8Naming
 def understand_einsum():

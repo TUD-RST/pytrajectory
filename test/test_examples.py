@@ -35,7 +35,7 @@ def rhs_di_penalties(x, u, uref, t, p):
     return ff
 
 
-def rhs_inv_pend(x, u, t, p):
+def rhs_inv_pend(x, u, uref, t, p):
     x1, x2, x3, x4 = x  # system variables
     u1, = u  # input variable
 
