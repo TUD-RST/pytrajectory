@@ -427,9 +427,20 @@ class Spline(object):
 
         assert callable(fnc)
 
+        # number of conditions (function value or slope)
+        Nc_total = len(self._indep_coeffs)
+
+        # 2 for the slope at the borders + some more in the middle
+        slope_fraction = 0.5
+        Nc_slope = 2 + int((Nc_total-2)*slope_fraction)
+
         # get a suitable number of points
-        N = len(self._indep_coeffs) - 2
+        Nc_value = Nc_total - Nc_slope
         # - 2 because we want two conditions for the slope at the borders
+
+        # dbg: least square solution: !!
+        Nc_slope = Nc_total
+        Nc_value = Nc_total
 
         bv0 = self._boundary_values.get(0)
 
@@ -439,17 +450,20 @@ class Spline(object):
         if method == 'equi':
             if bv0_flag:
                 # exclude the boundaries because we already have given bc
-                tt = np.linspace(self.a, self.b, N + 2)[1:-1]
+                tt = np.linspace(self.a, self.b, Nc_value + 2)[1:-1]
             else:
                 # no given bc -> include boundary points
-                tt = np.linspace(self.a, self.b, N)
+                tt = np.linspace(self.a, self.b, Nc_value)
         elif method == 'cheby':
             if bv0_flag:
                 # exclude the boundaries because we already have given bc
-                tt = aux.calc_chebyshev_nodes(self.a, self.b, N, include_borders=False)
+                tt = aux.calc_chebyshev_nodes(self.a, self.b, Nc_value, include_borders=False)
             else:
                 # no given bc -> include boundary points
-                tt = aux.calc_chebyshev_nodes(self.a, self.b, N, include_borders=True)
+                tt = aux.calc_chebyshev_nodes(self.a, self.b, Nc_value, include_borders=True)
+        else:
+            msg = "Unexpexcted method: '{}'. Use one of 'equi' or 'cheby'".format(method)
+            raise ValueError(msg)
 
         vv = np.array([fnc(t) for t in tt])
 
@@ -466,23 +480,35 @@ class Spline(object):
         # D1*a = v - D2
         # where a are the free coeffs
 
-        # add two equations for the slope at the borders:
-        dt = (self.b - self.a)/1e3
+        # add equations for the slope (at the borders ..
+        dt = (self.b - self.a)/1e4
+        slope_places = [self.a, self.b - dt]
+
+        # , and elsewhere:
+        Nc_slope_additional = Nc_slope - 2
+
+        # select points in the middle by using the distance to median as sorting key
+        mid_first_tuples = sorted(zip(np.abs(tt - np.median(tt)), tt))
+        mid_first = np.array(mid_first_tuples)[:, 1]  # second column contains the t-values
+
+        slope_places.extend(mid_first[:Nc_slope_additional])
+
+        slope_places = np.clip(slope_places, self.a, self.b-dt)
 
         # dependence vectors for 1st derivative
-        for t in [self.a, self.b - dt]:
+        for t in slope_places:
             slope = (fnc(t + dt) - fnc(t))/dt
             D1, D2 = self.get_dependence_vectors(t, d=1)
             lhs.append(D1)
             rhs.append(slope - D2)
 
         D1_matrix = np.array(lhs)
-        free_coeffs = np.linalg.solve(D1_matrix, rhs)
-
+        # free_coeffs = np.linalg.solve(D1_matrix, rhs)
+        free_coeffs = np.linalg.lstsq(D1_matrix, rhs)[0]
         if set_coeffs:
             self.set_coefficients(free_coeffs=free_coeffs)
 
-        return free_coeffs
+        return free_coeffs, tt, slope_places
 
     def interpolate(self, fnc=None, m0=None, mn=None, set_coeffs=False):
         """

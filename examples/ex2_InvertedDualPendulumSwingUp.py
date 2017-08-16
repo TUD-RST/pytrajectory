@@ -5,10 +5,20 @@ from pytrajectory import TransitionProblem
 from sympy import cos, sin
 import numpy as np
 
-# define the function that returns the vectorfield
-def f(x,u):
-    x1, x2, x3, x4, x5, x6 = x  # system variables
-    u, = u                      # input variable
+
+def f(xx, uu, uuref, t, pp):
+    """ Right hand side of the vectorfield defining the system dynamics
+
+    :param xx:       state
+    :param uu:       input
+    :param uuref:    reference input (not used)
+    :param t:        time (not used)
+    :param pp:       additionial free parameters  (not used)
+
+    :return:        xdot
+    """
+    x1, x2, x3, x4, x5, x6 = xx  # system variables
+    uu, = uu                      # input variable
     
     # length of the pendulums
     l1 = 0.7
@@ -16,13 +26,13 @@ def f(x,u):
     
     g = 9.81    # gravitational acceleration
     
-    ff = np.array([         x2,
-                            u,
-                            x4,
-                (1/l1)*(g*sin(x3)+u*cos(x3)),
-                            x6,
-                (1/l2)*(g*sin(x5)+u*cos(x5))
-                    ])
+    ff = np.array([x2,
+                   uu,
+                   x4,
+                   (1/l1)*(g*sin(x3) + uu*cos(x3)),
+                   x6,
+                   (1/l2)*(g*sin(x5) + uu*cos(x5))
+                   ])
     
     return ff
 

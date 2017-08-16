@@ -1,19 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import  division
 import sys
-import scipy.integrate as integrate
 import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
-import pickle
 from ipHelp import IPS
-#http://sourceforge.net/p/python-control/wiki/Download/
-import control.matlab as controlm
-# sys.path.append('/Volumes/work/workspaces/PYTHON/mymodules')
-import symbtools as st
 
 from pytrajectory import TransitionProblem, penalty_expression, aux
-from numpy import pi
+
+from pytrajectory import log
+
 
 
 msg = """
@@ -35,18 +31,13 @@ ub = 0.0
 xa1 = [0, 0]
 xb1 = [1, 0]
 
-xa2 = [0, 0, 0]
-xb2 = [1, 0, 1]
-
-from pytrajectory import log
-
 log.console_handler.setLevel(10)
 
 # calculation of overshooting reference solution
 import symbtools as st
 aa = st.symb_vector('a0:5')
 t = sp.Symbol('t')
-ref = (aa.T*sp.Matrix(5, 1, lambda i, j: t**i))[0,0]
+ref = (aa.T*sp.Matrix(5, 1, lambda i, j: t**i))[0, 0]
 eqns = []
 eqns.append(ref.subs(t, 0) - xa1[0])
 eqns.append(ref.diff(t).subs(t, Ta) - xa1[1])
@@ -58,16 +49,32 @@ sol = sp.solve(eqns, aa)
 
 #IPS()
 
-x_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 0), modules="numpy")
-v_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 1), modules="numpy")
-u_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 2), modules="numpy")
+def my_lambdify(*args, **kwargs):
+    original_shape = kwargs.pop('original_shape', None)
+    fnc = sp.lambdify(*args, **kwargs)
+    return aux.broadcasting_wrapper(fnc, original_shape)
+#
+# x_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 0), modules="numpy")
+# v_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 1), modules="numpy")
+# u_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 2), modules="numpy")
+# du_ref_num = sp.lambdify(t, ref.subs(sol).diff(t, 3), modules="numpy")
+
+x_ref_num = my_lambdify(t, ref.subs(sol).diff(t, 0), modules="numpy")
+v_ref_num = my_lambdify(t, ref.subs(sol).diff(t, 1), modules="numpy")
+u_ref_num = my_lambdify(t, ref.subs(sol).diff(t, 2), modules="numpy", original_shape=(1,))
+du_ref_num = my_lambdify(t, ref.subs(sol).diff(t, 3), modules="numpy", original_shape=(1,))
 
 
-def rhs1(state, u):
+def rhs1(state, u, t, pp):
+    pp  # ignored parameters
     x1, x2 = state
     u1, = u
 
     ff = [x2, u1]
+
+    # penalty
+    c = 0
+    ff.append(c)
     return np.array(ff)
 
 if 0:
@@ -83,40 +90,50 @@ if 0:
 
 # This factor adjusts how strong a deviation from the standard input is penalized.
 # Experience: 1 is much too strong
-input_penalty_scale = 0.01
+input_penalty_scale = 0.1
 
 
-def rhs2(state, u, pp, evalconstr=True):
+def rhs2(state, ua, uref, t, pp,):
     pp  # ignored parameters
-    x1, x2, t = state
-    u1, = u
-    u1_all = u1 + u_ref_num(t)
+    x1, x2 = state
+    ua1, = ua
+    uref1, = uref
 
-    ff = [x2, u1_all, 1]
-    if evalconstr:
-        c = 0*input_penalty_scale*u1**2 + 0*aux.switch_on(t, -1, Tb/2)*u1**2
-        ff.append(c)
+    u1 = ua1 + uref1
+    print ua, uref
+
+    ff = [x2, u1]
+
+    c = input_penalty_scale*ua1**2 + 0*aux.switch_on(t, -1, Tb/2)*u1**2
+    ff.append(c)
     return np.array(ff)
 
 tt = np.linspace(Ta, Tb, 1e3)
-xx_ref = np.column_stack((x_ref_num(tt), v_ref_num(tt), tt))
+xx_ref = np.column_stack((x_ref_num(tt).squeeze(), v_ref_num(tt).squeeze()))
 refsol = aux.Container(tt=tt, xx=xx_ref, uu=tt*0, n_raise_spline_parts=0)
 
+# make the signature of this function compatible with broadcasting_wrapper
 
-S2 = TransitionProblem(rhs2, Ta, Tb, xa2, xb2, constraints=None,
+
+def uref_fnc(t):
+    return u_ref_num(t)
+
+
+S2 = TransitionProblem(rhs2, Ta, Tb, xa1, xb1, constraints=None,
                        eps=1e-1, su=30, kx=2, use_chains=False,
                        #first_guess={'seed': 4, 'scale': 10, 'u1': lambda t: 0},
                        refsol=refsol,
+                       uref=uref_fnc,
                        use_std_approach=False,
                        sol_steps=200,
-                       ierr=None,
                        show_ir=True)
 
 S = S2
 
 # start BVP-solution
-x, u, p = S2.solve()
+x, u = S2.solve()
 
+IPS()
 sys.argv.append('plot')
 
 # the following code provides an animation of the system above

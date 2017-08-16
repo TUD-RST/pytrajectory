@@ -5,10 +5,20 @@ from pytrajectory import TransitionProblem
 import numpy as np
 from sympy import cos, sin
 
-# define the function that returns the vectorfield
-def f(x,u):
-    x1, x2, x3, x4 = x
-    u1, = u
+
+def f(xx, uu, uuref, t, pp):
+    """ Right hand side of the vectorfield defining the system dynamics
+
+    :param xx:       state
+    :param uu:       input
+    :param uuref:    reference input (not used)
+    :param t:        time (not used)
+    :param pp:       additionial free parameters  (not used)
+
+    :return:        xdot
+    """
+    x1, x2, x3, x4 = xx
+    u1, = uu
     
     m = 1.0             # masses of the rods [m1 = m2 = m]
     l = 0.5             # lengths of the rods [l1 = l2 = l]

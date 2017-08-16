@@ -2,25 +2,22 @@
 
 import numpy as np
 import sympy as sp
-from scipy import sparse
 import pickle
 import copy
 import time
-import inspect
 from collections import OrderedDict
 
-from trajectories import Trajectory
 from collocation import CollocationSystem
 from simulation import Simulator
-from solver import Solver
 import auxiliary
 import visualisation
 import splines
 from log import logging
 import interfaceserver
+from dynamical_system import DynamicalSystem
+from constraint_handling import ConstraintHandler
 
 import matplotlib.pyplot as plt
-
 
 # DEBUGGING
 from ipHelp import IPS
@@ -57,6 +54,11 @@ class TransitionProblem(object):
     ub : list
         Boundary values of the input variables at right border.
 
+    uref : None or callable
+        Vectorized function of reference input, i.e. uref(t).
+        The complete input signal is then uref(t) + ua(t), where ua is the
+        (vector-) spline that is searched.
+
     constraints : dict
         Box-constraints of the state variables.
 
@@ -68,15 +70,17 @@ class TransitionProblem(object):
         su            10               Initial number of spline parts for the input variables
         kx            2               Factor for raising the number of spline parts
         maxIt         10              Maximum number of iteration steps
+                                      (numbers of raising spline-parts)
         eps           1e-2            Tolerance for the solution of the initial value problem
         ierr          1e-1            Tolerance for the error on the whole interval
         tol           1e-5            Tolerance for the solver of the equation system
         dt_sim        1e-2            Sample time for integration (initial value problem)
-        reltol        2e-5            Rel. tolerance (for LM A. to be confident with local minimum)
+        reltol        2e-5            Rel. tolerance (for LM-Algorithm to be confident with local
+                                      minimum)
         localEsc      0               How often try to escape local minimum without increasing
                                       number of spline parts
         use_chains    True            Whether or not to use integrator chains
-        sol_steps     50             Maximum number of iteration steps for the eqs solver
+        sol_steps     50              Maximum number of iteration steps for the eqs solver
         accIt         5               How often resume the iteration after sol_steps limit
                                       (just have a look, in case the ivp is already satisfied)
         show_ir       False           Show intermediate result. Plot splines and simulation result
@@ -86,7 +90,8 @@ class TransitionProblem(object):
         ============= =============   ============================================================
     """
 
-    def __init__(self, ff, a=0., b=1., xa=None, xb=None, ua=None, ub=None, constraints=None, **kwargs):
+    def __init__(self, ff, a=0., b=1., xa=None, xb=None, ua=None, ub=None, uref=None,
+                 constraints=None, **kwargs):
 
         if xa is None:
             xa = []
@@ -116,7 +121,8 @@ class TransitionProblem(object):
         self.tmp_sol = None  # place to store the result of the server
 
         # create an object for the dynamical system
-        self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub, **kwargs)
+        self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub, uref=uref,
+                                       **kwargs)
 
         # TODO: change default behavior to False (including examples)
         self.use_chains = kwargs.get('use_chains', True)
@@ -157,11 +163,12 @@ class TransitionProblem(object):
         value
             The new value
         """
-        
+
         if param in {'maxIt', 'eps', 'ierr', 'dt_sim'}:
             self._parameters[param] = value
 
-        elif param in {'n_parts_x', 'sx', 'n_parts_u', 'su', 'kx', 'use_chains', 'nodes_type', 'use_std_approach'}:
+        elif param in {'n_parts_x', 'sx', 'n_parts_u', 'su', 'kx', 'use_chains', 'nodes_type',
+                       'use_std_approach'}:
             if param == 'nodes_type' and value != 'equidistant':
                 raise NotImplementedError()
 
@@ -181,6 +188,7 @@ class TransitionProblem(object):
         else:
             raise AttributeError("Invalid method parameter ({})".format(param))
 
+    # TODO: get rid of this method, because it is now implemented in ConstraintHandler
     def _preprocess_constraints(self, constraints=None):
         """
         Preprocessing of projective constraint-data provided by the user.
@@ -202,15 +210,12 @@ class TransitionProblem(object):
             elif k.startswith('u'):
                 con_u[k] = v
             else:
-                msg = "Unexpected key for constraint: %s: %s" % (k, v)
+                msg = "Unexpected key for constraint: %s: %s"%(k, v)
                 raise ValueError(msg)
 
         self.constraints = OrderedDict()
         self.constraints.update(sorted(con_x.iteritems()))
         self.constraints.update(sorted(con_u.iteritems()))
-
-        # now transform the constrained vectorfield into an unconstrained one
-        self.unconstrain()
 
         if self.use_chains:
             msg = "Currently not possible to make use of integrator chains together with " \
@@ -220,207 +225,24 @@ class TransitionProblem(object):
         # Note: it should be possible that just those chains are not used
         # which actually contain a constrained variable
 
-    def unconstrain(self):
+        self.constraint_handler = ConstraintHandler(self, self.dyn_sys, self.constraints)
+        self.dyn_sys.constraint_handler = self.constraint_handler
+
+    def get_constrained_spline_fncs(self):
         """
-        This method is used to enable compliance with desired box constraints given by the user.
-        It transforms the vectorfield by projecting the constrained state variables on
-        new unconstrained ones.
-
-        Parameters
-        ----------
-
-        constraints : dict
-            The box constraints for the state variables
-
+        Map the unconstrained coordinates (y, v) to the original constrained coordinats (x, u).
+        (Use identity map if no constrained was specified for a component)
+        :return: x_fnc, dx_fnc, u_fnc
         """
 
+        # TODO: the attribute names of the splines have to be adjusted
+        y_fncs = self.eqs.trajectories.x_fnc.values()
+        ydot_fncs = self.eqs.trajectories.dx_fnc.values()
+        # sequence of funcs vi(.)
+        v_fncs = self.eqs.trajectories.u_fnc.values()
 
-        if self.dyn_sys.f_sym.has_constraint_penalties and not len(self.constraints) == 0:
-            msg = "Combination of both types of constraints not yet supported."
-            raise NotImplementedError(msg)
-
-        # backup the original constrained system
-        self._dyn_sys_orig = copy.deepcopy(self.dyn_sys)
-
-        # get symbolic vectorfield
-        # (as sympy matrix toenable replacement method)
-        x = sp.symbols(self.dyn_sys.states)
-        u = sp.symbols(self.dyn_sys.inputs)
-        par = sp.symbols(self.dyn_sys.par)
-
-        # full matrix including penalty_constraints
-        ff_mat = sp.Matrix(self.dyn_sys.f_sym(x, u, par))
-
-        # get neccessary information form the dynamical system
-        a = self.dyn_sys.a
-        b = self.dyn_sys.b
-        boundary_values = self.dyn_sys.boundary_values
-        
-        # handle the constraints by projecting the constrained state variables
-        # on new unconstrained variables using saturation functions
-        allvars = self.dyn_sys.states + self.dyn_sys.inputs
-        for vname, limits in self.constraints.iteritems():
-            # check if boundary values are within saturation limits
-            assert vname in allvars, "variable name `%s` not found" % vname
-            idx = allvars.index(vname)
-            va, vb = self.dyn_sys.boundary_values[vname]
-
-            if None not in (va, vb):
-                # this is the usual case
-                if not ( limits[0] < va < limits[1] ) or not ( limits[0] < vb < limits[1] ):
-                    errmsg = "Boundary values must be strictly within the saturation limits!"
-                    logging.error(errmsg)
-                    logging.info("See docs, (e.g., example of constrained double intgrator.")
-                    raise ValueError(errmsg)
-            else:
-                # only one free boundary is not yet supported
-                # python keyword `is` does not work here
-                assert (va, vb) == (None, None)
-
-            # calculate saturation function expression and its derivative
-            yk = sp.Symbol(vname)
-
-            m, psi, dpsi = auxiliary.unconstrain(yk, *limits)
-
-            # replace constrained variables in vectorfield with saturation expression
-            # x(t) = psi(y(t))
-            ff_mat = ff_mat.replace(sp.Symbol(vname), psi)
-            
-            # update vectorfield to represent differential equation for new
-            # unconstrained state variable
-            #
-            #      d/dt x(t) = (d/dy psi(y(t))) * d/dt y(t)
-            # <==> d/dt y(t) = d/dt x(t) / (d/dy psi(y(t)))
-            # when vk is a component of the state
-            if idx < self.dyn_sys.n_states:
-                ff_mat[idx] /= dpsi
-            # update boundary values for new unconstrained variable
-            if None not in (va, vb):
-                boundary_values[vname] = ( (1./m) * np.log((va - limits[0]) / (limits[1] - va)),
-                                         (1./m) * np.log((vb - limits[0]) / (limits[1] - vb)) )
-        
-        # create a callable function for the new symbolic vectorfield
-        ff = np.asarray(ff_mat).flatten().tolist()
-        xup = self.dyn_sys.states + self.dyn_sys.inputs + self.dyn_sys.par
-        _f_sym = sp.lambdify(xup, ff, modules='sympy')
-
-        # handle additional penalty constraint expressions
-        n_pconstraints = self.dyn_sys.n_pconstraints
-        if n_pconstraints > 0:
-            def f_sym(x, u, p, evalconstr=True):
-                xup = np.hstack((x, u, p))
-                res = _f_sym(*xup)
-                if evalconstr:
-                    # full result
-                    return res
-                else:
-                    return res[:-n_pconstraints]
-        else:
-            def f_sym(x, u, p):
-                xup = np.hstack((x, u, p))
-                return _f_sym(*xup)
-
-        f_sym.n_par = self.dyn_sys.n_par
-        f_sym.has_constraint_penalties = n_pconstraints > 0
-
-        # create a new unconstrained system
-        xa = [boundary_values[x][0] for x in self.dyn_sys.states]
-        xb = [boundary_values[x][1] for x in self.dyn_sys.states]
-        ua = [boundary_values[u][0] for u in self.dyn_sys.inputs]
-        ub = [boundary_values[u][1] for u in self.dyn_sys.inputs]
-
-        self.dyn_sys = DynamicalSystem(f_sym, a, b, xa, xb, ua, ub)
-
-    def constrain(self):
-        """
-        This method is used to determine the solution of the original constrained
-        state variables by creating a composition of the saturation functions and
-        the calculated solution for the introduced unconstrained variables.
-        """
-        
-        # get a copy of the current function dictionaries
-        # (containing functions for unconstrained variables y_i)
-
-        # x_fnc = copy.deepcopy(self.eqs.trajectories.x_fnc)
-        # dx_fnc = copy.deepcopy(self.eqs.trajectories.dx_fnc)
-
-        all_fncs = copy.deepcopy(self.eqs.trajectories.x_fnc)
-        all_fncs.update(copy.deepcopy(self.eqs.trajectories.u_fnc))
-
-        def dummy_fnc(*args):
-            msg = "This function shall not be called. Derivative of input is not provided."
-            raise ValueError(msg)
-
-        all_fncs_d = copy.deepcopy(self.eqs.trajectories.dx_fnc)
-        du_fncs = OrderedDict((u_name, dummy_fnc) for u_name in self.dyn_sys.inputs)
-        all_fncs_d.update(du_fncs)
-
-        allvars = self.dyn_sys.states + self.dyn_sys.inputs
-        # iterate over all constraints
-        for vk, limits in self.constraints.items():
-
-            # TODO: is this still valid?
-            # get symbols of original constrained variable x_k,
-            # the introduced unconstrained variable y_k
-            # and the saturation limits y0, y1
-
-            idx = allvars.index(vk)
-            y0, y1 = limits
-            
-            # get the calculated solution function for the unconstrained variable and its derivative
-            y_fnc = all_fncs[vk]
-            dy_fnc = all_fncs_d[vk]
-            
-            # create the compositions
-            psi_y, dpsi_dy = auxiliary.saturation_functions(y_fnc, dy_fnc, y0, y1)
-
-            n = self.dyn_sys.n_states
-
-            if idx < n:
-                # state component
-                # -> put created compositions into dictionaries of solution functions
-                self.eqs.trajectories.x_fnc[idx] = psi_y
-                self.eqs.trajectories.dx_fnc[idx] = dpsi_dy
-            else:
-                # input component
-                assert idx < n + self.dyn_sys.n_inputs
-                self.eqs.trajectories.u_fnc[idx - n] = psi_y
-
-    def get_constrained_input_fnc(self):
-        """
-        If input-constraints have been specified, than this method maps the unconstrained
-        (auxiliary) input variable back to the constrained variable.
-
-        If no input-constraints are specified, return an identity map.
-
-        :return: function u(t)
-        """
-
-        # OrderedDict
-        u_funcs_odict = self.eqs.trajectories.u_fnc.copy()
-        # iterate over all constraints
-        for vk, limits in self.constraints.items():
-
-            if vk not in self.dyn_sys.inputs:
-                continue
-            idx = self.dyn_sys.inputs.index(vk)
-            y0, y1 = limits
-
-            # get the calculated solution function for the unconstrained variable and its derivative
-
-            y_fnc = u_funcs_odict[vk]
-
-            # create the composition (callable function)
-            psi_y_fnc = auxiliary.saturation_functions(y_fnc, None, y0, y1, first_deriv=False)
-
-            u_funcs_odict[vk] = psi_y_fnc
-
-        def constrained_u(t):
-
-            res = [u_func(t) for u_func in u_funcs_odict.itervalues()]
-            return np.array(res)
-
-        return constrained_u
+        return self.dyn_sys.constraint_handler.get_constrained_spline_fncs(y_fncs, ydot_fncs,
+                                                                           v_fncs)
 
     def check_refsol_consistency(self):
         """"
@@ -477,7 +299,7 @@ class TransitionProblem(object):
             return res
 
         while not q_finish_loop():
-            
+
             if not self.nIt == 0:
                 # raise the number of spline parts (not in the first step)
                 self.eqs.trajectories.raise_spline_parts()
@@ -497,11 +319,6 @@ class TransitionProblem(object):
             # increment iteration number
             self.nIt += 1
 
-        # as a last, if there were any constraints to be taken care of,
-        # we project the unconstrained variables back on the original constrained ones
-        if self.constraints:
-            self.constrain()
-        
         self.T_sol = time.time() - T_start
         # return the found solution functions
 
@@ -519,8 +336,9 @@ class TransitionProblem(object):
             return self.eqs.trajectories.x, self.eqs.trajectories.u
         else:
             return self.eqs.trajectories.x, self.eqs.trajectories.u, self.get_par_values()
-        ##:: self.eqs.trajectories.x, self.eqs.trajectories.u are functions,
-        ##:: variable is t.  x(t), u(t) (value of x and u at t moment, not all the values (not a list with values for all the time))
+            ##:: self.eqs.trajectories.x, self.eqs.trajectories.u are functions,
+            ##:: variable is t.  x(t), u(t) (value of x and u at t moment,
+            # not all the values (not a list with values for all the time))
 
     def get_spline_values(self, sol, plot=False):
         """
@@ -539,7 +357,7 @@ class TransitionProblem(object):
         # uf = np.vectorize(self.eqs.trajectories.u)
 
         dt = 0.01
-        tt = np.arange(self.a, self.b+dt, dt)
+        tt = np.arange(self.a, self.b + dt, dt)
         xx = np.zeros((len(tt), self.dyn_sys.n_states))
         uu = np.zeros((len(tt), self.dyn_sys.n_inputs))
 
@@ -563,7 +381,7 @@ class TransitionProblem(object):
 
         As a last, the resulting initial value problem is simulated.
         """
-        
+
         # Note: in pytrajectory there are Three main levels of 'iteration'
         # Level 3: perform one LM-Step (i.e. calculate a new set of parameters) 
         # This is implemented in solver.py. Ends when tolerances are met or
@@ -576,7 +394,7 @@ class TransitionProblem(object):
 
         # Initialise the spline function objects
         self.eqs.trajectories.init_splines()
-        
+
         # Get an initial value (guess)
         self.eqs.get_guess()
 
@@ -594,13 +412,13 @@ class TransitionProblem(object):
             # in the following iterations we want to use the same solver
             # object (we just had an intermediate look, whether the solution
             # of the initial value problem is already sufficient accurate.)
-            
+
             new_solver = False
 
             # Set the found solution
             self.eqs.trajectories.set_coeffs(self.tmp_sol)
 
-            #!! dbg
+            # !! dbg
             # self.eqs.trajectories.set_coeffs(self.eqs.guess)
 
             # Solve the resulting initial value problem
@@ -635,7 +453,7 @@ class TransitionProblem(object):
                 # Note: this approach seems not to be successful
                 if self.eqs.trajectories.n_parts_x >= 40:
                     # values between 0.32 and 3.2:
-                    scale = 10**(np.random.rand(len(slvr.x0))-.5)
+                    scale = 10 ** (np.random.rand(len(slvr.x0)) - .5)
                     # only use the actual value
                     if slvr.res < old_res:
                         old_sol = slvr.x0
@@ -686,8 +504,11 @@ class TransitionProblem(object):
             fnclist = self.refsol.xxfncs + self.refsol.uufncs
 
             for i, (key, s) in enumerate(C.splines.iteritems()):
-                coeffs = s.new_interpolate(fnclist[i], set_coeffs=True)
+                coeffs = s.new_interpolate(fnclist[i], set_coeffs=True, method="cheby")
                 new_spline_values.append(auxiliary.vector_eval(s.f, tt))
+
+                if 'u' in key:
+                    IPS()
 
                 sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)
                 # List of tuples like (cx1_0_0, 2.41)
@@ -779,11 +600,13 @@ class TransitionProblem(object):
         par = par.repeat(n_tt, axis=1)
 
         # input part of the vectorfiled
-        gg = self.eqs.Df_vectorized(self.sim_data_xx.T, self.sim_data_uu.T, par).transpose(2, 0, 1)
+        gg = self.eqs.Df_vectorized(self.sim_data_xx.T, self.sim_data_uu.T,
+                                    self.sim_data_tt.T, par).transpose(2, 0, 1)
         gg = gg[:, :-1, -1]
 
         # drift part of the vf
-        ff = self.eqs.ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0, par).T[:, :-1]
+        ff = self.eqs.ff_vectorized(self.sim_data_xx.T, self.sim_data_uu.T*0,
+                                    self.sim_data_tt.T, par).T[:, :-1]
 
         labels = self.dyn_sys.states + self.dyn_sys.inputs
 
@@ -833,27 +656,16 @@ class TransitionProblem(object):
         # Todo T = par[0] * T
 
         # get list of start values
-        start = []
+        start = self.dyn_sys.xa
 
-        if self.constraints is not None:
-            sys = self._dyn_sys_orig
-        else:
-            sys = self.dyn_sys
-
-        x_vars = sys.states  ##:: ('x1', 'x2', 'x3', 'x4')
-        start_dict = dict([(k, v[0]) for k, v in sys.boundary_values.items() if k in x_vars])  ##:: {'x2': start value of x2, 'x3': 1.256, 'x1': 0.0, 'x4': 0.0}
-
-        ff = sys.f_num_simulation
-
-        for x in x_vars:
-            start.append(start_dict[x])
+        ff = self.dyn_sys.f_num_simulation
 
         par = self.get_par_values()
         # create simulation object
-        u_fnc = self.get_constrained_input_fnc()
+        u_fnc = self.get_constrained_spline_fncs()[2]
         S = Simulator(ff, T, start, u_fnc, z_par=par, dt=self._parameters['dt_sim'])
 
-        logging.debug("start: %s" % str(start))
+        logging.debug("start: %s"%str(start))
 
         # forward simulation
         self.sim_data = S.simulate()
@@ -877,49 +689,40 @@ class TransitionProblem(object):
         that shows how "well" the spline functions comply with the system
         dynamic given by the vector field.
         """
-        
+
         # this is the solution of the simulation
         a = self.sim_data[0][0]
         b = self.sim_data[0][-1]
         xt = self.sim_data[1]
 
-        # TODO: remove obsolete line
-        # additional free parameters do not have any influence on accuracy
-        # par = self.get_par_values()
+        x_sym = self.dyn_sys.states
 
-        # get boundary values at right border of the interval
-        if self.constraints:
-            bv = self._dyn_sys_orig.boundary_values
-            x_sym = self._dyn_sys_orig.states 
-        else:
-            bv = self.dyn_sys.boundary_values
-            x_sym = self.dyn_sys.states
+        xb = self.dyn_sys.xb
 
-        xb = dict([(k, v[1]) for k, v in bv.items() if k in x_sym])  ##:: end boundary value
-        
         # what is the error
         logging.debug(40*"-")
         logging.debug("Ending up with:   Should Be:  Difference:")
 
         err = np.empty(xt.shape[1])
         for i, xx in enumerate(x_sym):
-            err[i] = abs(xb[xx] - xt[-1][i]) ##:: error (x1, x2) at end time
-            logging.debug(str(xx)+" : %f     %f    %f"%(xt[-1][i], xb[xx], err[i]))
-        
+            err[i] = abs(xb[i] - xt[-1][i])  ##:: error (x1, x2) at end time
+            logging.debug(str(xx) + " : %f     %f    %f"%(xt[-1][i], xb[i], err[i]))
+
         logging.debug(40*"-")
-        
+
         # if self._ierr:
         ierr = self._parameters['ierr']
         eps = self._parameters['eps']
+
+        xfnc, dxfnc, ufnc = self.get_constrained_spline_fncs()
+
         if ierr:
             # calculate maximum consistency error on the whole interval
 
-            maxH = auxiliary.consistency_error((a, b),
-                                               self.eqs.trajectories.x, self.eqs.trajectories.u,
-                                               self.eqs.trajectories.dx,
+            maxH = auxiliary.consistency_error((a, b), xfnc, ufnc, dxfnc,
                                                self.dyn_sys.f_num_simulation,
                                                par=self.get_par_values())
-            
+
             reached_accuracy = (maxH < ierr) and (max(err) < eps)
             logging.debug('maxH = %f'%maxH)
         else:
@@ -961,17 +764,16 @@ class TransitionProblem(object):
             sys = self._dyn_sys_orig
         else:
             sys = self.dyn_sys
-            
+
         # calculate the error functions H_i(t)
-        max_con_err, error = auxiliary.consistency_error((sys.a, sys.b), 
-                                                          self.eqs.trajectories.x,
-                                                          self.eqs.trajectories.u, 
-                                                          self.eqs.trajectories.dx, 
-                                                          sys.f_num, len(self.sim_data[0]), True)
-        
+        ace = auxiliary.consistency_error
+        max_con_err, error = ace((sys.a, sys.b), self.eqs.trajectories.x, self.eqs.trajectories.u,
+                                 self.eqs.trajectories.dx, sys.f_num_simulation,
+                                 len(self.sim_data[0]), True)
+
         H = dict()
         for i in self.eqs.trajectories._eqind:
-            H[i] = error[:,i]
+            H[i] = error[:, i]
 
         visualisation.plot_simulation(self.sim_data, H)
 
@@ -991,7 +793,7 @@ class TransitionProblem(object):
         save['sys']['state'] = dict.fromkeys(['nIt', 'reached_accuracy'])
         save['sys']['state']['nIt'] = self.nIt
         save['sys']['state']['reached_accuracy'] = self.reached_accuracy
-        
+
         # simulation results
         save['sys']['sim_data'] = self.sim_data
 
@@ -1000,11 +802,11 @@ class TransitionProblem(object):
 
         save['eqs'] = self.eqs.save()
         save['traj'] = self.eqs.trajectories.save()
-        
+
         if fname is not None:
             if not (fname.endswith('.pcl') or fname.endswith('.pcl')):
                 fname += '.pcl'
-        
+
             with open(fname, 'w') as dumpfile:
                 pickle.dump(save, dumpfile)
 
@@ -1027,329 +829,3 @@ class TransitionProblem(object):
 # For backward compatibility: make the class available under the old name
 # TODO: Introduce deprecation warning
 ControlSystem = TransitionProblem
-
-
-class DynamicalSystem(object):
-    """
-    Provides access to information about the dynamical system that is the
-    object of the control process.
-
-    Parameters
-    ----------
-
-    f_sym : callable
-        The (symbolic) vector field of the dynamical system
-
-    a, b : floats
-        The initial end final time of the control process
-
-    xa, xb : iterables
-        The initial and final conditions for the state variables
-
-    ua, ub : iterables
-        The initial and final conditions for the input variables
-    """
-
-    # TODO: improve interface w.r.t additional free parameters
-    def __init__(self, f_sym, a=0., b=1., xa=None, xb=None, ua=None, ub=None, **kwargs):
-
-        if xa is None:
-            msg = "Initial value required."
-            raise ValueError(msg)
-        if xb is None:
-            xb = []
-        self.f_sym = f_sym
-        self.a = a
-        self.b = b
-        self.xa = xa
-        self.xb = xb
-        self.tt = np.linspace(a, b, 1000)
-
-        # TODO: see remark above; The following should be more general!!
-        self.z_par = kwargs.get('k', [1.0])
-
-        self._analyze_f_sym_signature()
-        # analyse the given system  (set self.n_pos_args, n_states, n_inputs, n_par, n_pconstraints)
-        self._determine_system_dimensions()
-
-        if ua is None:
-            ua = [None]*self.n_inputs
-        if ub is None:
-            ub = [None]*self.n_inputs
-
-        # handle the case where f_sym does not depend on additional free parameters
-        if self.n_pos_args == 2:
-            if f_sym.has_constraint_penalties:
-                def f_sym_wrapper(xx, uu, pp, evalconstr=True):
-                    # ignore pp
-                    return f_sym(xx, uu, evalconstr)
-                self.f_sym = f_sym_wrapper
-
-            else:
-                def f_sym_wrapper(xx, uu, pp):
-                    # ignore pp
-                    return f_sym(xx, uu)
-
-            f_sym_wrapper.has_constraint_penalties = f_sym.has_constraint_penalties
-            self.f_sym = f_sym_wrapper
-
-        self.f_sym.n_par = self.n_par
-        # set names of the state and input variables
-        # (will be used as keys in various dictionaries)
-        self.states = tuple(['x{}'.format(i+1) for i in xrange(self.n_states)])
-        self.inputs = tuple(['u{}'.format(j+1) for j in xrange(self.n_inputs)])
-        
-        # TODO_ck: what does this mean??
-        # Todo_yx: if self.par is a list,then the following 2 sentences
-        # self.par = []
-        # self.par.append(tuple('z_par')) ##:: [('z_par',)]
-
-        self.par = tuple(['z_par_{}'.format(k+1) for k in xrange(self.n_par)]) # z_par_1, z_par_2,
-
-        self.xxs = sp.symbols(self.states)
-        self.uus = sp.symbols(self.inputs)
-        self.pps = sp.symbols(self.par)
-
-        # with (penalty-) constraints (if present)
-        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, self.pps))
-
-        # without (penalty-) constraints
-        self.f_sym_matrix = self.f_sym_full_matrix[:self.n_states, :]
-
-        # init dictionary for boundary values
-        self.boundary_values = self._get_boundary_dict_from_lists(xa, xb, ua, ub)
-
-        # create vectorfields f and g (symbolically and as numerical function)
-
-        ff = self.f_sym_matrix.subs(zip(self.uus, [0]*self.n_inputs))
-        gg = self.f_sym_matrix.jacobian(self.uus)
-        if gg.atoms(sp.Symbol).intersection(self.uus):
-            logging.warn("System is not input affine. -> VF g has no meaning.")
-
-        # vf_f and vf_g are not really neccessary, just for scientific playing
-        self.vf_f = auxiliary.sym2num_vectorfield(f_sym=ff, x_sym=self.states,
-                                                  u_sym=self.inputs, p_sym=self.par,
-                                                  vectorized=False, cse=False, evalconstr=None)
-
-        self.vf_g = auxiliary.sym2num_vectorfield(f_sym=gg, x_sym=self.states,
-                                                  u_sym=self.inputs, p_sym=self.par,
-                                                  vectorized=False, cse=False, evalconstr=None)
-
-        # create a numeric counterpart for the vector field
-        # for faster evaluation
-
-        # IPS()
-        self.f_num = auxiliary.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-                                                   u_sym=self.inputs, p_sym=self.par,
-                                                   vectorized=False, cse=False, evalconstr=True)
-
-        # to handle penalty contraints it is necessary to distinguish between
-        # the extended vectorfield (state equations + constraints) and
-        # the basic vectorfiled (only state equations)
-        # for simulation, only the the basic vf shall be used
-
-        self.f_num_simulation = auxiliary.sym2num_vectorfield(f_sym=self.f_sym, x_sym=self.states,
-                                                   u_sym=self.inputs, p_sym=self.par,
-                                                   vectorized=False, cse=False, evalconstr=False)
-
-    def _analyze_f_sym_signature(self):
-        """
-        This function analyzes the calling signature of the user_provided function f_sym
-
-        Analysis results are stored as instance variables.
-        :return:    None
-        """
-
-        argspec = inspect.getargspec(self.f_sym)
-
-        if not (argspec.varargs is None) and (argspec.keywords is None):
-            msg = "*args and/or **kwargs are not permitted in signature of f_sym"
-            raise TypeError(msg)
-
-        n_all_args = len(argspec.args)
-
-        msg = "Unexpected number of arguments in f_sym"
-        assert 2 <= n_all_args <= 4, msg
-
-        if n_all_args == 4:
-            assert argspec.args[-1] == 'evalconstr'
-            msg = "unexpected numbers or values for default arguments in f_sym"
-            assert argspec.defaults == (True,), msg
-
-            # this flag is stored as attribute of the function
-            # -> easier access, where ever the function occurs
-            self.f_sym.has_constraint_penalties = True
-        else:
-            self.f_sym.has_constraint_penalties = False
-            self.n_pconstraints = 0
-
-        if n_all_args in (3, 4):
-            # number of arguments which must be passed to f_sym
-            self.n_pos_args = 3
-        else:
-            assert n_all_args == 2
-            self.n_pos_args = 2
-
-    def _determine_system_dimensions(self):
-        # TODO comment on additional free parameters in the docstring
-        """
-        Determines the following parameters:
-        self.n_states
-        self.n_inputs
-        self.n_par              number of additional free parameters (afp)
-        self.n_pcontraints      number of penalty-constraint-equations
-
-
-        Parameters
-        ----------
-
-        n : int
-            Length of the list of initial state values
-        """
-
-        # first, determine system dimensions
-        logging.debug("Determine system/input dimensions")
-        
-        # the number of system variables can be determined via the length
-        # of the boundary value lists
-        n_states = len(self.xa)
-
-        assert self.n_pos_args in (2, 3)
-        if self.n_pos_args == 3:
-            # f_sym expects a third argument
-
-            # if there is no additional information provided assume that
-            # the present argument means 1 free parameter
-            # Note: n_par might also be 0 (due to "wrapping-generalization")
-            n_par = getattr(self.f_sym, 'n_par', 1)
-            par_arg = [[1]*n_par]
-        else:
-            n_par = 0
-            par_arg = []
-
-        # now we want to determine the input dimension
-        # therefore we iteratively increase the inputs dimension and try to call
-        # the vectorfield-function
-        found_n_inputs = False
-        x = np.ones(n_states)
-
-        j = 0
-        while not found_n_inputs:
-            u = np.ones(j)
-
-            if j > 100:
-                msg = "Unexpected unpacking Error inside rhs-function.\n " \
-                      "Probable reasons for this error:\n" \
-                      " - Wrong size of initial value (xa)\n" \
-                      " - System with > 100 input components (not supported)\n" \
-                      " - interal algortihmic error"
-
-                raise ValueError(msg)
-
-            try:
-                # print u
-                self.f_sym(x, u, *par_arg)
-                # if no ValueError is raised j is the dimension of the inputs
-                n_inputs = j
-                found_n_inputs = True
-            except ValueError as err:
-                if not "values to unpack" in err.message:
-                    logging.error("unexpected ValueError")
-                    raise err
-                # unpacking error inside f_sym
-                # (that means the dimensions don't match)
-                j += 1
-            except TypeError as err:
-                flag = "<lambda>() takes" in err.message and \
-                       "arguments" in err.message and "given" in err.message
-                if not flag:
-                    logging.error("unexpected TypeError")
-                    raise err
-                # calling error for lambda -> dimensions do not match
-                j += 1
-
-        # determine n_pconstraints
-        # if getattr(self.f_sym, 'has_constraint_penalties', False):
-        if self.f_sym.has_constraint_penalties:
-            testargs = [self.xa, [0]*n_inputs]
-            if n_par > 0:
-                testargs.append([1]*n_par)
-
-            # number of returned values - number of states
-            n_pconstraints = len(self.f_sym(*testargs, evalconstr=True)) - n_states
-            if n_pconstraints < 1:
-                msg = "No constraint equations found, but signature of f_sym indicates such."
-                raise ValueError(msg)
-        else:
-            n_pconstraints = 0
-
-        logging.debug("--> state: {}".format(n_states))
-        logging.debug("--> input: {}".format(n_inputs))
-        logging.debug("--> a.f.p.: {}".format(n_par))
-        logging.debug("--> p.constraint-expr.: {}".format(n_pconstraints))
-
-        self.n_states = n_states
-        self.n_inputs = n_inputs
-        self.n_par = n_par
-        self.n_pconstraints = n_pconstraints
-
-        return
-
-    def _get_boundary_dict_from_lists(self, xa, xb, ua, ub):
-        """
-        Creates a dictionary of boundary values for the state and input variables
-        for easier access.
-        """
-
-        # consistency check
-        assert len(xa) == len(xb) == self.n_states
-        if ua is None and ub is None:
-            ua = [None] * self.n_inputs
-            ub = [None] * self.n_inputs
-
-        # init dictionary
-        boundary_values = dict()
-
-        # add state boundary values
-        for i, x in enumerate(self.states):
-            boundary_values[x] = (xa[i], xb[i])  ##:: bv = {'x1':(xa[0],xb[0]),...}
-
-        # add input boundary values
-        for j, u in enumerate(self.inputs):
-            boundary_values[u] = (ua[j], ub[j])
-
-        return boundary_values
-
-    # TODO: handle additional free parameters (if needed). Or at least raise NotImplementedError
-    def get_linearization(self, xref, uref=None):
-        """
-        return A, B matrices of the Jacobian Linearization
-
-        :param xref:
-        :param uref:
-        :return:
-        """
-
-        if uref is None:
-            uref = np.zeros(self.n_inputs)
-
-        xx = sp.symbols(self.states)
-        uu = sp.symbols(self.inputs)
-
-        n = self.n_states
-        assert len(xref) == n
-        assert len(uref) == self.n_inputs
-
-        f_sym_martix = sp.Matrix(self.f_sym(xx, uu))[:n, :]
-        Dfdx = f_sym_martix.jacobian(self.states)
-        Dfdu = f_sym_martix.jacobian(self.inputs)
-
-        replacements = zip(self.states, xref) + zip(self.inputs, uref)
-
-        # for some strange reason np.array has to be called twice to get
-        # float arrays instead of object-arrays
-        npa = np.array
-        A = npa( npa(Dfdx.subs(replacements)), dtype=np.float)
-        B = npa( npa(Dfdu.subs(replacements)), dtype=np.float)
-
-        return A, B

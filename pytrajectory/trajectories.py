@@ -168,7 +168,7 @@ class Trajectory(object):
             # self.old_splines = auxiliary.copy_splines(self.splines)
             self.old_splines = copy.deepcopy(self.splines)
 
-        if self.old_splines is not None and isinstance(self.old_splines['x1'].f(0), sp.Basic):
+        if self.old_splines is not None and isinstance(self.old_splines['x1'].f(0), sp.Expr):
             msg = "Unexpectedly got an provisional spline for saving."
             # coeffs not set properly
             raise ValueError(msg)
@@ -177,8 +177,8 @@ class Trajectory(object):
         if self.splines is not None:
             assert not list(self.splines.values())[0]._prov_flag
 
-        bv = self.sys.boundary_values
-        
+        bv = self.sys.constraint_handler.boundary_values
+
         # dictionaries for splines and callable solution function for x,u and dx
         splines = OrderedDict()
         x_fnc = OrderedDict()

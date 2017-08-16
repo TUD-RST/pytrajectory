@@ -7,8 +7,10 @@ import scipy.integrate
 from scipy.linalg import expm
 from matplotlib import pyplot as plt
 from collections import OrderedDict
+from numbers import Number
 import copy
 import time
+import inspect
 
 import splines
 from simulation import Simulator
@@ -154,7 +156,7 @@ def find_integrator_chains(dyn_sys):
     chaindict = {}
     for i in xrange(len(f)):
         # substitution because of sympy difference betw. 1.0 and 1
-        if isinstance(f[i], sp.Basic):
+        if isinstance(f[i], sp.Expr):
             f[i] = f[i].subs(1.0, 1)
 
         for xx in state_sym:
@@ -224,174 +226,161 @@ def find_integrator_chains(dyn_sys):
     return chains, eqind
 
 
-def sym2num_vectorfield(f_sym, x_sym, u_sym, p_sym, vectorized=False, cse=False, evalconstr=None):
+def zero_func_like(arg):
+    """Shortcut to create a function of one argument which alway returns np.zeros((n,)),
+     where either n=len(arg) or n=arg
+
+    :param arg: sequence or int
+    :return:
     """
-    This function takes a callable vector field of a dynamical system that is to be evaluated with
-    symbols for the state and input variables and returns a corresponding function that can be
-    evaluated with numeric values for these variables.
+    if hasattr(arg, '__len__'):
+        n = len(arg)
+    else:
+        assert isinstance(arg, int)
+        n = arg
+    assert n > 0
 
-    Parameters
-    ----------
+    zeros = np.zeros((n,))
 
-    f_sym : callable or array_like
-        The callable ("symbolic") vector field of the control system.
+    def tmp_fnc(t):
+        return zeros
 
-    x_sym : iterable
-        The symbols for the state variables of the control system.
+    fnc = broadcasting_wrapper(tmp_fnc, zeros.shape)
+    return fnc
 
-    u_sym : iterable
-        The symbols for the input variables of the control system.
 
-    p_sym : np.array
-    
-    vectorized : bool
-        Whether or not to return a vectorized function.
+def expr2callable(expr, xxs, uus, uurefs, ts, pps, uref_fnc, cse=False, squeeze_axis=None,
+                  crop_result_idx=None, desired_shape=None, vectorized=True):
+    """
+    converts sympy expression(s) into a fast evaluable function
 
-    cse : bool
-        Whether or not to make use of common subexpressions in vector field
+    :param expr:        sympy expression or flat sequence of such or matrix
+    :param xxs:         state variables
+    :param uus:         input variables
+    :param uurefs:      reference input variables
+    :param ts:          time variable (or None)
+    :param pps:         parameter variables (empty sequence allowed)
+    :param uref_fnc:    None or callable (reference input)
+    :param cse:     flag for common subexpression simplification
+    :param squeeze_axis:    None or int, which axis of the result should be squeezed
+    :param crop_result_idx: None or int, after which row-index the result should be croped
+                            (used, e.g., to crop the penalty terms of the vf where not needed)
+    :param desired_shape:   desired shape of the target (extra dimensions are possible)
+    :param vectorized:      bool
 
-    evalconstr : None (default) or bool
-        Whether or not to include the constraint equations (which might be represented
-        as the last part of the vf)
-
-    Returns
-    -------
-
-    callable
-        The callable ("numeric") vector field of the control system.
+    :return:        callable
     """
 
-    # get a representation of the symbolic vector field
-    if callable(f_sym):
+    assert isinstance(crop_result_idx, (int, type(None)))
 
-        # ensure data type of arguments
-        if all(isinstance(s, str) for s in x_sym + u_sym + p_sym):
-            x_sym = sp.symbols(x_sym)
-            u_sym = sp.symbols(u_sym)
-            p_sym = sp.symbols(p_sym)
+    if isinstance(expr, sp.Expr):
+        expr_list = [expr]
+        assert crop_result_idx is None, "crop result for scalar expression does not make sense"
 
-        if not all(isinstance(s, sp.Symbol) for s in x_sym + u_sym + p_sym):
-            msg = "unexpected types in {}".format(x_sym + u_sym + p_sym)
-            raise TypeError(msg)
+    elif isinstance(expr, (list, tuple, np.ndarray)):
+        expr_list = list(expr)
 
-        # construct the arguments
-        args = [x_sym, u_sym, p_sym]
-        if f_sym.has_constraint_penalties:
-            assert evalconstr is not None
-            args.append(evalconstr)
+        for i, e in enumerate(expr_list):
 
-        # get the the symbolic expression by evaluation
-        F_sym = f_sym(*args)
+            msg = "Element #{} must be a number or sympy expression, but is {}".format(i, type(e))
+            assert isinstance(e, (sp.Expr, Number)), msg
 
+        assert crop_result_idx in [None] + list(range(len(expr_list) + 1))
+        expr_list = expr_list[:crop_result_idx]
+
+    elif isinstance(expr, sp.MatrixBase):
+        assert crop_result_idx in [None] + list(range(expr.shape[0] + 1))
+        expr_list = list(expr[:crop_result_idx, :])
+
+        if expr.shape[1] > 1 and desired_shape is None:
+            msg = "It is strongly recommended to explicitly provide a desired_shape if <expr> " \
+                  " is not a column vector"
+            raise UserWarning(msg)
     else:
-        # f_sym was not a callable
-        if evalconstr is not None:
-            msg = "expected a callable for usage with the flag evalconstr"
-            raise ValueError(msg)
-        F_sym = f_sym
+        msg = "Unexpected type of expr: {}".format(type(expr))
+        raise TypeError(msg)
 
-    sym_type = type(F_sym)
-
-    # first we determine the dimension of the symbolic expression
-    # to ensure that the created numeric vectorfield function
-    # returns an array of same dimension
-    if sym_type == np.ndarray:
-        sym_dim = F_sym.ndim
-    elif sym_type == list:
-        # if it is a list we have to determine if it consists
-        # of nested lists
-        sym_dim = np.array(F_sym).ndim
-    elif sym_type == sp.Matrix:
-        sym_dim = 2
-    else:
-        raise TypeError(str(sym_type))
-
-    if vectorized:
-
-        # TODO: Check and clean up
-        # All this code seems to be obsolete
-        # we now use explicit broadcasting of the result (see below)
-
-        # in order to make the numeric function vectorized
-        # we have to check if the symbolic expression contains
-        # constant numbers as a single expression
-
-        # therefore we transform it into a sympy matrix
-        F_sym = sp.Matrix(F_sym)
-
-        # if there are elements which are constant numbers we have to use some
-        # trick to achieve the vectorization (as far as the developers know ;-) )
-        for i in xrange(F_sym.shape[0]):
-            for j in xrange(F_sym.shape[1]):
-                if F_sym[i,j].is_Number:
-                    # we add an expression which evaluates to zero, but enables us
-                    # to put an array into the matrix where there is now a single number
-                    #
-                    # we just take an arbitrary state, multiply it with 0 and add it
-                    # to the current element (constant)
-                    zero_expr = sp.Mul(0.0, sp.Symbol(str(x_sym[0])), evaluate=False)
-                    F_sym[i, j] = sp.Add(F_sym[i, j], zero_expr, evaluate=False)
-
-    if sym_dim == 1:
-        # if the original dimension was equal to one
-        # we pass the expression as a list so that the
-        # created function also returns a list which then
-        # can be easily transformed into an 1d-array
-        F_sym = np.array(F_sym).ravel(order='F').tolist()
-    elif sym_dim == 2:
-        # if the the original dimension was equal to two
-        # we pass the expression as a matrix
-        # then the created function returns an 2d-array
-        F_sym = sp.Matrix(F_sym)
-    else:
-        msg = "unexpected number of dimensions: {}".format(F_sym)
-        raise ValueError(msg)
+    if ts is None:
+        ts = sp.Symbol("t")
+    assert isinstance(ts, sp.Symbol)
 
     # now we can create the numeric function
     if cse:
-        _f_num = cse_lambdify(x_sym + u_sym + p_sym, F_sym,
-                              modules=[{'ImmutableMatrix': np.array}, 'numpy'])
+        factory = cse_lambdify
     else:
-        _f_num = sp.lambdify(x_sym + u_sym + p_sym, F_sym,
-                             modules=[{'ImmutableMatrix': np.array}, 'numpy'])
+        factory = sp.lambdify
 
-    # create a wrapper as the actual function due to the behaviour
-    # of lambdify()
+    args = []
+
+    for elt in (xxs, uus, uurefs, [ts], pps):
+        args.extend(elt)
+    _f_num = factory(args, expr_list,
+                     modules=[{'ImmutableMatrix': np.array}, 'numpy'])
+
+    # create a wrapper (background: see broadcasting_wrapper.__doc__)
+    # TODO: get rid of this case distinction
     if vectorized:
         stack = np.vstack
     else:
         stack = np.hstack
 
-    if sym_dim == 1:
-        def f_num(x, u, p):
-            xup = stack((x, u, p))
-            raw = _f_num(*xup)  # list of arrays of potentially different length (1 or n)
-            return np.array(np.broadcast_arrays(*raw))
+    if desired_shape is None:
+        shape = (len(expr_list), )
     else:
-        def f_num(x, u, p):
-            xup = stack((x, u, p))
-            raw = _f_num(*xup)  # list of arrays of potentially different length (1 or n)
-            return np.array(np.broadcast_arrays(*raw))
+        shape = desired_shape
+
+    _f_num_bc = broadcasting_wrapper(_f_num, shape, squeeze_axis)
+
+    nu = len(uus)
+    # test shape compatibility
+    t0 = 0
+    npts = 10
+    tt = np.linspace(0, 1, npts)
+
+    assert uref_fnc(t0).shape == (nu,)
+    assert uref_fnc(tt).shape == (nu, npts)
+
+    # noinspection PyShadowingNames
+    def f_num(xx, uu, tt, pp):
+        uref = uref_fnc(tt)
+        if not uref.shape == uu.shape:
+            # IPS()
+            assert False
+        xutp = stack((xx, uu, uref, tt, pp))
+        res = _f_num_bc(*xutp)
+        return res
 
     return f_num
 
 
-def check_expression(expr):
+def preprocess_expression(expr):
     """
-    Checks whether a given expression is a sympy epression or a list
-    of sympy expressions.
+    Checks whether a given expression is a sympify-able expression or a sequence of such.
 
     Throws an exception if not.
+
+    Parameters
+    ----------
+
+    expr : number, sympy-expression or sequence (list or tuple)
+
+    Returns
+    -------
+
+    expr
+        sympified expression or list of sympified expressions
     """
 
     # if input expression is an iterable
     # apply check recursively
-    if isinstance(expr, list) or isinstance(expr, tuple):
-        for e in expr:
-            check_expression(e)
+    if isinstance(expr, (list, tuple)):
+        return [preprocess_expression(e) for e in expr]
+
     else:
-        if not isinstance(expr, sp.Basic) and not isinstance(expr, sp.Matrix):
+        expr = sp.sympify(expr)
+        if not isinstance(expr, (sp.Expr, sp.MatrixBase)):
             raise TypeError("Not a sympy expression!")
+        return expr
 
 
 def make_cse_eval_function(input_args, replacement_pairs, ret_filter=None, namespace=None):
@@ -439,6 +428,8 @@ def eval_replacements_fnc(args):
     else:
         replacements_str = ','.join(str(r) for r in zip(*replacement_pairs)[0])
 
+    # ensure iterable return type (also in case of only one result)
+    replacements_str = "({},)".format(replacements_str)
 
     eval_replacements_fnc_str = function_buffer.format(unpack_args=unpack_args_str,
                                                        eval_pairs=eval_pairs_str,
@@ -461,47 +452,66 @@ def eval_replacements_fnc(args):
 def cse_lambdify(args, expr, **kwargs):
     """
     Wrapper for sympy.lambdify which makes use of common subexpressions.
+
+    Parameters
+    ----------
+
+    args : iterable
+
+    expr : sympy expression or iterable of sympy expression
+
+    return callable
     """
 
-    # Note:
+    # Notes:
     # This was expected to speed up the evaluation of the created functions.
     # However performance gain is only at ca. 5%
 
-
-    # check input expression
-    if type(expr) == str:
-        raise TypeError('Not implemented for string input expression!')
+    # constant expressions are handled as well
 
     # check given expression
     try:
-        check_expression(expr)
+        expr = preprocess_expression(expr)
     except TypeError as err:
-        raise NotImplementedError("Only sympy expressions are allowed, yet")
+        raise NotImplementedError("Only (sequences of) sympy expressions are allowed, yet")
 
     # get sequence of symbols from input arguments
     if type(args) == str:
         args = sp.symbols(args, seq=True)
     elif hasattr(args, '__iter__'):
         # this may kill assumptions
+        # TODO: find out why this is done an possbly remove
         args = [sp.Symbol(str(a)) for a in args]
 
     if not hasattr(args, '__iter__'):
         args = (args,)
 
     # get the common subexpressions
-    cse_pairs, red_exprs = sp.cse(expr, symbols=sp.numbered_symbols('r'))
+    symbol_generator = sp.numbered_symbols('r')
+    cse_pairs, red_exprs = sp.cse(expr, symbols=symbol_generator)
+
+    # Note: cse always returns a list because expr might be a sequence of expressions
+    # However we want only one expression back if we put one in
+    # (a matrix-object is covered by this)
     if len(red_exprs) == 1:
         red_exprs = red_exprs[0]
 
     # check if sympy found any common subexpressions
+    # typically cse_pairs looks like [(r0, cos(x1)), (r1, sin(x1))], ...
     if not cse_pairs:
-        # if not, use standard lambdify
-        return sp.lambdify(args, expr, **kwargs)
+        # add a meaningless mapping r0 |-→ 0 to avoid empty list
+        cse_pairs = [(symbol_generator.next(), 0)]
 
     # now we are looking for those arguments that are part of the reduced expression(s)
+    # find out the shortcut-symbols
     shortcuts = zip(*cse_pairs)[0]
-    atoms = sp.Set(red_exprs).atoms()
+    atoms = sp.Set(red_exprs).atoms(sp.Symbol)
     cse_args = [arg for arg in tuple(args) + tuple(shortcuts) if arg in atoms]
+
+    assert isinstance(cse_pairs[0][0], sp.Symbol)
+    if len(cse_args) == 0:
+        # this happens if expr is constant
+        cse_args = [cse_pairs[0][0]]
 
     # next, we create a function that evaluates the reduced expression
     cse_expr = red_exprs
@@ -536,10 +546,164 @@ def cse_lambdify(args, expr, **kwargs):
 
     # now we can wrap things together
     def cse_fnc(*args):
+        # this function is intended only for scalar args
+        # vectorization is handled by `broadcasting_wrapper`
+        for a in args:
+            assert isinstance(a, Number)
+
         cse_args_evaluated = eval_pairs_fnc(args)
         return reduced_exprs_fnc(*cse_args_evaluated)
 
+    # later we might need the information how many scalar args this function expects
+    cse_fnc.args_info = args
+
     return cse_fnc
+
+
+def broadcasting_wrapper(original_fnc, original_shape=None, squeeze_axis=None):
+    """
+    Create a wrapper function which takes care of correctly broadcasting the result.
+
+    Background:
+    Let fnc1 = sp.lambdify(x, expr1, modules="numpy") # with expr1 = 3*x**2
+    Let fnc2 = sp.lambdify(x, expr2, modules="numpy") # with expr2 = 0*x**2
+
+    fnc1(np.arange(12)) returns an 1d-array of shape (12,)
+    fnc2(np.arange(12)) returns a plain zero
+
+    shape of result depends on the expression -> we dont want this
+
+    :param original_fnc:
+    :param original_shape:  tuple, or None (None means scalar)
+    :param squeeze_axis:    axis which will be squeezed before returning the result
+    :return:
+    """
+
+    # find out how many scalar args the funcition expects
+    # this is only used for security assertations
+    args_info = getattr(original_fnc, 'args_info', None)
+    if args_info:
+        n_args = len(args_info)
+    else:
+        argspec = inspect.getargspec(original_fnc)
+        if not argspec.varargs is None and argspec.keywords is None and argspec.defaults is None:
+            msg = "Unexpected calling signature of original fnc"
+            raise ValueError(msg)
+
+        n_args = len(argspec.args)
+
+    assert n_args > 0
+
+    def squeezer(res):
+        """
+        Optionally apply squeeze to a selected axis
+
+        Background: A vectorfield is a sympy matrix with shape (nx, 1)
+        Evaluated at nc different point we get an array with shape (nx, 1, nc)
+
+        However, an array with (nx, nc) is sometimes more practical.
+        :param res:
+        :return:
+        """
+        if squeeze_axis is None:
+            return res
+        else:
+            assert squeeze_axis in range(res.ndim)
+            assert res.shape[squeeze_axis] == 1
+            return np.squeeze(res, axis=squeeze_axis)
+
+    def fnc(*args):
+        """
+        accept two calling-cases:
+        1: scalar args -> e.g. fnc(0, 3.5)
+        2: sequences of args (list, tuple, 1d-array) -> e.g. fnc([0, 1], [3.5])
+            each sequence has to have the same length as the first one
+        Note: calling fnc(*arr), where arr is a 2d array results in case 2
+            this could be interpreted as fnc(row0, row1, ...)
+            with arr = np.row_stack(row0, row1, ...)
+
+            Typical meaning: nx, nc = arr.shape with nx: number of shapes, nc number of col. points
+        """
+
+        if not len(args) == n_args:
+            msg1 = "len(args) should be {} but instead is {}".format(n_args, len(args))
+            raise ValueError(msg1)
+
+        if is_flat_sequence_of_numbers(args):
+            res = original_fnc(*args)
+            if original_shape is None:
+                assert res == float(res)
+            else:
+                res = np.array(res).reshape(original_shape)
+
+            return squeezer(res)
+
+        # do not allow too much felxibility (faster development)
+        # first arg mus now be an array (which determines the length of the additional dimension)
+        elif not isinstance(args[0], np.ndarray):
+            msg1 = "Unexpected type {} of first arg (Expect either scalar or array)."
+            raise TypeError(msg1.format(type(args[0])))
+
+        # get a list of arrays of same shape
+        bc_args = np.broadcast_arrays(*args)
+
+        assert args[0].ndim == 1
+        L = len(args[0])
+
+        res_list = []
+
+        # if original_shape is None:
+        if original_shape is None:
+            tmp_shape = (1,)
+        else:
+            tmp_shape = original_shape
+
+        scalar_args = zip(*bc_args)
+
+        # now: evaluation
+        for arg in scalar_args:
+            # arg now should be
+            tmp = np.array(original_fnc(*arg))
+            res_list.append(tmp.reshape(tmp_shape))
+
+        assert len(res_list) == L
+
+        # stack along the last axis (should be 1 or 2)
+
+        res = np.stack(res_list, axis=len(tmp_shape))
+        return squeezer(res)
+
+    return fnc
+
+
+# TODO: Unittest
+def is_flat_sequence_of_numbers(obj, test_all=False):
+
+    if isinstance(obj, basestring):
+        return False
+
+    if not hasattr(obj, '__iter__'):
+        return False
+
+    assert hasattr(obj, '__len__')
+
+    if isinstance(obj, np.ndarray):
+        return obj.ndim == 1 and not obj.dtype == np.dtype('O')
+
+    if isinstance(obj, (tuple, list)):
+        if len(obj) == 0:
+            return True
+
+        if not test_all:
+            # only test first element (for performance reasons)
+            return isinstance(obj[0], Number)
+        else:
+            # Implement the above test for all elements
+            raise NotImplementedError()
+
+    else:
+        msg = "Unexpected type of sequence"
+        raise ValueError(msg)
 
 
 def saturation_functions(y_fnc, dy_fnc, y0, y1, first_deriv=True):
@@ -663,6 +827,18 @@ def unconstrain(var, vmin, vmax):
     return m, psi, dpsi
 
 
+def psi_inv(var, vmin, vmax):
+    """
+
+    :param var:
+    :param vmin:
+    :param vmax:
+    :return:        inverse expression of the psi-function
+    """
+    q = sp.Rational(1, 4)
+    return (vmax - vmin)*sp.log((vmin/(-vmax + var) - var/(-vmax + var))**q)
+
+
 def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, par, npts=500, return_error_array=False):
     """
     Calculates an error that shows how "well" the spline functions comply with the system
@@ -687,7 +863,7 @@ def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, par, npts=500, return_err
         A function for the vectorfield of the control system.
 
     par: np.array
-    
+
     npts : int
         Number of point to determine the error at.
 
@@ -712,7 +888,7 @@ def consistency_error(I, x_fnc, u_fnc, dx_fnc, ff_fnc, par, npts=500, return_err
         x = x_fnc(t)
         u = u_fnc(t)
 
-        ff = ff_fnc(x, u, par)
+        ff = ff_fnc(x, u, t, par).ravel()
         dx = dx_fnc(t)
 
         error.append(ff - dx)
@@ -756,25 +932,6 @@ def vector_eval(func, argarr):
     :return:
     """
     return np.array([func(arg) for arg in argarr])
-
-if __name__ == '__main__':
-    from sympy import sin, cos, exp
-
-    x, y, z = sp.symbols('x, y, z')
-
-    F = [(x+y) * (y-z),
-         sp.sin(-(x+y)) + sp.cos(z-y),
-         sp.exp(sp.sin(-y-x) + sp.cos(-y+z))]
-
-    MF = sp.Matrix(F)
-
-    f = cse_lambdify(args=(x,y,z), expr=MF,
-                     modules=[{'ImmutableMatrix' : np.array}, 'numpy'])
-
-    f_num = f(np.r_[[1.0]*10], np.r_[[2.0]*10], np.r_[[3.0]*10])
-    f_num_check = np.array([[-3.0],
-                            [-np.sin(3.0) + np.cos(1.0)],
-                            [np.exp(-np.sin(3.0) + np.cos(1.0))]])
 
 
 def new_spline(Tend, n_parts, targetvalues, tag, bv=None, use_std_approach=True):
@@ -876,6 +1033,30 @@ def calc_chebyshev_nodes(a, b, npts, include_borders=True):
         return chpts[1:-1]
 
     return chpts
+
+
+def ensure_colstack(seq, nrows):
+    """
+    Ensures that a sequence is in form of a columnstack
+
+    :param seq:
+    :param nrows:   desired number of rows
+
+    :return:        same data, maybe reshaped
+    """
+
+    arr = np.array(seq)
+    assert arr.size % nrows == 0
+
+    if arr.ndim == 1:
+        # only one column:
+        return arr.reshape(-1, 1)
+    elif arr.ndim == 2:
+        assert arr.shape[0] == nrows
+        return arr
+    else:
+        msg = "Unexpected dimensionality of array"
+        raise ValueError(msg)
 
 
 def calc_gramian(A, B, T, info=False):
@@ -1119,3 +1300,72 @@ def reshape_wrapper(arr, dim=None, **kwargs):
             return np.zeros((1, 0))
         else:
             return np.zeros((0, 1))
+
+
+def to_np(spobj, dtype=float):
+    """
+    Convert a sympy object to a numpy array
+    :param spobj:       sympy object to convert
+    :param dtype:       dtype-arg for the resulting array (float should be used for numbers)
+    :return:
+    """
+
+    # this is copied (and adapted) from symbtools package
+
+    if dtype is float:
+        # because np.int can not understand sp.Integer
+        # we temporarily convert to float
+        arr_float = np.vectorize(float)
+        arr1 = arr_float(np.array(spobj))  # the inner array is with dtype: object
+    else:
+        arr1 = spobj
+
+    if isinstance(arr1, sp.MatrixBase):
+        # this avoids strange numpy behavior: __array__() takes exactly  1 argument (2 given)
+        arr1 = arr1.tolist()
+
+    return np.array(arr1, dtype)
+
+
+def get_attributes_from_object(obj):
+    """
+    Use some magic from inspect module to get the left-hand-side of the line calling this function
+    and from this information we get the desired names
+
+    x, y, z, a, b, c = get_variables_from_object(myContainer)
+
+    This function is intended to avoid redundancy and space in situations like
+    x = myContainer.x
+    y = myContainer.y
+    ...
+
+    Note that this function is only intended to be used inside unit-tests
+
+    :param obj:
+    :return:        tuple of attribute values
+    """
+
+    frame, fname, l_number, fnc_name, lines, idx =\
+                  inspect.getouterframes(inspect.currentframe())[1]
+
+    assert len(lines) == 1
+    src_line, = lines
+    assert src_line.count("=") == 1
+
+    # left hand side
+    lhs = src_line.split("=")[0]
+    names = lhs.split(',')
+
+    results = []
+    for n in names:
+        n = n.strip()  # remove spaces
+        if not hasattr(obj, n):
+            msg = "Name {} not found".format(n)
+            raise NameError(msg)
+        results.append(getattr(obj, n))
+
+    if len(results) == 1:
+        results = results[0]
+
+    return results
+
