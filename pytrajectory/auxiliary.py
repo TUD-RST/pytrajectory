@@ -249,7 +249,7 @@ def zero_func_like(arg):
     return fnc
 
 
-def expr2callable(expr, xxs, uus, uref_fnc, ts, pps, cse=False, squeeze_axis=None,
+def expr2callable(expr, xxs, uus, uurefs, ts, pps, uref_fnc, cse=False, squeeze_axis=None,
                   crop_result_idx=None, desired_shape=None, vectorized=True):
     """
     converts sympy expression(s) into a fast evaluable function
@@ -257,6 +257,7 @@ def expr2callable(expr, xxs, uus, uref_fnc, ts, pps, cse=False, squeeze_axis=Non
     :param expr:        sympy expression or flat sequence of such or matrix
     :param xxs:         state variables
     :param uus:         input variables
+    :param uurefs:      reference input variables
     :param ts:          time variable (or None)
     :param pps:         parameter variables (empty sequence allowed)
     :param uref_fnc:    None or callable (reference input)
@@ -310,8 +311,7 @@ def expr2callable(expr, xxs, uus, uref_fnc, ts, pps, cse=False, squeeze_axis=Non
         factory = sp.lambdify
 
     args = []
-    # ad hoc creation of symbols for reference input
-    uurefs = sp.symbols("uref1:{}".format(len(uus) + 1))
+
     for elt in (xxs, uus, uurefs, [ts], pps):
         args.extend(elt)
     _f_num = factory(args, expr_list,

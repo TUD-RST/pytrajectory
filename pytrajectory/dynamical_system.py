@@ -87,6 +87,8 @@ class DynamicalSystem(object):
 
         self.xxs = sp.symbols(self.states)
         self.uus = sp.symbols(self.inputs)
+        # ad hoc creation of symbols for reference input
+        self.uurefs = sp.symbols([sname+"_ref" for sname in self.inputs])
         self.pps = sp.symbols(self.par)
 
         self._create_f_and_Df_objects()
@@ -273,15 +275,12 @@ class DynamicalSystem(object):
         self.ff_vectorized
         self.Df_vectorized
 
-
-        :return:
+        :return: None
         """
         ts = sp.Symbol('t')
 
-        # for symbolic evaluation uref(t) does not matter
-        uuref = [0]*len(self.uus)
-
-        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, uuref, ts, self.pps))
+        self.f_sym_full_matrix = sp.Matrix(self.f_sym(self.xxs, self.uus, self.uurefs,
+                                                      ts, self.pps))
 
         for i, elt in enumerate(self.f_sym_full_matrix):
             msg = "element #{} (i.e., `{}`) should be sp.Expr, not {}".format(i, elt, type(elt))
@@ -301,13 +300,15 @@ class DynamicalSystem(object):
         fnc_factory = aux.expr2callable
 
         nx = self.n_states
-        self.vf_f = fnc_factory(expr=ff, xxs=self.states, uus=self.inputs, uref_fnc=self.uref_fnc,
+        self.vf_f = fnc_factory(expr=ff, xxs=self.states, uus=self.inputs, uurefs=self.uurefs,
                                 ts=None, pps=self.par,
+                                uref_fnc=self.uref_fnc,
                                 vectorized=False, cse=False, crop_result_idx=nx)
 
-        self.vf_g = fnc_factory(expr=gg, xxs=self.states, uus=self.inputs, uref_fnc=self.uref_fnc,
-                                ts=None, pps=self.par, vectorized=False, cse=False,
-                                crop_result_idx=nx)
+        self.vf_g = fnc_factory(expr=gg, xxs=self.states, uus=self.inputs,  uurefs=self.uurefs,
+                                ts=None, pps=self.par,
+                                uref_fnc=self.uref_fnc,
+                                vectorized=False, cse=False, crop_result_idx=nx)
 
         # to handle penalty contraints it is necessary to distinguish between
         # the extended vectorfield (state equations + penalties) and
@@ -315,9 +316,10 @@ class DynamicalSystem(object):
         # for simulation, only the the basic vf shall be used -> crop_result
 
         self.f_num_simulation = fnc_factory(expr=self.f_sym_matrix, xxs=self.states,
-                                            uus=self.inputs, uref_fnc=self.uref_fnc, ts=None,
-                                            pps=self.par, vectorized=False, cse=False,
-                                            crop_result_idx=nx)
+                                            uus=self.inputs,  uurefs=self.uurefs,
+                                            ts=None, pps=self.par,
+                                            uref_fnc=self.uref_fnc,
+                                            vectorized=False, cse=False, crop_result_idx=nx)
 
         # ---
         # these objects were formerly defined in the class CollocationSystem:
@@ -327,14 +329,17 @@ class DynamicalSystem(object):
 
         assert self.f_sym_full_matrix.shape == (self.n_states + self.n_pconstraints, 1)
         self.ff_vectorized = fnc_factory(expr=self.f_sym_full_matrix, xxs=self.states,
-                                         uus=self.inputs, uref_fnc=self.uref_fnc,
-                                         ts=None, pps=self.par, vectorized=True,
+                                         uus=self.inputs,  uurefs=self.uurefs,
+                                         ts=None, pps=self.par,
+                                         uref_fnc=self.uref_fnc,
+                                         vectorized=True,
                                          cse=True, desired_shape=(len(self.f_sym_full_matrix), ) )
 
         all_symbols = sp.symbols(self.states + self.inputs + self.par)
         self.Df_expr = sp.Matrix(self.f_sym_full_matrix).jacobian(all_symbols)
 
         self.Df_vectorized = fnc_factory(expr=self.Df_expr, xxs=self.states, uus=self.inputs,
-                                         uref_fnc=self.uref_fnc, ts=None, pps=self.par,
+                                         uurefs=self.uurefs, ts=None, pps=self.par,
+                                         uref_fnc=self.uref_fnc,
                                          vectorized=True, cse=True,
                                          desired_shape=self.Df_expr.shape)

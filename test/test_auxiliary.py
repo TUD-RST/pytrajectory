@@ -119,14 +119,14 @@ class TestCseLambdify(object):
         assert f(0., 0.) == 1.
 
     def test_expr2callable(self):
-        x1, x2, x3, u, t, p = sp.symbols('x1, x2, x3, u, t, p')
+        x1, x2, x3, u, uref, t, p = sp.symbols('x1, x2, x3, u, uref, t, p')
         f1 = [x1, u, p]
         f2 = [x1, u, 0*p]
 
         f3 = [x1, x2*x3*u, p*x3, t, 2, 4]
 
         uref_fnc = aux.zero_func_like(1)
-        kwargs = dict(uref_fnc=uref_fnc, ts=t, pps=[p], vectorized=True, cse=True)
+        kwargs = dict(uurefs=[uref], uref_fnc=uref_fnc, ts=t, pps=[p], vectorized=True, cse=True)
 
         factory = pytrajectory.auxiliary.expr2callable
         fnc1a = factory(expr=f1, xxs=[x1], uus=[u], **kwargs)

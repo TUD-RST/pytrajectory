@@ -100,10 +100,11 @@ def rhs2(state, ua, uref, t, pp,):
     uref1, = uref
 
     u1 = ua1 + uref1
+    print ua, uref
 
     ff = [x2, u1]
 
-    c = input_penalty_scale*u1**2 + 0*aux.switch_on(t, -1, Tb/2)*u1**2
+    c = input_penalty_scale*ua1**2 + 0*aux.switch_on(t, -1, Tb/2)*u1**2
     ff.append(c)
     return np.array(ff)
 
@@ -111,11 +112,18 @@ tt = np.linspace(Ta, Tb, 1e3)
 xx_ref = np.column_stack((x_ref_num(tt).squeeze(), v_ref_num(tt).squeeze()))
 refsol = aux.Container(tt=tt, xx=xx_ref, uu=tt*0, n_raise_spline_parts=0)
 
+# make the signature of this function compatible with broadcasting_wrapper
+
+
+def uref_fnc(t):
+    return u_ref_num(t)
+
+
 S2 = TransitionProblem(rhs2, Ta, Tb, xa1, xb1, constraints=None,
                        eps=1e-1, su=30, kx=2, use_chains=False,
                        #first_guess={'seed': 4, 'scale': 10, 'u1': lambda t: 0},
                        refsol=refsol,
-                       uref=u_ref_num,
+                       uref=uref_fnc,
                        use_std_approach=False,
                        sol_steps=200,
                        show_ir=True)
