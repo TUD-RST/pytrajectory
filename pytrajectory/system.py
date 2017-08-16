@@ -19,7 +19,6 @@ from constraint_handling import ConstraintHandler
 
 import matplotlib.pyplot as plt
 
-
 # DEBUGGING
 from ipHelp import IPS
 
@@ -164,11 +163,12 @@ class TransitionProblem(object):
         value
             The new value
         """
-        
+
         if param in {'maxIt', 'eps', 'ierr', 'dt_sim'}:
             self._parameters[param] = value
 
-        elif param in {'n_parts_x', 'sx', 'n_parts_u', 'su', 'kx', 'use_chains', 'nodes_type', 'use_std_approach'}:
+        elif param in {'n_parts_x', 'sx', 'n_parts_u', 'su', 'kx', 'use_chains', 'nodes_type',
+                       'use_std_approach'}:
             if param == 'nodes_type' and value != 'equidistant':
                 raise NotImplementedError()
 
@@ -210,13 +210,12 @@ class TransitionProblem(object):
             elif k.startswith('u'):
                 con_u[k] = v
             else:
-                msg = "Unexpected key for constraint: %s: %s" % (k, v)
+                msg = "Unexpected key for constraint: %s: %s"%(k, v)
                 raise ValueError(msg)
 
         self.constraints = OrderedDict()
         self.constraints.update(sorted(con_x.iteritems()))
         self.constraints.update(sorted(con_u.iteritems()))
-
 
         if self.use_chains:
             msg = "Currently not possible to make use of integrator chains together with " \
@@ -300,7 +299,7 @@ class TransitionProblem(object):
             return res
 
         while not q_finish_loop():
-            
+
             if not self.nIt == 0:
                 # raise the number of spline parts (not in the first step)
                 self.eqs.trajectories.raise_spline_parts()
@@ -337,9 +336,9 @@ class TransitionProblem(object):
             return self.eqs.trajectories.x, self.eqs.trajectories.u
         else:
             return self.eqs.trajectories.x, self.eqs.trajectories.u, self.get_par_values()
-        ##:: self.eqs.trajectories.x, self.eqs.trajectories.u are functions,
-        ##:: variable is t.  x(t), u(t) (value of x and u at t moment,
-        # not all the values (not a list with values for all the time))
+            ##:: self.eqs.trajectories.x, self.eqs.trajectories.u are functions,
+            ##:: variable is t.  x(t), u(t) (value of x and u at t moment,
+            # not all the values (not a list with values for all the time))
 
     def get_spline_values(self, sol, plot=False):
         """
@@ -358,7 +357,7 @@ class TransitionProblem(object):
         # uf = np.vectorize(self.eqs.trajectories.u)
 
         dt = 0.01
-        tt = np.arange(self.a, self.b+dt, dt)
+        tt = np.arange(self.a, self.b + dt, dt)
         xx = np.zeros((len(tt), self.dyn_sys.n_states))
         uu = np.zeros((len(tt), self.dyn_sys.n_inputs))
 
@@ -382,7 +381,7 @@ class TransitionProblem(object):
 
         As a last, the resulting initial value problem is simulated.
         """
-        
+
         # Note: in pytrajectory there are Three main levels of 'iteration'
         # Level 3: perform one LM-Step (i.e. calculate a new set of parameters) 
         # This is implemented in solver.py. Ends when tolerances are met or
@@ -395,7 +394,7 @@ class TransitionProblem(object):
 
         # Initialise the spline function objects
         self.eqs.trajectories.init_splines()
-        
+
         # Get an initial value (guess)
         self.eqs.get_guess()
 
@@ -413,13 +412,13 @@ class TransitionProblem(object):
             # in the following iterations we want to use the same solver
             # object (we just had an intermediate look, whether the solution
             # of the initial value problem is already sufficient accurate.)
-            
+
             new_solver = False
 
             # Set the found solution
             self.eqs.trajectories.set_coeffs(self.tmp_sol)
 
-            #!! dbg
+            # !! dbg
             # self.eqs.trajectories.set_coeffs(self.eqs.guess)
 
             # Solve the resulting initial value problem
@@ -454,7 +453,7 @@ class TransitionProblem(object):
                 # Note: this approach seems not to be successful
                 if self.eqs.trajectories.n_parts_x >= 40:
                     # values between 0.32 and 3.2:
-                    scale = 10**(np.random.rand(len(slvr.x0))-.5)
+                    scale = 10 ** (np.random.rand(len(slvr.x0)) - .5)
                     # only use the actual value
                     if slvr.res < old_res:
                         old_sol = slvr.x0
@@ -666,7 +665,7 @@ class TransitionProblem(object):
         u_fnc = self.get_constrained_spline_fncs()[2]
         S = Simulator(ff, T, start, u_fnc, z_par=par, dt=self._parameters['dt_sim'])
 
-        logging.debug("start: %s" % str(start))
+        logging.debug("start: %s"%str(start))
 
         # forward simulation
         self.sim_data = S.simulate()
@@ -690,7 +689,7 @@ class TransitionProblem(object):
         that shows how "well" the spline functions comply with the system
         dynamic given by the vector field.
         """
-        
+
         # this is the solution of the simulation
         a = self.sim_data[0][0]
         b = self.sim_data[0][-1]
@@ -699,18 +698,18 @@ class TransitionProblem(object):
         x_sym = self.dyn_sys.states
 
         xb = self.dyn_sys.xb
-        
+
         # what is the error
         logging.debug(40*"-")
         logging.debug("Ending up with:   Should Be:  Difference:")
 
         err = np.empty(xt.shape[1])
         for i, xx in enumerate(x_sym):
-            err[i] = abs(xb[i] - xt[-1][i]) ##:: error (x1, x2) at end time
-            logging.debug(str(xx)+" : %f     %f    %f" % (xt[-1][i], xb[i], err[i]))
-        
+            err[i] = abs(xb[i] - xt[-1][i])  ##:: error (x1, x2) at end time
+            logging.debug(str(xx) + " : %f     %f    %f"%(xt[-1][i], xb[i], err[i]))
+
         logging.debug(40*"-")
-        
+
         # if self._ierr:
         ierr = self._parameters['ierr']
         eps = self._parameters['eps']
@@ -723,9 +722,9 @@ class TransitionProblem(object):
             maxH = auxiliary.consistency_error((a, b), xfnc, ufnc, dxfnc,
                                                self.dyn_sys.f_num_simulation,
                                                par=self.get_par_values())
-            
+
             reached_accuracy = (maxH < ierr) and (max(err) < eps)
-            logging.debug('maxH = %f' % maxH)
+            logging.debug('maxH = %f'%maxH)
         else:
             # just check if tolerance for the boundary values is satisfied
             reached_accuracy = (max(err) < eps)
@@ -765,13 +764,13 @@ class TransitionProblem(object):
             sys = self._dyn_sys_orig
         else:
             sys = self.dyn_sys
-            
+
         # calculate the error functions H_i(t)
         ace = auxiliary.consistency_error
         max_con_err, error = ace((sys.a, sys.b), self.eqs.trajectories.x, self.eqs.trajectories.u,
                                  self.eqs.trajectories.dx, sys.f_num_simulation,
                                  len(self.sim_data[0]), True)
-        
+
         H = dict()
         for i in self.eqs.trajectories._eqind:
             H[i] = error[:, i]
@@ -794,7 +793,7 @@ class TransitionProblem(object):
         save['sys']['state'] = dict.fromkeys(['nIt', 'reached_accuracy'])
         save['sys']['state']['nIt'] = self.nIt
         save['sys']['state']['reached_accuracy'] = self.reached_accuracy
-        
+
         # simulation results
         save['sys']['sim_data'] = self.sim_data
 
@@ -803,11 +802,11 @@ class TransitionProblem(object):
 
         save['eqs'] = self.eqs.save()
         save['traj'] = self.eqs.trajectories.save()
-        
+
         if fname is not None:
             if not (fname.endswith('.pcl') or fname.endswith('.pcl')):
                 fname += '.pcl'
-        
+
             with open(fname, 'w') as dumpfile:
                 pickle.dump(save, dumpfile)
 

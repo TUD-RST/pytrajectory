@@ -845,7 +845,6 @@ class CollocationSystem(object):
                         offset = 0
                         scale = 1
                     free_vars_guess = (np.random.random(len(v)) + offset)*scale
-                    print free_vars_guess
 
                 else:
                     free_vars_guess = 0.1*np.ones(len(v))

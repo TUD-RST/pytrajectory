@@ -5,10 +5,20 @@ from pytrajectory import TransitionProblem
 from sympy import sin, cos
 import numpy as np
 
-# define the function that returns the vectorfield
-def f(x,u):
-    x1, x2, x3, x4 = x       # system state variables
-    u1, = u                  # input variable
+
+def f(xx, uu, uref, t, p):
+    """ Right hand side of the vectorfield defining the system dynamics
+
+    :param xx:       state
+    :param uu:       input
+    :param uuref:    reference input (not used)
+    :param t:        time (not used)
+    :param pp:       additionial free parameters  (not used)
+
+    :return:        xdot
+    """
+    x1, x2, x3, x4 = xx       # system state variables
+    u1, = uu                  # input variable
 
     l = 0.5     # length of the pendulum rod
     g = 9.81    # gravitational acceleration

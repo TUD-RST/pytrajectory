@@ -5,10 +5,20 @@ from pytrajectory import TransitionProblem
 import numpy as np
 from sympy import cos, sin
 
-# define the function that returns the vectorfield
-def f(x,u):
-    x1, x2, x3, x4  = x     # state variables
-    u1, = u                 # input variable
+
+def f(xx, uu, uuref, t, pp):
+    """ Right hand side of the vectorfield defining the system dynamics
+
+    :param xx:       state
+    :param uu:       input
+    :param uuref:    reference input (not used)
+    :param t:        time (not used)
+    :param pp:       additionial free parameters  (not used)
+
+    :return:        xdot
+    """
+    x1, x2, x3, x4  = xx     # state variables
+    u1, = uu                 # input variable
     
     e = 0.9     # inertia coupling
     

@@ -1,14 +1,24 @@
-'''
+"""
 This example of the double integrator demonstrates how to pass constraints to PyTrajectory.
-'''
+"""
 # imports
 from pytrajectory import TransitionProblem
 import numpy as np
 
-# define the vectorfield
-def f(x,u):
-    x1, x2 = x
-    u1, = u
+
+def f(xx, uu, uuref, t, pp):
+    """ Right hand side of the vectorfield defining the system dynamics
+
+    :param xx:       state
+    :param uu:       input
+    :param uuref:    reference input (not used)
+    :param t:        time (not used)
+    :param pp:       additionial free parameters  (not used)
+
+    :return:        xdot
+    """
+    x1, x2 = xx
+    u1, = uu
     
     ff = [x2,
           u1]
@@ -20,7 +30,7 @@ xa = [0.0, 0.0]
 xb = [1.0, 0.0]
 
 # constraints dictionary
-con = {'x2' : [-0.1, 0.65]}
+con = {'x2': [-0.1, 0.65]}
 
 # create the trajectory object
 S = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, constraints=con, use_chains=False)

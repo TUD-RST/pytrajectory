@@ -1,7 +1,7 @@
-'''
+"""
 This example of the inverted pendulum demonstrates the basic usage of
 PyTrajectory as well as its visualisation capabilities.
-'''
+"""
 
 # import all we need for solving the problem
 from pytrajectory import TransitionProblem
@@ -14,10 +14,20 @@ import sys
 import matplotlib as mpl
 from pytrajectory.visualisation import Animation
 
-# first, we define the function that returns the vectorfield
-def f(x,u):
-    x1, x2, x3, x4 = x  # system variables
-    u1, = u             # input variable
+
+def f(xx, uu, uuref, t, pp):
+    """ Right hand side of the vectorfield defining the system dynamics
+
+    :param xx:       state
+    :param uu:       input
+    :param uuref:    reference input (not used)
+    :param t:        time (not used)
+    :param pp:       additionial free parameters  (not used)
+
+    :return:        xdot
+    """
+    x1, x2, x3, x4 = xx  # system variables
+    u1, = uu             # input variable
     
     l = 0.5     # length of the pendulum
     g = 9.81    # gravitational acceleration
@@ -41,7 +51,7 @@ ua = [0.0]
 ub = [0.0]
 
 from pytrajectory import log
-log.console_handler.setLevel(10)
+log.console_handler.setLevel(20)
 
 # now we create our Trajectory object and alter some method parameters via the keyword arguments
 

@@ -64,6 +64,7 @@ class TestExamples(object):
         self.assert_reached_accuracy(locals())
 
     @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
+    @pytest.mark.xfail(reason="multiple Inputs", strict=True)
     def test_aricraft(self):
         script = os.path.join(self.examples_dir, 'ex3_Aircraft.py')
         d = dict(locals(), **globals())
@@ -71,6 +72,7 @@ class TestExamples(object):
         self.assert_reached_accuracy(locals())
     
     @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
+    @pytest.mark.skip(reason="integrator chains", strict=True)
     def test_underactuated_manipulator(self):
         script = os.path.join(self.examples_dir, 'ex4_UnderactuatedManipulator.py')
         d = dict(locals(), **globals())
