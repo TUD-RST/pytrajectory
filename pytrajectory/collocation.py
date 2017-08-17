@@ -4,6 +4,7 @@ import sympy as sp
 from scipy import sparse
 from collections import OrderedDict
 from scipy import linalg
+import matplotlib.pyplot as plt
 
 from log import logging
 from trajectories import Trajectory
@@ -12,8 +13,7 @@ from solver import Solver
 from auxiliary import Container, NanError
 import auxiliary as aux
 
-# from ipHelp import IPS
-from IPython import embed
+from ipHelp import IPS
 
 np.set_printoptions(threshold='nan') ##??
 
@@ -288,7 +288,11 @@ class CollocationSystem(object):
                 # 'F' means to index the elements in column-major, Fortran-style order, with the
                 # first index changing fastest, and the last index changing slowest.
                 # in other words: building one huge column vector consisting of all stacked columns
-                # matrix.ravel(order="F") = array([m_0_0, m_0_1, ..., m_1_0, ...])
+                # np.arange(4).reshape(2, 2).ravel()
+                # Out[7]: array([0, 1, 2, 3])
+                # In [8]: np.arange(4).reshape(2, 2).ravel('F')
+                # Out[8]: array([0, 2, 1, 3])
+
                 F = F2.ravel(order="F").take(take_indices, axis=0)
 
                 # calculate Ydot from the spline:
@@ -297,7 +301,9 @@ class CollocationSystem(object):
                 assert dY1.shape == (n_states * n_cpts, )
 
                 dY = dY1.take(take_indices, axis=0)
-                #dX = np.array(dX).reshape((x_len, -1), order='F').take(eqind, axis=0)
+
+                # dbg:
+                dY2 = np.array(dY).reshape(F2.shape, order='F').take(eqind, axis=0)
 
                 G = F - dY
                 assert G.ndim == 1
@@ -313,6 +319,7 @@ class CollocationSystem(object):
                                    ff=ff_vec, Df=Df_vec)
                     res = iC
 
+                # IPS()
                 return res
 
         # save the dimension of the result and the argument for this function
@@ -892,18 +899,32 @@ class CollocationSystem(object):
 
         :return:    guess (vector of values for free parameters)
         """
-        fnc_list = self.masterobject.refsol.xxfncs + self.masterobject.refsol.uufncs
+        refsol = self.masterobject.refsol
+        fnc_list = refsol.xxfncs + refsol.uufncs
         assert isinstance(self.trajectories.indep_vars, OrderedDict)
 
         guess = np.empty(0)
 
         # assume that both fnc_list and indep_vars.items() are sorted like
         # [x_1, ... x_n, u_1, ..., u_m, p_1, ..., p_k]
+
+        # dbg:
+
+        # new splines (for visualization)
+        C = self.trajectories.init_splines(export=True)
+        new_spline_values = []
+        tt = refsol.tt
+
         for fnc, (k, v) in zip(fnc_list, self.trajectories.indep_vars.items()):
             logging.debug("Get guess from refsol for spline {}".format(k))
             s_new = self.trajectories.splines[k]
 
             free_coeffs_guess = s_new.interpolate(fnc)
+
+            dbg_spline = C.splines[k]
+            guess2 = dbg_spline.interpolate(fnc, set_coeffs=True)
+            assert np.alltrue(free_coeffs_guess == guess2)
+            new_spline_values.append(aux.vector_eval(dbg_spline.f, tt))
 
             # use Chebyshev nodes to increase approximation quality (currently does not work)
             # free_coeffs_guess = s_new.new_interpolate(fnc, method='cheby')
@@ -913,6 +934,29 @@ class CollocationSystem(object):
             if 'u' in k:
                 pass
                 # IPS()
+
+        # dbg
+        if 0 and self.masterobject._parameters.get('show_refsol', False):
+            # dbg visualization
+
+            mm = 1./25.4  # mm to inch
+            scale = 8
+            fs = [75*mm*scale, 35*mm*scale]
+            rows = np.round((len(new_spline_values) + 0)/2.0 + .25)  # round up
+            labels = self.masterobject.dyn_sys.states + self.masterobject.dyn_sys.inputs
+
+            plt.figure(figsize=fs)
+            for i in xrange(len(new_spline_values)):
+                plt.subplot(rows, 2, i + 1)
+                plt.plot(tt, refsol.xu_list[i], 'k', lw=3, label='sim')
+                plt.plot(tt, new_spline_values[i], label='new')
+                ax = plt.axis()
+                plt.axis(ax)
+                plt.grid(1)
+                ax = plt.axis()
+                plt.ylabel(labels[i])
+            plt.legend(loc='best')
+            plt.show()
 
         return guess
 

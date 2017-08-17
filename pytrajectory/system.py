@@ -495,6 +495,8 @@ class TransitionProblem(object):
         if self._parameters.get('show_refsol', False):
             # dbg visualization
 
+            guess = np.empty(0)
+
             C = self.eqs.trajectories.init_splines(export=True)
             self.eqs.guess = None
             new_params = OrderedDict()
@@ -504,17 +506,22 @@ class TransitionProblem(object):
             fnclist = self.refsol.xxfncs + self.refsol.uufncs
 
             for i, (key, s) in enumerate(C.splines.iteritems()):
-                coeffs = s.new_interpolate(fnclist[i], set_coeffs=True, method="cheby")
+                coeffs = s.interpolate(fnclist[i], set_coeffs=True)
                 new_spline_values.append(auxiliary.vector_eval(s.f, tt))
 
+                guess = np.hstack((guess, coeffs))
+
                 if 'u' in key:
-                    IPS()
+                    pass
+                    # dbg:
+                    # IPS()
 
                 sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)
                 # List of tuples like (cx1_0_0, 2.41)
 
                 new_params.update(sym_num_tuples)
-
+            self.refsol_coeff_guess = guess
+            # IPS()
             mm = 1./25.4  # mm to inch
             scale = 8
             fs = [75*mm*scale, 35*mm*scale]

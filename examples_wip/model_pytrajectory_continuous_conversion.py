@@ -62,18 +62,22 @@ limit = .7
 # nicht lineares partiell linarisiertes Modell
 def model_rhs(xx, uu, uuref, t, pp):
     x1, x2, x3, x4, x5, x6, x7, x8 = xx # q1, q2, q3, q4, q1d, q2d, q3d, q4d
-    stell, = uu
+    u1, = uu
+    u1ref, = uuref
+    u1a = u1 + u1ref
+
     x1d = x5
     x2d = x6
     x3d = x7
     x4d = x8
 
-    x5d = q1dd_fnc(x1, x2, x3, x4, x5, x6, x7, x8, stell)
-    x6d = q2dd_fnc(x1, x2, x3, x4, x5, x6, x7, x8, stell)
-    x7d = q3dd_fnc(x1, x2, x3, x4, x5, x6, x7, x8, stell)
-    x8d = q4dd_fnc(x1, x2, x3, x4, x5, x6, x7, x8, stell)
+    x5d = q1dd_fnc(x1, x2, x3, x4, x5, x6, x7, x8, u1a)
+    x6d = q2dd_fnc(x1, x2, x3, x4, x5, x6, x7, x8, u1a)
+    x7d = q3dd_fnc(x1, x2, x3, x4, x5, x6, x7, x8, u1a)
+    x8d = q4dd_fnc(x1, x2, x3, x4, x5, x6, x7, x8, u1a)
 
-    res = [x1d, x2d, x3d, x4d, x5d, x6d, x7d, x8d]
+    penalty = .1*u1**2
+    res = [x1d, x2d, x3d, x4d, x5d, x6d, x7d, x8d, penalty]
 
     return np.array(res)
 
@@ -87,6 +91,10 @@ ub = 0.0
 
 w = -1.3
 xa = [w*pi+.2, w*pi -.3, w*pi, 0.0, 0.0, 0.0, 0.0, 5]
+
+# dbg:
+w = 1
+xa = [w*pi, w*pi, w*pi, 0.0, 0.0, 0.0, 0.0, 0]
 # xb = [pi, pi, pi, 1.0, 0.0, 0.0, 0.0, 0.0]
 xb_des = [0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0]
 
@@ -114,9 +122,14 @@ u_values = np.r_[-15, -10, -1, 5, 18, 3]*1
 u_values = np.r_[0, -16, - 14, -11,  -4, 3]*1.0
 
 
+# dbg:
+u_values = np.r_[0, 3, 0, -3,  -3, 0, 3, 0]*1
+
+
 con = {'x4': (-1, 1),
        'x8': (-20, 20),
        'u1': (-20, 20)}
+
 
 if 0:
     # plot and exit
@@ -129,6 +142,9 @@ else:
 
     xb_0 = refsol.xx[-1, :]
 
+    # pass reference input with new interface (uref_fnc)
+    refsol.uu = refsol.tt*0
+
     con = {}
 
 
@@ -136,7 +152,9 @@ N = 10
 for i in range(N + 1):
     xb = xb_0 + i*1.0/N*(xb_des - xb_0)
     S = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb_0, use_chains=False,
-                          use_std_approach=False,  refsol=refsol, ierr=None, maxIt=6,
+                          use_std_approach=False,  refsol=refsol,
+                          uref=refsol.uref_func,
+                          ierr=None, maxIt=6,
                           eps=1e-1, sol_steps=100, reltol=1e-3, accIt=1, show_ir=True,
                           constraints=con, first_guess=first_guess, show_refsol=True)
     S.solve()
@@ -153,8 +171,9 @@ for i in range(N + 1):
     # prepare reference solution for next step
     refsol = aux.Container(tt=tt, xx=xx, uu=uu, n_raise_spline_parts=2)
 
-    IPS()
     break
+
+
 # dt_sim=0.004
 # time to run the iteration
 

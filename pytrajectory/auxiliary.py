@@ -1173,11 +1173,20 @@ def make_refsol_by_simulation(tp, u_values, plot_u=False, plot_x_idx=0):
 
     x_start = tp.dyn_sys.xa
     ff = tp.eqs.sys.f_num_simulation
-    sim = Simulator(ff, Tb, x_start, uspline.f)
+
+    def ufunc(t):
+        """adapt siganture for broadcasting wrapper
+        """
+        return uspline.f(t)
+
+    nu = len(np.atleast_1d(ufunc(Ta)))
+    uref_func = broadcasting_wrapper(ufunc, original_shape=(nu, ))
+
+    sim = Simulator(ff, Tb, x_start, uref_func)
     tt, xx, uu = sim.simulate()
     uu = np.atleast_2d(uu)
 
-    refsol = Container(tt=tt, xx=xx, uu=uu, n_raise_spline_parts=0)
+    refsol = Container(tt=tt, xx=xx, uu=uu, n_raise_spline_parts=0, uref_func=uref_func)
 
     plot_flag = False
 
@@ -1186,6 +1195,7 @@ def make_refsol_by_simulation(tp, u_values, plot_u=False, plot_x_idx=0):
         tt2 = np.linspace(Ta, Tb, 1000)
         uu = vector_eval(uspline.f, tt2)
         plt.plot(tt2, uu)
+        plt.title("u")
         plot_flag = True
 
     assert isinstance(plot_x_idx, (int, str))
@@ -1202,6 +1212,7 @@ def make_refsol_by_simulation(tp, u_values, plot_u=False, plot_x_idx=0):
         plt.figure()
         plt.plot(tt, xx[:, :n])
         plt.grid(1)
+        plt.legend([str(i+1) for i in xrange(n)])
         plot_flag = True
 
     if plot_flag:

@@ -174,7 +174,8 @@ class Trajectory(object):
             raise ValueError(msg)
 
         # dbg:
-        if self.splines is not None:
+        if self.splines is not None and not export:
+            # this is a "regular calling case" (no construction of additional splines for dbg)
             assert not list(self.splines.values())[0]._prov_flag
 
         bv = self.sys.constraint_handler.boundary_values
