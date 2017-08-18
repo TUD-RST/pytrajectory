@@ -6,11 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
 import pickle
-from ipHelp import IPS
-#http://sourceforge.net/p/python-control/wiki/Download/
-import control.matlab as controlm
-# sys.path.append('/Volumes/work/workspaces/PYTHON/mymodules')
-import symbtools as st
+from ipHelp import IPS, activate_ips_on_exception
+activate_ips_on_exception()
 
 from pytrajectory import TransitionProblem, penalty_expression, aux
 from numpy import pi
@@ -76,7 +73,7 @@ def model_rhs(xx, uu, uuref, t, pp):
     x7d = q3dd_fnc(x1, x2, x3, x4, x5, x6, x7, x8, u1a)
     x8d = q4dd_fnc(x1, x2, x3, x4, x5, x6, x7, x8, u1a)
 
-    penalty = .1*u1**2
+    penalty = 5*u1**2
     res = [x1d, x2d, x3d, x4d, x5d, x6d, x7d, x8d, penalty]
 
     return np.array(res)
@@ -92,9 +89,6 @@ ub = 0.0
 w = -1.3
 xa = [w*pi+.2, w*pi -.3, w*pi, 0.0, 0.0, 0.0, 0.0, 5]
 
-# dbg:
-w = 1
-xa = [w*pi, w*pi, w*pi, 0.0, 0.0, 0.0, 0.0, 0]
 # xb = [pi, pi, pi, 1.0, 0.0, 0.0, 0.0, 0.0]
 xb_des = [0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0]
 
@@ -122,10 +116,6 @@ u_values = np.r_[-15, -10, -1, 5, 18, 3]*1
 u_values = np.r_[0, -16, - 14, -11,  -4, 3]*1.0
 
 
-# dbg:
-u_values = np.r_[0, 3, 0, -3,  -3, 0, 3, 0]*1
-
-
 con = {'x4': (-1, 1),
        'x8': (-20, 20),
        'u1': (-20, 20)}
@@ -143,20 +133,21 @@ else:
     xb_0 = refsol.xx[-1, :]
 
     # pass reference input with new interface (uref_fnc)
+    refsol.uu_orig = refsol.uu.copy()
     refsol.uu = refsol.tt*0
 
     con = {}
 
 
-N = 10
+N = 100
 for i in range(N + 1):
     xb = xb_0 + i*1.0/N*(xb_des - xb_0)
-    S = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb_0, use_chains=False,
+    S = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb, use_chains=False,
                           use_std_approach=False,  refsol=refsol,
                           uref=refsol.uref_func,
                           ierr=None, maxIt=6,
                           eps=1e-1, sol_steps=100, reltol=1e-3, accIt=1, show_ir=True,
-                          constraints=con, first_guess=first_guess, show_refsol=True)
+                          constraints=con, first_guess=first_guess, show_refsol=False)
     S.solve()
 
     if S.reached_accuracy:
@@ -166,12 +157,21 @@ for i in range(N + 1):
         IPS()
 
     tt, xx, uu = S.sim_data
-    uu = np.atleast_2d(uu)
 
     # prepare reference solution for next step
-    refsol = aux.Container(tt=tt, xx=xx, uu=uu, n_raise_spline_parts=2)
 
-    break
+    uu_total = uu.squeeze() + refsol.uu_orig.squeeze()
+    uref_func = aux.broadcasted_u_func(tt, uu_total)
+
+    plt.figure()
+    plt.plot(tt, uu_total)
+
+    refsol = aux.Container(tt=tt, xx=xx, uu=tt*0, uref_func=uref_func,
+                           uu_orig=uu_total,
+                           n_raise_spline_parts=refsol.n_raise_spline_parts,)
+
+    # break
+plt.show()
 
 
 # dt_sim=0.004
