@@ -1253,6 +1253,20 @@ def make_refsol_callable(refsol):
         refsol.uufncs.append(interp1d(tt, uarr))
 
 
+# TODO: docstring and generalization
+def broadcasted_u_func(tt, uu):
+
+    # extrapolation might be necessary as the resulting function might be also called by odeint
+    fnc1 = interp1d(tt, uu, bounds_error=False, fill_value="extrapolate")
+
+    # adapt signature (for broadcasting wrapper):
+    def fnc2(t):
+        # t = np.clip(t, tt[0], tt[-1])
+        return fnc1(t)
+
+    return broadcasting_wrapper(fnc2, (1,))
+
+
 def random_refsol_xx(tt, xa, xb, n_points, x_lower, x_upper, seed=0):
     """
     Generates some random spline curves respecting boundaray conditions and limits.
