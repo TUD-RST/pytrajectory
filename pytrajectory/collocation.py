@@ -54,10 +54,7 @@ class CollocationSystem(object):
             raise ValueError("Insufficient number of default values for afp.")
         self._parameters['z_par'] = tmp_par
 
-        
-        ##!! self.n_par = self._parameters['z_par'].__len__()
-        
-        # yet we don't have objects for solver, soution, guess
+        # prepare some instance variables
         self.solver = None
         self.sol = None
         self. guess = None

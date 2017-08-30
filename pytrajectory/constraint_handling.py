@@ -11,9 +11,9 @@ from ipHelp import IPS
 # noinspection PyPep8Naming
 class ConstraintHandler(object):
     """
-    This class serves to handle the based box constraints (based on coordinate transformation )
-    for the state and the input. The Transformation is constructed and used in any case.
-    If there are no constraints present, the transformations are identical mappings
+    This class serves to handle the based box constraints (based on coordinate transformation)
+    for the state and the input. The transformation is constructed and used in any case.
+    If there are no constraints present, the scalar transformations are identical mappings.
     """
 
     def __init__(self, masterobject, dynsys, constraints=None):
@@ -35,6 +35,10 @@ class ConstraintHandler(object):
 
         # this is mainly for debuging
         self.masterobject = masterobject
+
+        # Notation:
+        # z = (xx, uu) =  <original coordinates, which have to respect box constraints>
+        # z_tilde = (yy, vv) = <new coordinates, which are unconstrained>
 
         self._preprocess_constraints(constraints)
         assert isinstance(self.constraints, OrderedDict)
@@ -94,12 +98,12 @@ class ConstraintHandler(object):
             tmp = self.Jac_Gamma.diff(zi)
             self.dJac_Gamma[:, :, i] = aux.to_np(tmp, object)
 
-        self._create_num_functions()
+        self._create_num_functions()  # lambdification of the expressions
         self._create_boundary_value_dict()
 
     def _create_num_functions(self):
         """
-        Create function for numerical evaluation of Psi and its Jacobian and store them as
+        Create function for numerical evaluation of Psi, Gamma and its Jacobians and store them as
         attributes.
 
         :return: None
@@ -178,7 +182,7 @@ class ConstraintHandler(object):
     def _preprocess_constraints(self, constraints=None):
         """
         Preprocessing of projective constraint-data provided by the user.
-        Ensure types and ordering
+        Ensure types and ordering.
 
         :return: None
         """

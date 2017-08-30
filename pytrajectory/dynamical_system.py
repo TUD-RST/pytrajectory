@@ -221,7 +221,7 @@ class DynamicalSystem(object):
 
     def _preprocess_boundary_values(self, xa, xb, ua, ub):
         """
-        Save the original boundary values
+        Save the original boundary values.
 
         :param xa:
         :param xb:

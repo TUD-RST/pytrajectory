@@ -15,7 +15,7 @@ from ipHelp import IPS
 class Trajectory(object):
     """
     This class handles the creation and managing of the spline functions
-    that are intended to approximate the desired trajectories.
+    that are intended to approximate the desired systems trajectory.
 
     Parameters
     ----------
