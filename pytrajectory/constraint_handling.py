@@ -8,6 +8,10 @@ import auxiliary as aux
 from ipHelp import IPS
 
 
+class ConstraintError(ValueError):
+    pass
+
+
 # noinspection PyPep8Naming
 class ConstraintHandler(object):
     """
@@ -163,6 +167,9 @@ class ConstraintHandler(object):
         # z = (x, u)            (original bounded coordinates)
         # z_tilde = (y, v)      (new unbounded coordinates)
 
+        # ensure that boundary values are compatible with constraints
+        self._check_boundary_values(za, zb)
+
         z_tilde_a = self.Gamma_fnc(*za)
         z_tilde_b = self.Gamma_fnc(*zb)
 
@@ -178,6 +185,30 @@ class ConstraintHandler(object):
 
         self.ya = z_tilde_a[:self.nx]
         self.yb = z_tilde_b[:self.nx]
+
+    def _check_boundary_values(self, za, zb):
+        """Check whether boundary values meet constraints.
+         Raise exception if not.
+
+        :param za:
+        :param zb:
+        :return: None
+        """
+
+        for z_symb, z_a_value, z_b_value in zip(self.z, za, zb):
+            con = self.constraints.get(z_symb)
+            if con is not None:
+                if not con[0] < z_a_value < con[1]:
+                    msg = "Initial condition for %s does not meet constraints" % z_symb
+                    msg += "({} < {} < {})".format(con[0], z_a_value, con[1])
+                    raise ConstraintError(msg)
+
+                if not con[0] < z_b_value < con[1]:
+                    msg = "Final condition for %s does not meet constraints" % z_symb
+                    msg += "({} < {} < {})".format(con[0], z_b_value, con[1])
+                    raise ConstraintError(msg)
+
+
 
     def _preprocess_constraints(self, constraints=None):
         """

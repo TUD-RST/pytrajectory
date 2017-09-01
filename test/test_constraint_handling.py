@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+from pip.cmdoptions import constraints
 
-import pytrajectory
+from pytrajectory import TransitionProblem
 import pytrajectory.auxiliary as aux
 import pytrajectory.constraint_handling as ch
 import pytrajectory.dynamical_system as ds
@@ -12,7 +13,7 @@ from ipHelp import IPS
 
 
 # define the vectorfield
-def rhs_double_integrator(x, u, uref, t, p):
+def rhs_di(x, u, uref, t, p):
     x1, x2 = x
     u1, = u
 
@@ -30,7 +31,7 @@ xb = [1.0, 0.0]
 class TestConstraintHandler(object):
 
     def test_di_identity_map(self):
-        dynsys = ds.DynamicalSystem(rhs_double_integrator, 0, 2, xa, xb)
+        dynsys = ds.DynamicalSystem(rhs_di, 0, 2, xa, xb)
         constraints = None  # equivalent to {}
         chandler = ch.ConstraintHandler(None, dynsys, constraints)
 
@@ -51,8 +52,42 @@ class TestConstraintHandler(object):
         # -> call with several z-points results in 4dim-array
         assert np.alltrue( chandler.dJac_Gamma_fnc(*zz) == np.zeros((nz, nz, nz, n_points)) )
 
+    def test_di_invalid_boundary(self):
+
+        xa_bad1 = [0, -4]
+        xa_bad2 = [0, 4]
+        xb_bad1 = [1, -4]
+        xb_bad2 = [1, 4]
+
+        ua_bad = [10]
+        ub_bad = [10]
+
+        con = {'x1': [-1, 2], 'x2': [-4, 4], 'u1':[-5, 5]}
+
+        kwargs = dict(show_ir=False, ierr=None, use_chains=False, constraints=con)
+        # no Problem
+        S1 = TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa, xb=xb, ua=[0], ub=[0], **kwargs)
+
+        with pytest.raises(ch.ConstraintError) as err:
+            TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_bad1, xb=xb, ua=[0], ub=[0], **kwargs)
+
+        with pytest.raises(ch.ConstraintError) as err:
+            TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_bad2, xb=xb, ua=[0], ub=[0], **kwargs)
+
+        with pytest.raises(ch.ConstraintError) as err:
+            TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa, xb=xb_bad1, ua=[0], ub=[0], **kwargs)
+
+        with pytest.raises(ch.ConstraintError) as err:
+            TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa, xb=xb_bad2, ua=[0], ub=[0], **kwargs)
+
+        with pytest.raises(ch.ConstraintError) as err:
+            TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa, xb=xb, ua=ua_bad, ub=[0], **kwargs)
+
+        with pytest.raises(ch.ConstraintError) as err:
+            TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa, xb=xb, ua=[0], ub=ub_bad, **kwargs)
+
     def test_di_constrain_all(self):
-        dynsys = ds.DynamicalSystem(rhs_double_integrator, 0, 2, xa, xb)
+        dynsys = ds.DynamicalSystem(rhs_di, 0, 2, xa, xb)
         constraints = {'x1': [-5, 5], 'x2': [-.1, 3], 'u1': [-4, 4]}  # equivalent to {}
         chandler = ch.ConstraintHandler(None, dynsys, constraints)
 

@@ -275,7 +275,7 @@ class Solver:
                     logging.debug("lm: inner loop shell")
                     IPS()
 
-                if self.mu > 10:
+                if self.mu > 100:
                     # just for breakpoint (dbg)
                     IPS()
                 
