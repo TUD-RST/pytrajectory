@@ -93,6 +93,8 @@ class TransitionProblem(object):
     def __init__(self, ff, a=0., b=1., xa=None, xb=None, ua=None, ub=None, uref=None,
                  constraints=None, **kwargs):
 
+        self.initial_kwargs = kwargs
+
         if xa is None:
             xa = []
         if xb is None:
@@ -291,6 +293,7 @@ class TransitionProblem(object):
             interfaceserver.listen_for_connections(tcpport)
 
         self._process_refsol()
+        self._process_first_guess()
 
         self.nIt = 0
 
@@ -383,7 +386,7 @@ class TransitionProblem(object):
         """
 
         # Note: in pytrajectory there are Three main levels of 'iteration'
-        # Level 3: perform one LM-Step (i.e. calculate a new set of parameters) 
+        # Level 3: perform one LM-Step (i.e. calculate a new set of parameters)
         # This is implemented in solver.py. Ends when tolerances are met or
         # the maximum number of steps is reached
         # Level 2: restarts the LM-Algorithm with the last values
@@ -470,6 +473,34 @@ class TransitionProblem(object):
                 # IPS()
                 logging.warn("unexpected state in mainloop of outer iteration -> break loop")
                 break
+
+    def _process_first_guess(self):
+        """
+        In case of a provided guess of all free parameters (coefficients) this is the place to
+        ensure the right number of spline parts.
+
+        :return: None
+        -------
+        """
+
+        if self.eqs._first_guess is None:
+            return
+
+        # ensure that either both keys or none are present
+        relevant_keys = {'complete_guess', 'n_spline_parts'}
+        intrsctn = relevant_keys.intersection(self.eqs._first_guess)
+
+        if len(intrsctn) == 0:
+            # nothing to preprocess
+            return
+
+        if not len(intrsctn) == 2:
+            missing_key = list(relevant_keys.difference(self.eqs._first_guess))[0]
+            msg = "Missing dict-key in keyword-argument 'first_guess': %s"
+            raise ValueError(msg % missing_key)
+
+        n_spline_parts = self.eqs._first_guess['n_spline_parts']
+        self.eqs.trajectories.raise_spline_parts(n_spline_parts)
 
     def _process_refsol(self):
         """
@@ -818,6 +849,25 @@ class TransitionProblem(object):
                 pickle.dump(save, dumpfile)
 
         return save
+
+    def create_new_TP(self, **kwargs):
+        """
+        Create a new TransitionProblem object with the same data like the present one,
+        except what is specified in kwargs
+
+        :return: TransitionProblem object
+        """
+
+        # DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub, uref=uref,
+        ds = self.dyn_sys
+        new_kwargs = dict(ff=ds.f_sym, a=self.a, b=self.b, xa=ds.xa, xb=ds.xb,
+                          ua=ds.ua, ub=ds.ub, uref=ds.uref_fnc, constraints=self.constraints)
+        new_kwargs.update(self.initial_kwargs)
+
+        # update with the information which was passed to this call
+        new_kwargs.update(kwargs)
+
+        return TransitionProblem(**new_kwargs)
 
     @property
     def a(self):

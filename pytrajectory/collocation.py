@@ -803,6 +803,7 @@ class CollocationSystem(object):
         """
         generate the initial value for the free parameters
         - either randomly
+        - with provided values
         - or [.1, .1, ..., .1]
 
         :return: None (set self.guess)
@@ -812,6 +813,12 @@ class CollocationSystem(object):
             # user defines initial value of free coefficients
             # together, `guess` and `refsol` make no sense
             assert self.masterobject.refsol is None
+
+            complete_guess = self._first_guess.get('complete_guess', None)
+            if complete_guess is not None:
+                assert len(complete_guess) == len(self.all_free_parameters)
+                self.guess = complete_guess
+                return
 
             guess = np.empty(0)
 

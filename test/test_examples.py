@@ -10,7 +10,10 @@ import numpy as np
 import pytest
 from pytrajectory import TransitionProblem
 from pytrajectory import log
-from ipHelp import IPS
+from pytrajectory import auxiliary as aux
+
+from ipHelp import IPS, activate_ips_on_exception
+activate_ips_on_exception()
 
 
 def rhs_di(x, u, uref, t, p):
@@ -55,11 +58,6 @@ xa_inv_pend = [0.0, 0.0, np.pi, 0.0]
 # b = 3.0
 xb_inv_pend = [0.0, 0.0, 0.0, 0.0]
 
-import sys
-from IPython.core import ultratb
-sys.excepthook = ultratb.FormattedTB(mode='Verbose',
-     color_scheme='Linux', call_pdb=1)
-
 
 # noinspection PyPep8Naming
 class TestExamples(object):
@@ -81,6 +79,32 @@ class TestExamples(object):
                                use_chains=False)
         S1.solve()
         assert S1.reached_accuracy
+
+    def test_di_integrator_pure_with_complete_guess(self):
+
+        # solve Problem for the first time
+        first_guess = {'seed': 20}
+        S1 = TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
+                               show_ir=False,
+                               ierr=None,
+                               first_guess=first_guess,
+                               use_chains=False)
+        S1.solve()
+        assert S1.reached_accuracy
+
+        first_guess2 = {'complete_guess': S1.eqs.sol,
+                        'n_spline_parts': aux.Container(x=S1.eqs.trajectories.n_parts_x,
+                                                        u=S1.eqs.trajectories.n_parts_u)}
+        S2 = S1.create_new_TP(first_guess=first_guess2)
+        S2.solve()
+
+        assert S2.reached_accuracy
+
+        # now test changed boundary conditions
+
+        S3 = S2.create_new_TP(first_guess=first_guess2, xb=[1.5, 0.0])
+        S3.solve()
+        assert S3.reached_accuracy
 
     def test_di_integrator_pure_with_penalties(self):
         S1 = TransitionProblem(rhs_di_penalties, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
@@ -158,6 +182,7 @@ if __name__ == "__main__":
     # print "-"*10
     # tests.test_di_con_u1_x2_projective_integrator()
     # tests.test_di_integrator_pure_with_penalties()
+    # tests.test_di_integrator_pure_with_random_guess()
     print "-"*10
-    tests.test_di_integrator_pure_with_random_guess()
+    tests.test_di_integrator_pure_with_complete_guess()
 

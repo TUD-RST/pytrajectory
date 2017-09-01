@@ -40,7 +40,8 @@ class Trajectory(object):
         self._parameters['nodes_type'] = kwargs.get('nodes_type', 'equidistant')
         self._parameters['use_std_approach'] = kwargs.get('use_std_approach', True)
         
-        self._chains, self._eqind = auxiliary.find_integrator_chains(sys)  ##:: chains=[class ic_1, class ic_2], eqind=[3] means x4,  ic_1: x1->x2->u1; ic_2: x3->x4
+        self._chains, self._eqind = auxiliary.find_integrator_chains(sys)
+        # :: chains=[class ic_1, class ic_2], eqind=[3] means x4,  ic_1: x1->x2->u1; ic_2: x3->x4
         self._parameters['use_chains'] = masterobject.use_chains
 
         # These will become OrderedDicts later (containing spline functions)
@@ -74,12 +75,15 @@ class Trajectory(object):
         """
         return self._parameters['n_parts_u']
 
-    def raise_spline_parts(self, k=None):
-        if k is not None:
-            # This normally does not happen, and is only for 
-            # experiments and debugging
-            self._parameters['n_parts_x'] *= int(k)
-        else:
+    def raise_spline_parts(self, n_spline_parts=None):
+        """
+        Increase the number of spline parts for x and u
+
+        :param n_spline_parts: optional concrete values
+        :return: self.n_parts_x (increased)
+        """
+        if n_spline_parts is None:
+            # usual case
             self._parameters['n_parts_x'] *= self._parameters['kx']
 
             # TODO: introduce parameter `ku` and handle it here
@@ -90,6 +94,11 @@ class Trajectory(object):
             # this should prevent the input signal from getting too much ripple
             np.clip(npu, 0, nx*3)
             self._parameters['n_parts_u'] = npu
+        else:
+            # this is used by processing first_guess
+            assert isinstance(n_spline_parts, auxiliary.Container)
+            self._parameters['n_parts_x'] = n_spline_parts.x
+            self._parameters['n_parts_u'] = n_spline_parts.u
 
         return self.n_parts_x
     
