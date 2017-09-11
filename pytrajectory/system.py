@@ -70,7 +70,7 @@ class TransitionProblem(object):
         su            10               Initial number of spline parts for the input variables
         kx            2               Factor for raising the number of spline parts
         maxIt         10              Maximum number of iteration steps
-                                      (numbers of raising spline-parts)
+                                      (how often raising spline-parts)
         eps           1e-2            Tolerance for the solution of the initial value problem
         ierr          1e-1            Tolerance for the error on the whole interval
         tol           1e-5            Tolerance for the solver of the equation system
@@ -815,7 +815,7 @@ class TransitionProblem(object):
 
         visualisation.plot_simulation(self.sim_data, H)
 
-    def save(self, fname=None):
+    def save(self, fname=None, quiet=False):
         """
         Save data using the python module :py:mod:`pickle`.
         """
@@ -845,8 +845,10 @@ class TransitionProblem(object):
             if not (fname.endswith('.pcl') or fname.endswith('.pcl')):
                 fname += '.pcl'
 
-            with open(fname, 'w') as dumpfile:
+            with open(fname, 'wb') as dumpfile:
                 pickle.dump(save, dumpfile)
+        if not quiet:
+            logging.info("File written: {}".format(fname))
 
         return save
 
