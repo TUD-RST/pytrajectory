@@ -9,7 +9,7 @@ import auxiliary as aux
 from log import logging
 
 # DEBUG
-from ipHelp import IPS
+from ipydex import IPS
 
 
 class Spline(object):

@@ -4,7 +4,7 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
-from ipHelp import IPS
+from ipydex import IPS
 
 from pytrajectory import TransitionProblem, penalty_expression, aux
 

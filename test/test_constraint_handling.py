@@ -9,7 +9,7 @@ import pytest
 import sympy as sp
 import numpy as np
 
-from ipHelp import IPS
+from ipydex import IPS
 
 
 # define the vectorfield

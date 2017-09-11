@@ -5,7 +5,7 @@ from collections import OrderedDict
 
 import auxiliary as aux
 
-from ipHelp import IPS
+from ipydex import IPS
 
 
 class ConstraintError(ValueError):

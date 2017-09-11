@@ -20,7 +20,7 @@ from constraint_handling import ConstraintHandler
 import matplotlib.pyplot as plt
 
 # DEBUGGING
-from ipHelp import IPS
+from ipydex import IPS
 
 
 # Note: This class is the former `ControlSystem` class

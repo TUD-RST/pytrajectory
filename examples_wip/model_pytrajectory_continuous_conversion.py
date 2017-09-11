@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
 import pickle
-from ipHelp import IPS, activate_ips_on_exception
+from ipydex import IPS, activate_ips_on_exception
 activate_ips_on_exception()
 
 from pytrajectory import TransitionProblem, penalty_expression, aux

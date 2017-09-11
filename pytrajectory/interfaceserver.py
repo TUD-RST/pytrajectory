@@ -13,7 +13,7 @@ import time
 import Queue
 from log import logging
 
-from ipHelp import IPS
+from ipydex import IPS
 
 # for data
 msgqueue = Queue.Queue()

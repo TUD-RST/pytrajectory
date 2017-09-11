@@ -11,7 +11,7 @@ import interfaceserver
 
 from matplotlib import pyplot as plt
 
-from ipHelp import IPS
+from ipydex import IPS
 
 
 class Solver:

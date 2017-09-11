@@ -13,7 +13,7 @@ from solver import Solver
 from auxiliary import Container, NanError
 import auxiliary as aux
 
-from ipHelp import IPS
+from ipydex import IPS
 
 np.set_printoptions(threshold='nan') ##??
 

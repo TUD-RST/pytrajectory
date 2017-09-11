@@ -11,7 +11,7 @@ import time
 from pytrajectory.simulation import Simulator
 import pytrajectory.auxiliary as aux
 
-from ipHelp import IPS
+from ipydex import IPS
 #http://sourceforge.net/p/python-control/wiki/Download/
 import control.matlab as controlm
 # sys.path.append('/Volumes/work/workspaces/PYTHON/mymodules')

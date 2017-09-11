@@ -9,7 +9,7 @@ import splines
 from log import logging
 import auxiliary
 
-from ipHelp import IPS
+from ipydex import IPS
 
 
 class Trajectory(object):

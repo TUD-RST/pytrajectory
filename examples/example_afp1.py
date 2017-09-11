@@ -43,7 +43,7 @@ def f(x,u, par, evalconstr=True):
 
 if 0:
     from matplotlib import pyplot as plt
-    from ipHelp import IPS
+    from ipydex import IPS
     import sympy as sp
     kk = np.linspace(-1, 11)
     x = sp.Symbol('x')

@@ -2,7 +2,7 @@ import numpy as np
 import inspect
 from scipy.integrate import ode
 
-from ipHelp import IPS
+from ipydex import IPS
 
 
 class Simulator(object):

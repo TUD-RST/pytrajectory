@@ -3,7 +3,7 @@ import time
 import sys
 
 
-from ipHelp import IPS
+from ipydex import IPS
 
 from pytrajectory import interfaceserver as ifs
 

@@ -7,7 +7,7 @@ import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ipHelp import IPS
+from ipydex import IPS
 
 
 # noinspection PyPep8Naming

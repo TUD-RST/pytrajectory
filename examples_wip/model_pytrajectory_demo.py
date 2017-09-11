@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
 import pickle
-from ipHelp import IPS
+from ipydex import IPS
 #http://sourceforge.net/p/python-control/wiki/Download/
 import control.matlab as controlm
 # sys.path.append('/Volumes/work/workspaces/PYTHON/mymodules')

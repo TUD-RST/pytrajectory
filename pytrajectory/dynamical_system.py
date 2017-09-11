@@ -6,7 +6,7 @@ import inspect
 from numbers import Number
 import itertools
 
-from ipHelp import IPS
+from ipydex import IPS
 
 import auxiliary as aux
 from log import logging

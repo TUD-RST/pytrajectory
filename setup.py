@@ -12,7 +12,8 @@ setup(name='PyTrajectory',
       requires=['numpy (>=1.8.1)',
                 'sympy (>=0.7.5)',
                 'scipy (>=0.13.0)',
-                'matplotlib (<1.5.0)'],
+                'matplotlib (>=1.5.0)',
+                'ipydex'],
 
       # metadata
       author='Andreas Kunze, Carsten Knoll, Oliver Schnabel',

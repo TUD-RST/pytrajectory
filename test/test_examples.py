@@ -12,7 +12,7 @@ from pytrajectory import TransitionProblem
 from pytrajectory import log
 from pytrajectory import auxiliary as aux
 
-from ipHelp import IPS, activate_ips_on_exception
+from ipydex import IPS, activate_ips_on_exception
 activate_ips_on_exception()
 
 

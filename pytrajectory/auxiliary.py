@@ -16,7 +16,7 @@ import splines
 from simulation import Simulator
 from log import logging, Timer
 
-from ipHelp import IPS
+from ipydex import IPS
 
 
 class NanError(ValueError):
