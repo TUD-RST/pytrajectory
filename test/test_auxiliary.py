@@ -7,7 +7,9 @@ import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
 
-from ipydex import IPS
+from ipydex import IPS, activate_ips_on_exception
+
+
 
 
 # noinspection PyPep8Naming
@@ -288,6 +290,7 @@ class TestCseLambdify(object):
                   ("hello", False),
                   (None, False),
                   (np.array([[1, 2], [3, 4]]), False),
+                  ([0, 1, (2.1, 2.2)], False),
                   ]
         for obj, res in tests_:
             assert aux.is_flat_sequence_of_numbers(obj) == res
@@ -302,6 +305,25 @@ class TestCseLambdify(object):
 
         B = sp.Matrix(3, 3, lambda i, j: x1*i + x2*j)
         assert np.alltrue( aux.to_np(B, dtype=object) == np.array(list(B)).reshape(B.shape) )
+
+    def test_partial_dict_structure(self):
+        data1 = {1: 1.0, 2: 2.1}
+        data2 = {'a': 'A', 'b': data1, 'c': [1, 2, 3]}
+        data3 = {'01': 'A', '02': data2, '03': data1, '04': {}}
+
+        r1 = aux.partial_dict_structure(data1, [[1], [2]])
+        assert r1[1] == data1[1] and r1[2] == data1[2]
+
+        r2a = aux.partial_dict_structure(data2, [[]])
+        r2b = aux.partial_dict_structure(data2, [['a']])
+        r2c = aux.partial_dict_structure(data2, [['a'], ['b']])
+        assert len(r2a.keys()) == 0
+        assert len(r2b.keys()) == 1
+        assert len(r2c.keys()) == 2
+        assert r2c['b'] == data1
+
+        r3a = aux.partial_dict_structure(data3, [['02', 'b', 2]])
+        assert r3a['02']['b'][2] == 2.1
 
     # new_interpolate is currently not used because it tends to unwanted oscillations
     @pytest.mark.xfail(reason='this only works for the method Spline.new_interpolate', strict=True)
@@ -514,5 +536,8 @@ def understand_einsum():
 if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")
 
+    activate_ips_on_exception()
+
+
     tests = TestCseLambdify()
-    print "no test run."
+    tests.test_partial_dict_structure()

@@ -16,7 +16,7 @@ import splines
 from simulation import Simulator
 from log import logging, Timer
 
-from ipydex import IPS
+from ipydex import IPS, activate_ips_on_exception
 
 
 class NanError(ValueError):
@@ -638,17 +638,18 @@ def broadcasting_wrapper(original_fnc, original_shape=None, squeeze_axis=None):
 
             return squeezer(res)
 
-        # do not allow too much felxibility (faster development)
-        # first arg mus now be an array (which determines the length of the additional dimension)
-        elif not isinstance(args[0], np.ndarray):
-            msg1 = "Unexpected type {} of first arg (Expect either scalar or array)."
-            raise TypeError(msg1.format(type(args[0])))
+        # # do not allow too much felxibility (faster development)
+        # # first arg mus now be an array (which determines the length of the additional dimension)
+        # elif not isinstance(args[0], np.ndarray):
+        #     msg1 = "Unexpected type {} of first arg (Expect either scalar or array)."
+        #     raise TypeError(msg1.format(type(args[0])))
 
+        # we have at least one sequence in args ->
         # get a list of arrays of same shape
         bc_args = np.broadcast_arrays(*args)
 
-        assert args[0].ndim == 1
-        L = len(args[0])
+        assert bc_args[0].ndim == 1
+        L = len(bc_args[0])
 
         res_list = []
 
@@ -677,7 +678,7 @@ def broadcasting_wrapper(original_fnc, original_shape=None, squeeze_axis=None):
 
 
 # TODO: Unittest
-def is_flat_sequence_of_numbers(obj, test_all=False):
+def is_flat_sequence_of_numbers(obj):
 
     if isinstance(obj, basestring):
         return False
@@ -694,12 +695,10 @@ def is_flat_sequence_of_numbers(obj, test_all=False):
         if len(obj) == 0:
             return True
 
-        if not test_all:
-            # only test first element (for performance reasons)
-            return isinstance(obj[0], Number)
-        else:
-            # Implement the above test for all elements
-            raise NotImplementedError()
+        bc_list = np.broadcast_arrays(*obj)
+        # if it was a flat sequence of numbers we now have a list of array of shape ()
+        res = [elt.shape == () for elt in bc_list]
+        return all(res)
 
     else:
         msg = "Unexpected type of sequence"
@@ -1350,6 +1349,52 @@ def to_np(spobj, dtype=float):
         arr1 = arr1.tolist()
 
     return np.array(arr1, dtype)
+
+class AllKeyWildcard(object):
+    pass
+
+
+def partial_dict_structure(src, keylistlist):
+    """
+    Create a new dict which only contains some keys of src and apply this recursively.
+
+    Serves to save memory when src contains big data, which is not needed.
+
+    :param src:     dict
+    :param keylistlist: list of list of keys
+    :return: res (dict)
+    """
+
+    res = dict()
+
+    def insert(keylist, obj):
+        tmp_dict = res
+        for k in keylist[:-1]:
+            old_tmp_dict = tmp_dict
+            tmp_dict = tmp_dict.get(k)
+
+            if tmp_dict is None:
+                tmp_dict = dict()
+                old_tmp_dict[k] = tmp_dict
+
+            assert isinstance(tmp_dict, (dict, OrderedDict))
+
+        # insert the object
+        tmp_dict[keylist[-1]] = obj
+
+    # perform insertion
+    for kl in keylistlist:
+        if len(kl) == 0:
+            continue
+        tmp_dict = src
+        for k in kl[:-1]:
+            tmp_dict = tmp_dict[k]
+
+        # at the end of each keylist we have the result
+        obj = tmp_dict[kl[-1]]
+        insert(kl, obj)
+
+    return res
 
 
 def get_attributes_from_object(obj):
