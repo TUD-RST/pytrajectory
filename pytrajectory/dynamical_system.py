@@ -177,7 +177,12 @@ class DynamicalSystem(object):
                 finished = True
                 break
             except ValueError as err:
-                if "values to unpack" not in err.message:
+                # expected error messages are:
+                # need more than 1 value to unpack
+                # need more than 2 values to unpack
+                # too many values to unpack
+
+                if not ("value" in err.message and "to unpack" in err.message):
                     logging.error("unexpected ValueError")
                     raise err
                 else:
@@ -199,7 +204,7 @@ class DynamicalSystem(object):
                   "Probable reasons for this error:\n" \
                   " - Wrong size of initial value (xa)\n" \
                   " - System with >= {} input / parameter components (not supported)\n" \
-                  " - interal algortihmic error".format(max_dim)
+                  " - interal algortihmic error (i.e., a bug)".format(max_dim)
 
             raise ValueError(msg)
 

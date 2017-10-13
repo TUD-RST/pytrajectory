@@ -53,6 +53,18 @@ def rhs_inv_pend(x, u, uref, t, p):
 
     return ff
 
+
+def rhs_brockett_system(x, u, uref, t, p):
+    x1, x2, x3 = x  # system variables
+    u1, u2 = u  # input variables
+    # this is the vectorfield
+
+    ff = [u1,
+          u2,
+          x2*u1-x1*u2]
+
+    return ff
+
 # a = 0.0
 xa_inv_pend = [0.0, 0.0, np.pi, 0.0]
 # b = 3.0
@@ -138,6 +150,14 @@ class TestExamples(object):
         S1 = TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0, constraints=con,
                                show_ir=False,
                                accIt=0,
+                               use_chains=False)
+        S1.solve()
+        assert S1.reached_accuracy
+
+    def test_brockett_system(self):
+        S1 = TransitionProblem(rhs_brockett_system, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
+                               show_ir=False,
+                               ierr=None,
                                use_chains=False)
         S1.solve()
         assert S1.reached_accuracy
