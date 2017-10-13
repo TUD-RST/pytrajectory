@@ -150,6 +150,8 @@ class ConstraintHandler(object):
         if ub is None:
             ub = [None]*self.nu
 
+        assert len(ua) == len(ub) == self.nu
+
         # transformed boundary conditions
         za = list(self.dynsys.xa)
         zb = list(self.dynsys.xb)

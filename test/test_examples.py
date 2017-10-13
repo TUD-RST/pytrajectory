@@ -28,6 +28,9 @@ def rhs_di(x, u, uref, t, p):
 xa_di = [0.0, 0.0]
 xb_di = [1.0, 0.0]
 
+xa_br = [0.0, 0.0, 0.0]
+xb_br = [0.0, 0.0, 1.0]
+
 
 def rhs_di_penalties(x, u, uref, t, p):
     x1, x2 = x
@@ -155,7 +158,8 @@ class TestExamples(object):
         assert S1.reached_accuracy
 
     def test_brockett_system(self):
-        S1 = TransitionProblem(rhs_brockett_system, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
+        S1 = TransitionProblem(rhs_brockett_system, a=0.0, b=2.0, xa=xa_br, xb=xb_br,
+                               ua=None, ub=None,
                                show_ir=False,
                                ierr=None,
                                use_chains=False)
@@ -204,5 +208,5 @@ if __name__ == "__main__":
     # tests.test_di_integrator_pure_with_penalties()
     # tests.test_di_integrator_pure_with_random_guess()
     print "-"*10
-    tests.test_di_integrator_pure_with_complete_guess()
+    tests.test_brockett_system()
 

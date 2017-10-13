@@ -64,7 +64,7 @@ class TestExamples(object):
         self.assert_reached_accuracy(locals())
 
     @pytest.mark.skipif(test_example_path_failed, reason="Cannot get example scripts!")
-    @pytest.mark.xfail(reason="multiple Inputs", strict=True)
+    # @pytest.mark.xfail(reason="multiple Inputs", strict=True)
     def test_aricraft(self):
         script = os.path.join(self.examples_dir, 'ex3_Aircraft.py')
         d = dict(locals(), **globals())
