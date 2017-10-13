@@ -304,7 +304,7 @@ class DynamicalSystem(object):
         # vf_f and vf_g are not really neccessary, just for scientific playing
         fnc_factory = aux.expr2callable
 
-        nx = self.n_states
+        nx, nu = self.n_states, self.n_inputs
         self.vf_f = fnc_factory(expr=ff, xxs=self.states, uus=self.inputs, uurefs=self.uurefs,
                                 ts=None, pps=self.par,
                                 uref_fnc=self.uref_fnc,
@@ -313,6 +313,7 @@ class DynamicalSystem(object):
         self.vf_g = fnc_factory(expr=gg, xxs=self.states, uus=self.inputs,  uurefs=self.uurefs,
                                 ts=None, pps=self.par,
                                 uref_fnc=self.uref_fnc,
+                                desired_shape=(nx, nu),
                                 vectorized=False, cse=False, crop_result_idx=nx)
 
         # to handle penalty contraints it is necessary to distinguish between

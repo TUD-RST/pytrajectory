@@ -274,9 +274,10 @@ class ConstraintHandler(object):
             v_values = [v_fnc(t) for v_fnc in v_fncs]
 
             # use only the input-relevant part of the transformation
+            # -> setting nu elements, counting from backward
             arg = self.z_middle*1
             arg[-self.nu:] = v_values
-            res = np.atleast_1d( self.Psi_fnc(*arg)[-self.nu] )
+            res = np.atleast_1d( self.Psi_fnc(*arg)[-self.nu:] )
             return res
 
         return constrained_x, constrained_xdot, constrained_u
