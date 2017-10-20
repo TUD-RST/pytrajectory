@@ -60,6 +60,9 @@ class CollocationSystem(object):
         self. guess = None
         self.n_cpts = None
 
+        self.n_dof = None
+        self.debugContainer = None
+
         # get vectorized versions of the control system's vector field
         # and its jacobian for the faster evaluation of the collocation equation system `G`
         # and its jacobian `DG` (--> see self.build())
@@ -133,7 +136,8 @@ class CollocationSystem(object):
         # the free parameters c
 
         # because of Psi-Gamma-Transformation (constraint-handling) this gives d Z_tilde / dc
-        dYVP_dc = []
+        dYV_dc = []
+        dP_dc = []
         n_states = self.sys.n_states
         n_inputs = self.sys.n_inputs
         nz = n_states + n_inputs
@@ -142,14 +146,16 @@ class CollocationSystem(object):
         n_vars = n_states + n_inputs + n_par
 
         for i in xrange(n_cpts):
-            dYVP_dc.append(np.vstack(( SMC.Mx[n_states * i : n_states * (i+1)].toarray(),
-                                    SMC.Mu[n_inputs * i : n_inputs * (i+1)].toarray(),
-                                    SMC.Mp[n_par * i : n_par * (i+1)].toarray() )))
+            dYV_dc.append(np.vstack(( SMC.Mx[n_states * i: n_states * (i+1)].toarray(),
+                                    SMC.Mu[n_inputs * i: n_inputs * (i+1)].toarray(), )) )
 
-        # DXU_old = DXU  # obsolete
-        dYVP_dc = np.vstack(dYVP_dc)
+            # dependency of additional free parameters w.r.t the overall free parameters
+            # this should mainly be zero-padded unit-matrices:
+            # currently not used by algorithm
+            dP_dc.append( SMC.Mp[n_par * i: n_par * (i+1)].toarray() )
 
-        dYVP_dc = sparse.csr_matrix(dYVP_dc)
+        # convert list to sparse matrix
+        dYV_dc = sparse.csr_matrix(np.vstack(dYV_dc))
 
         # localize vectorized functions for the control system's vector field and its jacobian
         ff_vec = self.ff_vectorized
@@ -316,7 +322,6 @@ class CollocationSystem(object):
                                    ff=ff_vec, Df=Df_vec)
                     res = iC
 
-                # IPS()
                 return res
 
         # save the dimension of the result and the argument for this function
@@ -414,8 +419,13 @@ class CollocationSystem(object):
                 JJ_f_full = DF_blocks0.transpose([1, 2, 0])  # undo the above transformation
 
                 # split lines (a: corresponding to the actual vector field and b: penalties)
-                JJ_f = JJ_f_full[:n_states, :, : ]
-                JJ_penalties = JJ_f_full[n_states:, :, : ]
+                # Jacobian w.r.t. z (=[x, u])
+                JJ_f_wrt_z = JJ_f_full[:n_states, :nz, : ]
+                JJ_penalties_wrt_z = JJ_f_full[n_states:, :nz, : ]
+
+                # Jacobian w.r.t. afp
+                JJ_f_wrt_afp = JJ_f_full[:n_states, nz:, : ]
+                JJ_penalties_wrt_afp = JJ_f_full[n_states:, nz:, : ]
 
                 # calculate additional terms, which are needed because of Psi-Gamma-Transformation
                 Z = np.row_stack((X, U))
@@ -435,28 +445,35 @@ class CollocationSystem(object):
                 # (they are not part of ff(x)-xdot)
                 F1 = F0[:n_states, :]
 
-                factor1 = np.einsum("ijkl,jl->ikl", dJJ_Gamma, F1)
-                assert factor1.shape == (n_states, nz, n_cpts)
+                sumterm1 = np.einsum("ijkl,jl->ikl", dJJ_Gamma, F1)
+                assert sumterm1.shape == (n_states, nz, n_cpts)
                 # index meaning: i: equation, j: first derivative, k: second derivative,
                 # l: collocation point
 
-                factor2 = np.einsum("ijl,jkl->ikl", JJ_Gamma, JJ_f)
+                sumterm2 = np.einsum("ijl,jkl->ikl", JJ_Gamma, JJ_f_wrt_z)
                 # this is a "vectorized matrix product"
                 # (matrix-stack * matrix-stack) = stack of matrix-products
                 # index meaning: i, j: row, col of first "matrix",
                 # j, k: row, col of second matrix
                 # l: collocation point
-                assert factor2.shape == (n_states, nz, n_cpts)
 
-                #
-                dF_tilde_dz = (factor1 + factor2)
+                # Note: the derivatives wrt AFPs are handled below
+                assert sumterm2.shape == (n_states, nz, n_cpts)
 
+                sumterm3 = np.einsum("ijl,jkl->ikl", JJ_Gamma, JJ_f_wrt_afp)
+                assert sumterm3.shape == (n_states, n_par, n_cpts)
+
+                # convert 3d-vector to 2d
+                sumterm3_trps = sumterm3.transpose([2, 0, 1])
+                sumterm3_colstack = np.vstack(sumterm3_trps)
+                assert sumterm3_colstack.shape == (n_cpts*n_states, n_par)
+
+                dF_tilde_dz = (sumterm1 + sumterm2)
                 DF_blocks1 = dF_tilde_dz.transpose([2, 0, 1])
 
-                # TODO: check whether additional free parameters are handled correctly
                 # index-meaning:
                 # axis: 0 -> collocation point
-                # axis: 1 -> equation (of vectorfiled)
+                # axis: 1 -> equation (of vector field)
                 # axis: 2 -> variable (x_i or u_j)
                 # DF_blocks0.shape -> nc x (ns + np) x (ns + ni)
                 # nc: collocation points, ns: states, ni: inputs, np: penalty constraints
@@ -473,14 +490,20 @@ class CollocationSystem(object):
                 assert Jac_Psi.shape == (nz, nz, n_cpts)
                 Jac_Psi_sparse = sparse.block_diag(Jac_Psi.transpose([2, 0, 1]), format='csr')
 
-                dXUP_dc = Jac_Psi_sparse.dot(dYVP_dc)
-                assert dXUP_dc.shape == (nz*n_cpts, len(c))
+                dXU_dc = Jac_Psi_sparse.dot(dYV_dc)
+                assert dXU_dc.shape == (nz*n_cpts, len(c))
 
                 # now also rearrange the 3d array DF_blocks1 to a sparse block-diagonal matrix
                 # first axis is the block number (corresponding to the collocation point)
-                # also multiply by DXUP (to get the jac. w.r.t. the (total) free parameters
+                # also multiply by dXU_dc(to get the jac. w.r.t. the (total) free parameters
                 # instead of the specific X and U values)
-                DF_csr_main = sparse.block_diag(DF_blocks1, format='csr').dot(dXUP_dc)
+                DF_csr_preliminary = sparse.block_diag(DF_blocks1, format='csr').dot(dXU_dc)
+
+                # now take the Jacobian wrt the additional free parameters into account
+                # -> replace the last columns of the jacobian (because afp are located at the end)
+                n_ofp = self.n_dof - n_par  # number of ordinary free parameters
+
+                DF_csr_main = sparse.hstack((DF_csr_preliminary[:, :n_ofp], sumterm3_colstack))
 
                 # if we make use of the system structure
                 # we have to select those rows which correspond to the equations
@@ -495,18 +518,27 @@ class CollocationSystem(object):
                 DG = DF_csr_main - DdY
 
                 # now, extract the part corresponding to the penalty constraints
-                Jac_constr0 = JJ_penalties.transpose([2, 0, 1])
+                Jac_constr0 = JJ_penalties_wrt_z.transpose([2, 0, 1])
 
                 # arrange these blocks to a blockdiagonal and multiply by d/dc XUP (see above)
-                Jac_constr1 = sparse.block_diag(Jac_constr0, format='csr').dot(dXUP_dc)
+                Jac_constr1 = sparse.block_diag(Jac_constr0, format='csr').dot(dXU_dc)
+
+                # now (like above) take the Jacobian wrt the additional free parameters into account
+                # TODO: This should not allways be zero!!!
+                JJ_pen_afp_colstack = np.vstack(JJ_penalties_wrt_afp.transpose([2, 0, 1]))
+
+                # -> replace the last columns of the jacobian (because afp are located at the end)
+                # IPS()
+                Jac_constr_main = sparse.hstack((Jac_constr1[:, :n_ofp], JJ_pen_afp_colstack))
 
                 # now stack this hyperrow below DF_csr0
-                res = sparse.vstack((DG, Jac_constr1))
+                res = sparse.vstack((DG, Jac_constr_main))
 
                 return res
 
         # dbg (call the new functions)
         z = np.zeros((F.argdim,))
+        z = np.ones((F.argdim,))
         F(z)
         DF(z)
 
@@ -522,7 +554,7 @@ class CollocationSystem(object):
 
         # store internal information for diagnose purposes
         C.take_indices = take_indices
-        self.C = C
+        self.debugContainer = C
 
         return C
 
@@ -599,7 +631,7 @@ class CollocationSystem(object):
         #                               key=lambda arr: arr[0].name))
         # ::-> array([cu1_0_0, cu1_1_0, cu1_2_0, ..., cx4_8_0, cx4_9_0, cx4_0_2, k])
         free_param = self.trajectories.indep_var_list
-        n_dof = len(free_param)
+        self.n_dof = len(free_param)
 
         # store internal information:
         self.dbgC = Container(cpts=self.cpts, dx_fnc=dx_fnc, x_fnc=x_fnc, u_fnc=u_fnc)
@@ -610,16 +642,16 @@ class CollocationSystem(object):
         lp = len(self.cpts) * self.sys.n_par
 
         # initialize sparse dependence matrices
-        Mx = sparse.lil_matrix((lx, n_dof))
+        Mx = sparse.lil_matrix((lx, self.n_dof))
         Mx_abs = sparse.lil_matrix((lx, 1))
 
-        Mdx = sparse.lil_matrix((lx, n_dof))
+        Mdx = sparse.lil_matrix((lx, self.n_dof))
         Mdx_abs = sparse.lil_matrix((lx, 1))
 
-        Mu = sparse.lil_matrix((lu, n_dof))
+        Mu = sparse.lil_matrix((lu, self.n_dof))
         Mu_abs = sparse.lil_matrix((lu, 1))
 
-        Mp = sparse.lil_matrix((lp, n_dof))
+        Mp = sparse.lil_matrix((lp, self.n_dof))
         Mp_abs = sparse.lil_matrix((lp, 1))
 
         # determine for each spline the index range of its free coeffs in the concatenated
@@ -644,7 +676,7 @@ class CollocationSystem(object):
 
                 k = ip * self.sys.n_states + ix
 
-                Mx[k, i:j] = mx  # :: Mx.shape = (lx, n_dof)
+                Mx[k, i:j] = mx  # :: Mx.shape = (lx, self.n_dof)
                 Mx_abs[k] = mx_abs
 
                 Mdx[k, i:j] = mdx

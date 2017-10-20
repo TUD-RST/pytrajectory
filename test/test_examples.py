@@ -24,6 +24,30 @@ def rhs_di(x, u, uref, t, p):
 
     return ff
 
+
+def rhs_di_time_scaled(x, u, uref, t, p):
+    x1, x2 = x
+    u1, = u
+
+    # one additional free parameter
+    k, = p
+
+    ff = [k*x2, k*u1]
+
+    return ff
+
+# this does not yet work
+def rhs_di_time_scaled_with_penalties(x, u, uref, t, p):
+    x1, x2 = x
+    u1, = u
+
+    # one additional free parameter
+    k, = p
+
+    ff = [k*x2, k*u1, (k-1)**2*100]
+
+    return ff
+
 # system state boundary values for a = 0.0 [s] and b = 2.0 [s]
 xa_di = [0.0, 0.0]
 xb_di = [1.0, 0.0]
@@ -150,7 +174,32 @@ class TestExamples(object):
 
     def test_di_con_u1_x2_projective_integrator(self):
         con = {'u1': [-1.3, 1.3], 'x2': [-.1, .8],}
-        S1 = TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0, constraints=con,
+        S1 = TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
+                               constraints=con,
+                               show_ir=False,
+                               accIt=0,
+                               use_chains=False)
+        S1.solve()
+        assert S1.reached_accuracy
+
+    def test_di_timescaled(self):
+        """The double integrator with an additional free parameter for time scaling"""
+        con = {'u1': [-1.3, 1.3], 'x2': [-.1, .8],}
+        S1 = TransitionProblem(rhs_di_time_scaled, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
+                               constraints=con,
+                               show_ir=False,
+                               accIt=0,
+                               use_chains=False)
+        S1.solve()
+        assert S1.reached_accuracy
+
+    @pytest.mark.xfail(reason="yet to implement", strict=True)
+    def test_di_timescaled_with_penalties(self):
+        """The double integrator with an additional free parameter for time scaling"""
+        con = {'u1': [-1.3, 1.3], 'x2': [-.1, .8],}
+        S1 = TransitionProblem(rhs_di_time_scaled_with_penalties, a=0.0, b=2.0,
+                               xa=xa_di, xb=xb_di, ua=0, ub=0,
+                               constraints=con,
                                show_ir=False,
                                accIt=0,
                                use_chains=False)
@@ -208,5 +257,6 @@ if __name__ == "__main__":
     # tests.test_di_integrator_pure_with_penalties()
     # tests.test_di_integrator_pure_with_random_guess()
     print "-"*10
-    tests.test_brockett_system()
+    tests.test_di_timescaled_with_penalties()
+    # tests.test_di_timescaled()
 
