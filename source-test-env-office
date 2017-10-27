@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# https://stackoverflow.com/questions/16011245/source-files-in-a-bash-script
+# run this script with . ./source-test-env
+
+source /home/ck/tmp/python-venvs-office/ptr27-env/bin/activate
+
+# to return to "normal bash": deactivate

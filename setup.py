@@ -4,20 +4,20 @@ This file is part of PyTrajectory.
 
 from distutils.core import setup
 
-__version__ = '1.4.0'
+__version__ = '1.5.0'
+
+with open("requirements.txt") as requirements_file:
+    requirements = requirements_file.read()
+
 
 setup(name='PyTrajectory',
       version=__version__,
       packages=['pytrajectory'],
-      requires=['numpy (>=1.8.1)',
-                'sympy (>=0.7.5)',
-                'scipy (>=0.13.0)',
-                'matplotlib (>=1.5.0)',
-                'ipydex'],
+      install_requires=requirements,
 
       # metadata
       author='Andreas Kunze, Carsten Knoll, Oliver Schnabel',
-      author_email='Andreas.Kunze@mailbox.tu-dresden.de',
+      author_email='Carsten.Knoll@tu-dresden.de',
       url='https://github.com/TUD-RST/pytrajectory',
       description='Python library for trajectory planning.',
       long_description="""
