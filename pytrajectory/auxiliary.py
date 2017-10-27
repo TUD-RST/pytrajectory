@@ -308,14 +308,13 @@ def expr2callable(expr, xxs, uus, uurefs, ts, pps, uref_fnc, cse=False, squeeze_
     if cse:
         factory = cse_lambdify
     else:
-        factory = sp.lambdify
+        factory = lambdify
 
     args = []
 
     for elt in (xxs, uus, uurefs, [ts], pps):
         args.extend(elt)
-    _f_num = factory(args, expr_list,
-                     modules=[{'ImmutableMatrix': np.array}, 'numpy'])
+    _f_num = factory(args, expr_list, modules=[{'ImmutableMatrix': np.array}, 'numpy'])
 
     # create a wrapper (background: see broadcasting_wrapper.__doc__)
     # TODO: get rid of this case distinction
@@ -558,6 +557,22 @@ def cse_lambdify(args, expr, **kwargs):
     cse_fnc.args_info = args
 
     return cse_fnc
+
+
+def lambdify(fncargs, expr, *args, **kwargs):
+    """
+    Wrapper for sympy.lambdify. The result should carry explicit information about the involved
+    arguments for the function (attribute .args_info)
+
+    :param fncargs: sequence of symbols
+    :param expr: expression to be evaluated
+
+    :return:  callable function
+    """
+
+    fnc = sp.lambdify(fncargs, expr, *args, **kwargs)
+    fnc.args_info = fncargs
+    return fnc
 
 
 def broadcasting_wrapper(original_fnc, original_shape=None, squeeze_axis=None):

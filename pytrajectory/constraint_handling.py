@@ -112,30 +112,31 @@ class ConstraintHandler(object):
 
         :return: None
         """
-        tmp_fnc = sp.lambdify(self.z_tilde, self.Psi, modules="numpy")
+        tmp_fnc = aux.lambdify(self.z_tilde, self.Psi, modules="numpy")
+
         self.Psi_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Psi.shape, squeeze_axis=1)
 
-        tmp_fnc = sp.lambdify(self.z_tilde, self.Jac_Psi)
+        tmp_fnc = aux.lambdify(self.z_tilde, self.Jac_Psi)
         self.Jac_Psi_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Jac_Psi.shape)
 
         # sp.lambdify cannot handle object arrays
         # the lost shape will later be restored by broadcasting wrapper
         expr_list = list(self.dJac_Gamma.ravel())
-        tmp_fnc = sp.lambdify(self.z, expr_list)
+        tmp_fnc = aux.lambdify(self.z, expr_list)
         self.dJac_Gamma_fnc = aux.broadcasting_wrapper(tmp_fnc, self.dJac_Gamma.shape)
 
         # inverse transformation and Jacobian
-        tmp_fnc = sp.lambdify(self.z, self.Gamma, modules="numpy")
+        tmp_fnc = aux.lambdify(self.z, self.Gamma, modules="numpy")
         self.Gamma_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Gamma.shape, squeeze_axis=1)
 
-        tmp_fnc = sp.lambdify(self.z, self.Jac_Gamma)
+        tmp_fnc = aux.lambdify(self.z, self.Jac_Gamma)
         self.Jac_Gamma_fnc = aux.broadcasting_wrapper(tmp_fnc, self.Jac_Gamma.shape)
 
         # From the Jacobian of the inverse only the part corresponding to the state is needed
         # Background: y_dot = Jac_Gamma_fnc(z)[:nx, :nx] * xdot
         # for the sake of simplicity we create a separate function for this
 
-        tmp_fnc = sp.lambdify(self.z, self.Jac_Gamma[:self.nx, :self.nx])
+        tmp_fnc = aux.lambdify(self.z, self.Jac_Gamma[:self.nx, :self.nx])
         self.Jac_Gamma_state_fnc = aux.broadcasting_wrapper(tmp_fnc, (self.nx, self.nx))
 
     def _create_boundary_value_dict(self):

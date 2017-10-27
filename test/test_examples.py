@@ -206,6 +206,9 @@ class TestExamples(object):
         S1.solve()
         assert S1.reached_accuracy
 
+        # the penalties are not handled correctly yet..
+        assert False
+
     def test_brockett_system(self):
         S1 = TransitionProblem(rhs_brockett_system, a=0.0, b=2.0, xa=xa_br, xb=xb_br,
                                ua=None, ub=None,
