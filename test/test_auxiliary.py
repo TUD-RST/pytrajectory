@@ -232,8 +232,8 @@ class TestCseLambdify(object):
         xx, uu, pp, xxn, uun, ppn, Jx1, Jx2, allargs, N = aux.get_attributes_from_object(self)
         a1 = allargs[:, 0]  # dim-1 array
 
-        fnc1 = sp.lambdify(xx + uu + pp, self.Jx1, modules=self.modules_arg)
-        fnc2 = sp.lambdify(xx + uu + pp, self.Jx2, modules=self.modules_arg)
+        fnc1 = aux.lambdify(xx + uu + pp, self.Jx1, modules=self.modules_arg)
+        fnc2 = aux.lambdify(xx + uu + pp, self.Jx2, modules=self.modules_arg)
 
         r1 = fnc1(*a1)
         r2 = fnc2(*a1)
