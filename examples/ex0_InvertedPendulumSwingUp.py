@@ -28,16 +28,16 @@ def f(xx, uu, uuref, t, pp):
     """
     x1, x2, x3, x4 = xx  # system variables
     u1, = uu             # input variable
-    
+
     l = 0.5     # length of the pendulum
     g = 9.81    # gravitational acceleration
-    
+
     # this is the vectorfield
     ff = [          x2,
                     u1,
                     x4,
             (1/l)*(g*sin(x3)+u1*cos(x3))]
-    
+
     return ff
 
 # then we specify all boundary conditions
@@ -124,7 +124,7 @@ if not 'no-pickle' in sys.argv:
     # the iteration again in case the following fails
     S.save(fname='ex0_InvertedPendulumSwingUp.pcl')
 
-# now we can create an instance of the `Animation` class 
+# now we can create an instance of the `Animation` class
 # with our draw function and the simulation results
 #
 
@@ -153,7 +153,7 @@ export_array = np.hstack((tt.reshape(-1, 1), xx, uu))
 # to plot the curves of some trajectories along with the picture
 # we also pass the appropriate lists as arguments (see documentation)
 if 'plot' in sys.argv or 'animate' in sys.argv:
-    A = Animation(drawfnc=draw, simdata=S.sim_data, 
+    A = Animation(drawfnc=draw, simdata=S.sim_data,
                   plotsys=[(0,'x'), (2,'phi')], plotinputs=[(0,'u')])
 
     # as for now we have to explicitly set the limits of the figure
