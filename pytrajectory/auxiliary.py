@@ -1409,3 +1409,16 @@ def get_attributes_from_object(obj):
 
     return results
 
+
+def ensure_sequence(arg):
+    """
+    if arg is not a sequence then return (arg,) else return arg
+
+    :param arg:
+    :return:
+    """
+
+    if hasattr(arg, '__len__'):
+        return arg
+    else:
+        return arg,
