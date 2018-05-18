@@ -18,10 +18,11 @@ from auxiliary import penalty_expression
 import auxiliary as aux
 
 # current version
-__version__ = '1.3.1'
+__version__ = '1.5.1'
 
-# Placeholder for the datetime string of latest commit
-__date__ = "2016-01-15 14:12:08"
+# +++ Marker-Comment: next line will be changed by pre-commit-hook +++
+__date__ = "2018-05-18 18:04:37"
+
 
 # `__date__` contains the date and time of the latest commit
 # (will be altered with every commit using git's pre-commit hook)
