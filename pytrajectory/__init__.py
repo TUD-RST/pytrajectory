@@ -21,7 +21,7 @@ import auxiliary as aux
 __version__ = '1.5.1'
 
 # +++ Marker-Comment: next line will be changed by pre-commit-hook +++
-__date__ = "2018-05-18 18:04:37"
+__date__ = "2018-05-18 18:30:48"
 
 
 # `__date__` contains the date and time of the latest commit
