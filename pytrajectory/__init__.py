@@ -20,25 +20,26 @@ from visualisation import Animation
 from log import logging
 from auxiliary import penalty_expression
 import auxiliary as aux
+from distutils.version import LooseVersion
 
 # current version
 __version__ = '1.5.1'
 
 # +++ Marker-Comment: next line will be changed by pre-commit-hook +++
-__date__ = "2018-05-22 10:36:19"
+__date__ = "2018-05-22 11:12:23"
 
 
 # check versions of dependencies
 
-np_info = numpy.__version__.split('.')
-scp_info = scipy.__version__.split('.')
-sp_info = sympy.__version__.split('.')
+np_version = LooseVersion(numpy.__version__)
+scp_version = LooseVersion(scipy.__version__)
+sp_version = LooseVersion(sympy.__version__)
 
-if not (int(np_info[0]) >= 1 and int(np_info[1]) >= 8):
+if np_version < LooseVersion("1.8.0"):
     logging.warning('numpy version ({}) may be out of date'.format(numpy.__version__))
-if not (int(scp_info[0]) >= 0 and int(scp_info[1]) >= 13 and int(scp_info[2][0]) >= 0):
+if scp_version < LooseVersion("0.13.0"):
     logging.warning('scipy version ({}) may be out of date'.format(scipy.__version__))
-if not (int(sp_info[0]) >= 0 and int(sp_info[1]) >= 7 and int(sp_info[2][0]) >= 5):
+if sp_version < LooseVersion("0.7.5"):
     logging.warning('sympy version ({}) may be out of date'.format(sympy.__version__))
 
 # log information about current version
