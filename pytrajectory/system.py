@@ -95,6 +95,11 @@ class TransitionProblem(object):
 
         self.initial_kwargs = kwargs
 
+        # save all arguments for possible later reference
+        self.all_args = dict(ff=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub, uref=uref,
+                             constraints=constraints)
+        self.all_args.update(kwargs)
+
         if xa is None:
             xa = []
         if xb is None:
@@ -144,6 +149,7 @@ class TransitionProblem(object):
 
         self.nIt = None
         self.T_sol = None
+        self.tmp_sol_list = None
 
         # empty objects to store the simulation results later
         self.sim_data = None  # all results
@@ -263,7 +269,7 @@ class TransitionProblem(object):
         if not np.allclose(xx[-1, :], self.dyn_sys.xb):
             logging.warn("boundary values and reference solution not consistent at Tb")
 
-    def solve(self, tcpport=None):
+    def solve(self, tcpport=None, return_format="xup-tuple"):
         """
         This is the main loop.
 
@@ -275,6 +281,9 @@ class TransitionProblem(object):
 
         tcpport:  port for interaction with the solution process
                           default: None (no interaction)
+
+        return_format:  specifies the format of the return value (either tuple or container)
+                        admitted values: "xup-tuple" (default) or "info_container"
 
         Returns
         -------
@@ -296,6 +305,8 @@ class TransitionProblem(object):
         self._process_first_guess()
 
         self.nIt = 0
+
+        self.tmp_sol_list = []  # list to save the "intermediate local optima"
 
         def q_finish_loop():
             res = self.reached_accuracy or self.nIt >= self._parameters['maxIt']
@@ -321,6 +332,7 @@ class TransitionProblem(object):
 
             # increment iteration number
             self.nIt += 1
+            self.tmp_sol_list.append(self.eqs.sol)
 
         self.T_sol = time.time() - T_start
         # return the found solution functions
@@ -328,13 +340,68 @@ class TransitionProblem(object):
         if interfaceserver.running:
             interfaceserver.stop_listening()
 
-        return self.return_solution()
+        return self.return_solution(return_format=return_format)
 
-    def return_solution(self):
+    def return_sol_info_container(self):
+        """
+        Create a data structure which contains all necessary information of the solved
+        TransitionProblem, while consuming only few memory.
+
+        :return:   Conainer
+        """
+        import pytrajectory  # avoid circular imports
+
+        msg = "See system.return_sol_info_container for information about the attributes."
+        sol_info = auxiliary.Container(aaa_info=msg)
+
+        # The actual solution of optimization
+        sol_info.opt_sol = self.eqs.sol
+
+        # variables to which the solution belongs
+        sol_info.indep_vars = self.eqs.trajectories.indep_vars
+
+        """
+        Note that the curves can be reproduced by creating splines.Spline(...) objects and
+        setting the free coeffs
         """
 
-        :return: 2 or 3 elements (depending on the presence of additional free parameters)
+        # intermediate local optima
+        sol_info.intermediate_solutions = self.tmp_sol_list
+
+        sol_info.solver_res = self.eqs.solver.res
+
+        # some meta data
+        sol_info.pytrajectory_version = pytrajectory.__version__
+        sol_info.pytrajectory_commit_date = pytrajectory.__date__
+        sol_info.reached_accuracy = self.reached_accuracy
+        sol_info.all_args = self.all_args
+        sol_info.n_parts_x = self.eqs.trajectories.n_parts_x
+        sol_info.n_parts_u = self.eqs.trajectories.n_parts_u
+
+        sol_info.nIt = self.nIt
+        sol_info.T_sol = self.T_sol
+
+        # this should be evaluated
+
+        return sol_info
+
+    def return_solution(self, return_format="xup-tuple"):
         """
+        if return_format == "xup-tuple" (classic behavior) return tuple of callables (xfnc, ufnc)
+        or (xfnc, ufnc, par_values) (depending on the presence of additional free parameters)
+
+        if return_format == "info_container" return a Container which contains the essential
+        information of the solution consuming few memory. This is usefull for parallelized runs
+
+        :return: 2-tuple, 3-tuple or Container
+        """
+
+        if return_format == "info_container":
+            return self.return_sol_info_container()
+
+        elif not return_format == "xup-tuple":
+            raise ValueError("Unkown return format: {}".format(return_format))
+
         if self.dyn_sys.n_par == 0:
             return self.eqs.trajectories.x, self.eqs.trajectories.u
         else:

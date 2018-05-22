@@ -12,6 +12,7 @@ import copy
 import time
 import inspect
 import itertools as it
+from multiprocessing import Pool
 
 import splines
 from simulation import Simulator
@@ -446,6 +447,7 @@ def eval_replacements_fnc(args):
     else:
         exec code in locals()
 
+    # noinspection PyUnboundLocalVariable
     return eval_replacements_fnc
 
 
@@ -1423,6 +1425,7 @@ def ensure_sequence(arg):
     else:
         return arg,
 
+
 def multi_solve_arglist(**kwargs):
     """
     create a list of lists of arguments for TransitionProblem(...). Each combination will occur.
@@ -1438,13 +1441,22 @@ def multi_solve_arglist(**kwargs):
     :return:
     """
 
-    # 1st handle special cases
+    # 1st handle special cases (seed, xa, xb)
     # (for convenience we allow e.g. seed=range(100) but finally we need every seed value
     # wrapped in a dict and associate that sequence to `first_guess`)
     seed_list = ensure_sequence(kwargs.pop("seed", None))
 
     # create a list of dicts for compatibility
     kwargs["first_guess"] = [{"seed": s} for s in seed_list]
+
+    # wrap start and end state with a length-1-list if necessary
+    if "xa" in kwargs:
+        if is_flat_sequence_of_numbers(kwargs["xa"]):
+            kwargs["xa"] = [kwargs["xa"]]
+
+    if "xb" in kwargs:
+        if is_flat_sequence_of_numbers(kwargs["xb"]):
+            kwargs["xb"] = [kwargs["xb"]]
 
     #
     # now handle all arguments the same way
@@ -1465,3 +1477,65 @@ def multi_solve_arglist(**kwargs):
     # -> multiarglist = [{'Tb': 1.0, 'eps': 1e-3}, {'Tb': 1.0, 'eps': 1e-2}, ...]
 
     return multiarglist
+
+
+# noinspection PyPep8Naming
+def _solveTP(argdict):
+    """
+    Function that will be called by parallelizedTP with pool.map
+
+    (must be defined on module level due to technical restrictions)
+
+    :param argdict:
+    :return:
+    """
+    from pytrajectory.system import TransitionProblem  # import here to avoid circular dependency
+
+    print("calling with {}".format(argdict))
+    TP = TransitionProblem(**argdict)
+    return TP.solve(return_format="info_container")
+
+
+# noinspection PyPep8Naming
+def parallelizedTP(poolsize=3, **kwargs):
+    """
+    Parallelize the solution of a TransitionProblem with a cartesian product of the arguments.
+
+    :param poolsize:  how many processors will be used (positive int)
+    :param kwargs:    arguments which will be passed to TransitionProblem
+
+    :return:          list of return-Values of the individual solve()-Methods
+    """
+    from pytrajectory.system import TransitionProblem  # import here to avoid circular dependency
+
+
+    # find out whether all important arguments have been passed
+    argspec = inspect.getargspec(TransitionProblem.__init__)
+    assert argspec.args.pop(0) == "self"
+
+    required_arguments = argspec.args[:-len(argspec.defaults)]
+    # optional_args = argspec.args[-len(argspec.defaults):]
+
+    arglist = multi_solve_arglist(**kwargs)
+
+    for ra in required_arguments:
+        if not ra in kwargs:
+            msg = "The required argument {} for the class TransitionProblem " \
+                  "is missing.".format(ra)
+            raise ValueError(msg)
+
+
+    msg = "Using {} parallel processes to solve {} TransitionProblems.\n" \
+          "This might take a while... \n\n".format(poolsize, len(arglist))
+    print(msg)
+
+    # use `Pool` from multiprocessing
+    processor_pool = Pool(poolsize)
+
+    # rr = _solveTP(arglist[0])
+
+    # IPS()
+    result_list = processor_pool.map(_solveTP, arglist)
+
+    return result_list
+

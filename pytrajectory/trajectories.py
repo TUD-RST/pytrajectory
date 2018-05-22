@@ -247,6 +247,8 @@ class Trajectory(object):
                             splines[upper]._boundary_values[2] = bv[elem]
                             x_fnc[elem] = splines[upper].ddf  ##:: x_fnc={'x1': method Spline.f, x2': Spline.df, 'x3': Spline.f, 'x4': Spline.df}
 
+        # End of chain-handling
+
         # now handle the variables which are not part of any chain
         for i, xx in enumerate(self.sys.states):  ##:: ('x1',...,'xn')
             if not x_fnc.has_key(xx):

@@ -244,11 +244,31 @@ class TestExamples(object):
         S1.solve()
         assert S1.reached_accuracy
 
+
+# noinspection PyPep8Naming
+class TestExamplesParallel(object):
+
+    def test_di_integrator_pure(self):
+
+        # only one run
+        results = aux.parallelizedTP(ff=rhs_di, xa=xa_di, xb=xb_di, ua=0, ub=0, use_chains=False)
+
+        assert len(results) == 1
+        assert results[0].reached_accuracy
+
+        # now vary two parameters
+        results = aux.parallelizedTP(ff=rhs_di, xa=xa_di, xb=xb_di, ua=0, ub=0, use_chains=False,
+                                     seed=[0, 1, 2], b=[1, 2])
+
+        assert len(results) == 6
+        assert [r.reached_accuracy for r in results] == [True]*len(results)
+
 if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s -k-slow %filename.py"+ "\n")
     # or: py.test -s --pdbcls=IPython.terminal.debugger:TerminalPdb %filename
 
     tests = TestExamples()
+    tests2 = TestExamplesParallel()
 
     log.console_handler.setLevel(10)
 
@@ -260,6 +280,6 @@ if __name__ == "__main__":
     # tests.test_di_integrator_pure_with_penalties()
     # tests.test_di_integrator_pure_with_random_guess()
     print "-"*10
-    tests.test_di_timescaled_with_penalties()
+    tests2.test_di_integrator_pure()
     # tests.test_di_timescaled()
 
