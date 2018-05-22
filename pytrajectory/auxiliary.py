@@ -11,6 +11,7 @@ from numbers import Number
 import copy
 import time
 import inspect
+import itertools as it
 
 import splines
 from simulation import Simulator
@@ -1409,7 +1410,6 @@ def get_attributes_from_object(obj):
 
     return results
 
-
 def ensure_sequence(arg):
     """
     if arg is not a sequence then return (arg,) else return arg
@@ -1422,3 +1422,46 @@ def ensure_sequence(arg):
         return arg
     else:
         return arg,
+
+def multi_solve_arglist(**kwargs):
+    """
+    create a list of lists of arguments for TransitionProblem(...). Each combination will occur.
+    -> (cartesian product)
+
+    Example:
+    >>> multi_solve_arglist(seed=[1, 2], Tb=[1.0, 1.2, 1.4])
+    creates a list of six lists where `seed` and `Tb` are as specified (each combination)
+    and the rest or the parameters takes the default values
+
+
+    :param kwargs:
+    :return:
+    """
+
+    # 1st handle special cases
+    # (for convenience we allow e.g. seed=range(100) but finally we need every seed value
+    # wrapped in a dict and associate that sequence to `first_guess`)
+    seed_list = ensure_sequence(kwargs.pop("seed", None))
+
+    # create a list of dicts for compatibility
+    kwargs["first_guess"] = [{"seed": s} for s in seed_list]
+
+    #
+    # now handle all arguments the same way
+    #
+
+    keys, oringinal_values = zip(*kwargs.items())
+    values = [ensure_sequence(v) for v in oringinal_values]
+
+    # example:
+    # -> keys = ['Tb', 'eps']
+    # -> values = [[1.0, 1.2, 1.4], [1e-3, 1e-2]]
+
+    prod = it.product(*values)
+    # -> prod = [(1.0, 1e-3), (1.0, e-2), (1.2, 1e-3), ...]
+
+    # now create a list of dictionaries
+    multiarglist = [dict(zip(keys, p)) for p in prod]
+    # -> multiarglist = [{'Tb': 1.0, 'eps': 1e-3}, {'Tb': 1.0, 'eps': 1e-2}, ...]
+
+    return multiarglist

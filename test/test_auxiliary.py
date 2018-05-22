@@ -473,6 +473,25 @@ class TestAuxFunctions(object):
         # noinspection PyTypeChecker
         assert np.all(aux.ensure_sequence(np.r_[1, 2, 3]) == np.r_[1, 2, 3])
 
+    def test_multi_solve_arglist(self):
+
+        msal = aux.multi_solve_arglist(seed=range(3), Tb=[1.0, 1.2, 1.4])
+        assert len(msal) == 9
+
+        ref = [
+                {'Tb': 1.0, 'first_guess': {'seed': 0}},
+                {'Tb': 1.2, 'first_guess': {'seed': 0}},
+                {'Tb': 1.4, 'first_guess': {'seed': 0}},
+                {'Tb': 1.0, 'first_guess': {'seed': 1}},
+                {'Tb': 1.2, 'first_guess': {'seed': 1}},
+                {'Tb': 1.4, 'first_guess': {'seed': 1}},
+                {'Tb': 1.0, 'first_guess': {'seed': 2}},
+                {'Tb': 1.2, 'first_guess': {'seed': 2}},
+                {'Tb': 1.4, 'first_guess': {'seed': 2}}
+        ]
+
+        assert msal == ref
+
 
 # noinspection PyPep8Naming
 def understand_einsum():
