@@ -280,6 +280,10 @@ class TestCseLambdify(object):
             assert np.allclose(w1[:, :, i], Jx1_num)
             assert np.allclose(w2[:, :, i], Jx2_num)
 
+
+# noinspection PyPep8Naming
+class TestAuxFunctions(object):
+
     def test_is_flat_sequence_of_numbers(self):
 
         tests_ = [(list(range(10)), True),
@@ -348,6 +352,7 @@ class TestCseLambdify(object):
             assert np.allclose(xx[idx1:idx2], xx_s[idx1:idx2], rtol=5e-3)
 
             # ensure that we don't have values like 1e12 near boundaries
+            # noinspection PyTypeChecker
             assert all((-10 < xx_s) * (xx_s < 10))
 
         # plotting
@@ -371,6 +376,8 @@ class TestCseLambdify(object):
 
         Ta, Tb = 0, 1
         n_parts = 85
+
+        # noinspection PyTypeChecker
         tt1 = np.linspace(Ta, Tb, len(u_values))
 
         uspline = aux.new_spline(Tb, n_parts=10, targetvalues=(tt1, u_values), tag='u0')
@@ -428,6 +435,7 @@ class TestCseLambdify(object):
             plt.plot(pts_noborders, pts_noborders*0, '.' )
             plt.show()
 
+    # noinspection PyUnresolvedReferences
     def test_get_attributes_from_object(self):
         c = aux.Container(x=0, y=1.0, z="abc")
         c.a = 10
@@ -442,7 +450,7 @@ class TestCseLambdify(object):
 
         # test whether meaningful exception is raised
         with pytest.raises(NameError):
-            K = aux.get_attributes_from_object(c)
+            _ = aux.get_attributes_from_object(c)
 
     def test_zero_func_like(self):
         n = 3
@@ -453,6 +461,17 @@ class TestCseLambdify(object):
 
         tt = np.linspace(10, 100, npts)
         assert np.alltrue( f1(tt) == np.zeros((n, npts)))
+
+    def test_ensure_sequence(self):
+
+        assert aux.ensure_sequence(0) == (0, )
+        assert aux.ensure_sequence(1j) == (1j, )
+        assert aux.ensure_sequence([1, 2, 3]) == [1, 2, 3]
+
+        # xrange objects cannot be compared directly
+        assert tuple(aux.ensure_sequence(xrange(100))) == tuple(xrange(100))
+        # noinspection PyTypeChecker
+        assert np.all(aux.ensure_sequence(np.r_[1, 2, 3]) == np.r_[1, 2, 3])
 
 
 # noinspection PyPep8Naming
@@ -467,6 +486,7 @@ def understand_einsum():
 
     import itertools
 
+    # noinspection PyShadowingNames
     def symbolic_tensor(base_symb, shape):
         r = np.empty(shape, dtype=object)
         idx_lists = [range(l) for l in shape]
@@ -485,7 +505,9 @@ def understand_einsum():
     res_shape = AA.shape[0], AA.shape[2]
     # use numbers anyway (because einsum does not work with symbols)
 
+    # noinspection PyTypeChecker
     AA = np.arange(np.prod(Na)).reshape(Na)
+    # noinspection PyTypeChecker
     bb = np.arange(np.prod(Nb)).reshape(Nb)
 
     # we want to calculate:
