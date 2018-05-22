@@ -6,6 +6,10 @@ PyTrajectory is a Python library for the determination of the feed forward contr
 to achieve a transition between desired states of a nonlinear control system.
 """
 
+import numpy
+import scipy
+import sympy
+
 from system import TransitionProblem, ControlSystem
 from trajectories import Trajectory
 from splines import Spline
@@ -21,16 +25,10 @@ import auxiliary as aux
 __version__ = '1.5.1'
 
 # +++ Marker-Comment: next line will be changed by pre-commit-hook +++
-__date__ = "2018-05-18 18:30:48"
+__date__ = "2018-05-22 10:36:19"
 
-
-# `__date__` contains the date and time of the latest commit
-# (will be altered with every commit using git's pre-commit hook)
 
 # check versions of dependencies
-import numpy
-import scipy
-import sympy
 
 np_info = numpy.__version__.split('.')
 scp_info = scipy.__version__.split('.')
@@ -45,4 +43,3 @@ if not (int(sp_info[0]) >= 0 and int(sp_info[1]) >= 7 and int(sp_info[2][0]) >= 
 
 # log information about current version
 # logging.debug('This is PyTrajectory version {} of {}'.format(__version__, __date__))
-
