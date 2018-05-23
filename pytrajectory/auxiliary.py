@@ -12,6 +12,7 @@ import copy
 import time
 import inspect
 import itertools as it
+import pickle
 from multiprocessing import Pool
 
 import splines
@@ -42,6 +43,23 @@ class Container(object):
     @property
     def dict(self):
         return self.__dict__
+
+class ResultContainer(Container):
+    """
+    Data structure which serves for holding the solution of a problem
+    """
+
+    def __init__(self, **kwargs):
+        super(ResultContainer, self).__init__(**kwargs)
+        self.reached_accuracy = None
+        self.solver_res = None
+        self.final_state_err = None
+
+    def __repr__(self):
+        sim_err_str = ", ".join(["{:.3f}".format(e) for e in self.final_state_err])
+        s = "RC(accurate={}; res={}, err={})".format(self.reached_accuracy,
+                                                     self.solver_res, sim_err_str)
+        return s
 
 
 class IntegChain(object):
@@ -1413,6 +1431,11 @@ def get_attributes_from_object(obj):
     return results
 
 
+def timestamped_fname(basename):
+    tstring = time.strftime(r"%Y%m%d-%H%M%S")
+    return "{}-{}".format(tstring, basename)
+
+
 def ensure_sequence(arg):
     """
     if arg is not a sequence (but not dict-like) then return (arg,) else return arg
@@ -1420,7 +1443,7 @@ def ensure_sequence(arg):
     :param arg:
     :return:
     """
-    if isinstance(arg, (dict, OrderedDict)):
+    if isinstance(arg, (basestring, dict, OrderedDict)):
         return arg,
     if hasattr(arg, '__len__'):
         return arg
@@ -1478,6 +1501,11 @@ def multi_solve_arglist(**kwargs):
     multiarglist = [dict(zip(keys, p)) for p in prod]
     # -> multiarglist = [{'Tb': 1.0, 'eps': 1e-3}, {'Tb': 1.0, 'eps': 1e-2}, ...]
 
+    # add progress information (to be printed out later)
+    n = len(multiarglist)
+    for i, d in enumerate(multiarglist):
+        d["progress_info"] = (i, n)
+
     return multiarglist
 
 
@@ -1493,13 +1521,17 @@ def _solveTP(argdict):
     """
     from pytrajectory.system import TransitionProblem  # import here to avoid circular dependency
 
-    print("calling with {}".format(argdict))
+    # extract progress information:
+
+    index, total = argdict.pop("progress_info", (None, None))
+
+    print("Run {} / {}; \n with arguments: {}".format(index, total, argdict))
     TP = TransitionProblem(**argdict)
     return TP.solve(return_format="info_container")
 
 
 # noinspection PyPep8Naming
-def parallelizedTP(poolsize=3, **kwargs):
+def parallelizedTP(poolsize=3, save_results=True, **kwargs):
     """
     Parallelize the solution of a TransitionProblem with a cartesian product of the arguments.
 
@@ -1509,7 +1541,6 @@ def parallelizedTP(poolsize=3, **kwargs):
     :return:          list of return-Values of the individual solve()-Methods
     """
     from pytrajectory.system import TransitionProblem  # import here to avoid circular dependency
-
 
     # find out whether all important arguments have been passed
     argspec = inspect.getargspec(TransitionProblem.__init__)
@@ -1526,11 +1557,9 @@ def parallelizedTP(poolsize=3, **kwargs):
                   "is missing.".format(ra)
             raise ValueError(msg)
 
-
     msg = "Using {} parallel processes to solve {} TransitionProblems.\n" \
           "This might take a while... \n\n".format(poolsize, len(arglist))
 
-    IPS()
     print(msg)
 
     # use `Pool` from multiprocessing
@@ -1538,8 +1567,12 @@ def parallelizedTP(poolsize=3, **kwargs):
 
     # rr = _solveTP(arglist[0])
 
-    # IPS()
+    # result_list = list(map(_solveTP, arglist))
     result_list = processor_pool.map(_solveTP, arglist)
+
+    if save_results:
+        with open(timestamped_fname("results.pcl"), 'wb') as dumpfile:
+            pickle.dump(result_list, dumpfile)
 
     return result_list
 

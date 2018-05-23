@@ -1,4 +1,4 @@
-# IMPORTS
+# -*- coding: utf-8 -*-
 
 import pytrajectory
 import pytrajectory.auxiliary as aux
@@ -474,6 +474,8 @@ class TestAuxFunctions(object):
         assert np.all(aux.ensure_sequence(np.r_[1, 2, 3]) == np.r_[1, 2, 3])
 
         assert aux.ensure_sequence({"x7": [-4, 4]}) == ({"x7": [-4, 4]}, )
+        assert aux.ensure_sequence("abc") == ("abc", )
+        assert aux.ensure_sequence(u"äüö") == (u"äüö", )
 
     def test_multi_solve_arglist(self):
 
@@ -481,18 +483,26 @@ class TestAuxFunctions(object):
         assert len(msal) == 9
 
         ref = [
-                {'Tb': 1.0, 'first_guess': {'seed': 0}},
-                {'Tb': 1.2, 'first_guess': {'seed': 0}},
-                {'Tb': 1.4, 'first_guess': {'seed': 0}},
-                {'Tb': 1.0, 'first_guess': {'seed': 1}},
-                {'Tb': 1.2, 'first_guess': {'seed': 1}},
-                {'Tb': 1.4, 'first_guess': {'seed': 1}},
-                {'Tb': 1.0, 'first_guess': {'seed': 2}},
-                {'Tb': 1.2, 'first_guess': {'seed': 2}},
-                {'Tb': 1.4, 'first_guess': {'seed': 2}}
+                {'Tb': 1.0, 'first_guess': {'seed': 0}, 'progress_info': (0, 9)},
+                {'Tb': 1.2, 'first_guess': {'seed': 0}, 'progress_info': (1, 9)},
+                {'Tb': 1.4, 'first_guess': {'seed': 0}, 'progress_info': (2, 9)},
+                {'Tb': 1.0, 'first_guess': {'seed': 1}, 'progress_info': (3, 9)},
+                {'Tb': 1.2, 'first_guess': {'seed': 1}, 'progress_info': (4, 9)},
+                {'Tb': 1.4, 'first_guess': {'seed': 1}, 'progress_info': (5, 9)},
+                {'Tb': 1.0, 'first_guess': {'seed': 2}, 'progress_info': (6, 9)},
+                {'Tb': 1.2, 'first_guess': {'seed': 2}, 'progress_info': (7, 9)},
+                {'Tb': 1.4, 'first_guess': {'seed': 2}, 'progress_info': (8, 9)}
         ]
 
         assert msal == ref
+        con = {"x2": [-4, 4]}
+        msal = aux.multi_solve_arglist(ff="rhs", a=0,
+                                       xa=[0, 0], xb=[1, 0], ua=0, ub=0,
+                                       use_chains=False, ierr=None, maxIt=4,
+                                       eps=4e-1, kx=2, use_std_approach=False,
+                                       seed=range(10), constraints=con,
+                                       b=[0.9, 1.0, 1.2, 1.5, 1.7])
+        assert len(msal) == 50
 
 
 # noinspection PyPep8Naming

@@ -158,6 +158,9 @@ class TransitionProblem(object):
         self.sim_data_uu = None
         self.sim_data_tt = None
 
+        # storage for the error w.r.t desired state
+        self.sim_err = None
+
     def set_param(self, param='', value=None):
         """
         Alters the value of the method parameters.
@@ -352,7 +355,7 @@ class TransitionProblem(object):
         import pytrajectory  # avoid circular imports
 
         msg = "See system.return_sol_info_container for information about the attributes."
-        sol_info = auxiliary.Container(aaa_info=msg)
+        sol_info = auxiliary.ResultContainer(aaa_info=msg)
 
         # The actual solution of optimization
         sol_info.opt_sol = self.eqs.sol
@@ -369,6 +372,9 @@ class TransitionProblem(object):
         sol_info.intermediate_solutions = self.tmp_sol_list
 
         sol_info.solver_res = self.eqs.solver.res
+
+        # error wrt. desired final state
+        sol_info.final_state_err = self.sim_err
 
         # some meta data
         sol_info.pytrajectory_version = pytrajectory.__version__
@@ -839,6 +845,10 @@ class TransitionProblem(object):
             logging.info(msg)
         else:
             logging.debug(msg)
+
+        # save for late reference
+        self.sim_err = err
+
         self.reached_accuracy = reached_accuracy
 
     def get_par_values(self):
