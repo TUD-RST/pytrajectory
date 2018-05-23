@@ -483,15 +483,15 @@ class TestAuxFunctions(object):
         assert len(msal) == 9
 
         ref = [
-                {'Tb': 1.0, 'first_guess': {'seed': 0}, 'progress_info': (0, 9)},
-                {'Tb': 1.2, 'first_guess': {'seed': 0}, 'progress_info': (1, 9)},
-                {'Tb': 1.4, 'first_guess': {'seed': 0}, 'progress_info': (2, 9)},
-                {'Tb': 1.0, 'first_guess': {'seed': 1}, 'progress_info': (3, 9)},
-                {'Tb': 1.2, 'first_guess': {'seed': 1}, 'progress_info': (4, 9)},
-                {'Tb': 1.4, 'first_guess': {'seed': 1}, 'progress_info': (5, 9)},
-                {'Tb': 1.0, 'first_guess': {'seed': 2}, 'progress_info': (6, 9)},
-                {'Tb': 1.2, 'first_guess': {'seed': 2}, 'progress_info': (7, 9)},
-                {'Tb': 1.4, 'first_guess': {'seed': 2}, 'progress_info': (8, 9)}
+                {'Tb': 1.0, 'first_guess': {'seed': 0}, 'progress_info': (1, 9)},
+                {'Tb': 1.2, 'first_guess': {'seed': 0}, 'progress_info': (2, 9)},
+                {'Tb': 1.4, 'first_guess': {'seed': 0}, 'progress_info': (3, 9)},
+                {'Tb': 1.0, 'first_guess': {'seed': 1}, 'progress_info': (4, 9)},
+                {'Tb': 1.2, 'first_guess': {'seed': 1}, 'progress_info': (5, 9)},
+                {'Tb': 1.4, 'first_guess': {'seed': 1}, 'progress_info': (6, 9)},
+                {'Tb': 1.0, 'first_guess': {'seed': 2}, 'progress_info': (7, 9)},
+                {'Tb': 1.2, 'first_guess': {'seed': 2}, 'progress_info': (8, 9)},
+                {'Tb': 1.4, 'first_guess': {'seed': 2}, 'progress_info': (9, 9)}
         ]
 
         assert msal == ref

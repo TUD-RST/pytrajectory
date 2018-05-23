@@ -12,7 +12,7 @@ from simulation import Simulator
 import auxiliary
 import visualisation
 import splines
-from log import logging
+from log import Logger
 import interfaceserver
 from dynamical_system import DynamicalSystem
 from constraint_handling import ConstraintHandler
@@ -25,7 +25,7 @@ from ipydex import IPS
 
 # Note: This class is the former `ControlSystem` class
 # noinspection PyPep8Naming
-class TransitionProblem(object):
+class TransitionProblem(Logger):
     """
     Base class of the PyTrajectory project containing all information to model a transition problem
     of a dynamical system.
@@ -87,11 +87,15 @@ class TransitionProblem(object):
                                       after each IVP-solution (usefull for development)
         first_guess   None            to initiate free parameters (might be useful: {'seed': value})
         refsol        Container       optional data (C.tt, C.xx, C.uu) for the reference trajectory
+        progress_info (1, 1)          2-tuple which indicates the actual run w.r.t multiprocessing
         ============= =============   ============================================================
     """
 
     def __init__(self, ff, a=0., b=1., xa=None, xb=None, ua=None, ub=None, uref=None,
                  constraints=None, **kwargs):
+
+        self.progress_info = kwargs.get("progress_info", (1, 1))
+        self.init_logger(self)
 
         self.initial_kwargs = kwargs
 
@@ -123,13 +127,14 @@ class TransitionProblem(object):
         self._parameters['show_ir'] = kwargs.get('show_ir', False)
         self._parameters['show_refsol'] = kwargs.get('show_refsol', False)
 
+
         self.refsol = kwargs.get('refsol', None)  # this serves to reproduce a given trajectory
 
         self.tmp_sol = None  # place to store the result of the server
 
         # create an object for the dynamical system
-        self.dyn_sys = DynamicalSystem(f_sym=ff, a=a, b=b, xa=xa, xb=xb, ua=ua, ub=ub, uref=uref,
-                                       **kwargs)
+        self.dyn_sys = DynamicalSystem(f_sym=ff, masterobject=self, a=a, b=b, xa=xa, xb=xb,
+                                       ua=ua, ub=ub, uref=uref, **kwargs)
 
         # TODO: change default behavior to False (including examples)
         self.use_chains = kwargs.get('use_chains', True)
@@ -231,7 +236,7 @@ class TransitionProblem(object):
         if self.use_chains:
             msg = "Currently not possible to make use of integrator chains together with " \
                   "projective constraints."
-            logging.warn(msg)
+            self.log_warn(msg)
         self.use_chains = False
         # Note: it should be possible that just those chains are not used
         # which actually contain a constrained variable
@@ -268,9 +273,9 @@ class TransitionProblem(object):
         assert xx.shape[1] == self.dyn_sys.n_states, msg
 
         if not np.allclose(xx[0, :], self.dyn_sys.xa):
-            logging.warn("boundary values and reference solution not consistent at Ta")
+            self.log_warn("boundary values and reference solution not consistent at Ta")
         if not np.allclose(xx[-1, :], self.dyn_sys.xb):
-            logging.warn("boundary values and reference solution not consistent at Tb")
+            self.log_warn("boundary values and reference solution not consistent at Tb")
 
     def solve(self, tcpport=None, return_format="xup-tuple"):
         """
@@ -323,15 +328,15 @@ class TransitionProblem(object):
 
             msg = "Iteration #{}; spline parts_ {}".format(self.nIt + 1,
                                                            self.eqs.trajectories.n_parts_x)
-            logging.info(msg)
+            self.log_info(msg)
             # start next iteration step
             try:
                 self._iterate()
             except auxiliary.NanError:
-                logging.warn("NanError")
+                self.log_warn("NanError")
                 return None, None
 
-            logging.info('par = {}'.format(self.get_par_values()))
+            self.log_info('par = {}'.format(self.get_par_values()))
 
             # increment iteration number
             self.nIt += 1
@@ -512,13 +517,13 @@ class TransitionProblem(object):
             slvr = self.eqs.solver
 
             if slvr.cond_external_interrupt:
-                logging.debug('Continue minimization after external interrupt')
+                self.log_debug('Continue minimization after external interrupt')
                 continue
 
             if slvr.cond_num_steps:
                 if slvr.solve_count < self._parameters['accIt']:
                     msg = 'Continue minimization (not yet reached tolerance nor limit of attempts)'
-                    logging.debug(msg)
+                    self.log_debug(msg)
                     continue
                 else:
                     break
@@ -537,14 +542,14 @@ class TransitionProblem(object):
                         slvr.x0 *= scale
                     else:
                         slvr.x0 = old_sol*scale
-                    logging.debug('Continue minimization with changed x0')
+                    self.log_debug('Continue minimization with changed x0')
                     continue
 
             if slvr.cond_abs_tol or slvr.cond_rel_tol:
                 break
             else:
                 # IPS()
-                logging.warn("unexpected state in mainloop of outer iteration -> break loop")
+                self.log_warn("unexpected state in mainloop of outer iteration -> break loop")
                 break
 
     def _process_first_guess(self):
@@ -747,7 +752,7 @@ class TransitionProblem(object):
         if 0:
             fname = auxiliary.datefname(ext="pdf")
             plt.savefig(fname)
-            logging.debug(fname + " written.")
+            self.log_debug(fname + " written.")
 
         plt.show()
         # IPS()
@@ -758,7 +763,7 @@ class TransitionProblem(object):
         after the computation of a solution for the input trajectories.
         """
 
-        logging.debug("Solving Initial Value Problem")
+        self.log_debug("Solving Initial Value Problem")
 
         # calulate simulation time
         T = self.dyn_sys.b - self.dyn_sys.a
@@ -776,7 +781,7 @@ class TransitionProblem(object):
         u_fnc = self.get_constrained_spline_fncs()[2]
         S = Simulator(ff, T, start, u_fnc, z_par=par, dt=self._parameters['dt_sim'])
 
-        logging.debug("start: %s"%str(start))
+        self.log_debug("start: %s"%str(start))
 
         # forward simulation
         self.sim_data = S.simulate()
@@ -811,15 +816,15 @@ class TransitionProblem(object):
         xb = self.dyn_sys.xb
 
         # what is the error
-        logging.debug(40*"-")
-        logging.debug("Ending up with:   Should Be:  Difference:")
+        self.log_debug(40*"-")
+        self.log_debug("Ending up with:   Should Be:  Difference:")
 
         err = np.empty(xt.shape[1])
         for i, xx in enumerate(x_sym):
             err[i] = abs(xb[i] - xt[-1][i])  ##:: error (x1, x2) at end time
-            logging.debug(str(xx) + " : %f     %f    %f"%(xt[-1][i], xb[i], err[i]))
+            self.log_debug(str(xx) + " : %f     %f    %f"%(xt[-1][i], xb[i], err[i]))
 
-        logging.debug(40*"-")
+        self.log_debug(40*"-")
 
         # if self._ierr:
         ierr = self._parameters['ierr']
@@ -835,16 +840,16 @@ class TransitionProblem(object):
                                                par=self.get_par_values())
 
             reached_accuracy = (maxH < ierr) and (max(err) < eps)
-            logging.debug('maxH = %f'%maxH)
+            self.log_debug('maxH = %f'%maxH)
         else:
             # just check if tolerance for the boundary values is satisfied
             reached_accuracy = (max(err) < eps)
 
         msg = "  --> reached desired accuracy: " + str(reached_accuracy)
         if reached_accuracy:
-            logging.info(msg)
+            self.log_info(msg)
         else:
-            logging.debug(msg)
+            self.log_debug(msg)
 
         # save for late reference
         self.sim_err = err
@@ -872,7 +877,7 @@ class TransitionProblem(object):
         try:
             import matplotlib
         except ImportError:
-            logging.error('Matplotlib is not available for plotting.')
+            self.log_error('Matplotlib is not available for plotting.')
             return
 
         if self.constraints:
@@ -925,7 +930,7 @@ class TransitionProblem(object):
             with open(fname, 'wb') as dumpfile:
                 pickle.dump(save, dumpfile)
         if not quiet:
-            logging.info("File written: {}".format(fname))
+            self.log_info("File written: {}".format(fname))
 
         return save
 

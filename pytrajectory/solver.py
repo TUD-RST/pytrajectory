@@ -6,7 +6,7 @@ import time
 
 from auxiliary import NanError
 
-from log import logging
+from log import Logger
 import interfaceserver
 
 from matplotlib import pyplot as plt
@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 from ipydex import IPS
 
 
-class Solver:
+class Solver(Logger):
     """
     This class provides solver for the collocation equation system.
 
@@ -48,6 +48,7 @@ class Solver:
                  method='leven', par=None, mu=1e-4):
 
         self.masterobject = masterobject
+        self.init_logger(masterobject)
 
         self.F = F
         self.DF = DF
@@ -99,11 +100,11 @@ class Solver:
         self.cond_external_interrupt = False
 
         if (self.method == 'leven'):
-            logging.debug("Run Levenberg-Marquardt method")
+            self.log_debug("Run Levenberg-Marquardt method")
             self.leven()
         
         if (self.sol is None):
-            logging.warning("Wrong solver, returning initial value.")
+            self.warning("Wrong solver, returning initial value.")
             return self.x0
         else:
             # TODO: include par into sol??
@@ -185,7 +186,7 @@ class Solver:
 
             if np.any(np.isnan(DFx.toarray())):
                 msg = "Invalid start guess (leads to nan in Jacobian)"
-                logging.warn(msg)
+                self.log_warn(msg)
                 raise NanError(msg)
 
             break_inner_loop = False
@@ -232,7 +233,7 @@ class Solver:
                 if any(np.isnan(Fxs)):
                     # this might be caused by too small mu
                     msg = "Invalid start guess (leads to nan in Function)"
-                    logging.warn(msg)
+                    self.log_warn(msg)
                     raise NanError(msg)
 
                 normFx = norm(Fx)
@@ -250,7 +251,7 @@ class Solver:
                     self.mu *= 2
                     rho = 0.0  # ensure another iteration
                     
-                    # logging.debug("increasing res. R1=%f, R2=%f, dismiss solution" % (R1, R2))
+                    # self.debug("increasing res. R1=%f, R2=%f, dismiss solution" % (R1, R2))
 
                 elif (rho <= b0):
                     self.mu *= 2
@@ -259,20 +260,20 @@ class Solver:
 
                 # -> if b0 < rho < b1 : leave mu unchanged
                 
-                logging.debug("  rho= %f    mu= %f, |s|^2=%f" % (rho, self.mu, norm(s)))
+                self.log_debug("  rho= %f    mu= %f, |s|^2=%f"%(rho, self.mu, norm(s)))
 
                 if np.isnan(rho):
                     # this should might be caused by large values for xs
                     # but it should have been catched above
-                    logging.warn("rho = nan (should not happen)")
+                    self.log_warn("rho = nan (should not happen)")
                     # IPS()
                     raise NanError()
 
                 if rho < 0:
-                    logging.warn("rho < 0 (should not happen)")
+                    self.log_warn("rho < 0 (should not happen)")
 
                 if interfaceserver.has_message(interfaceserver.messages.lmshell_inner):
-                    logging.debug("lm: inner loop shell")
+                    self.log_debug("lm: inner loop shell")
                     IPS()
 
                 locally_stuck_flag = False
@@ -302,10 +303,10 @@ class Solver:
             self.ntries_list.append(count_inner)
 
             if i > 1 and self.res > self.res_old:
-                logging.warn("res_old > res  (should not happen)")
+                self.log_warn("res_old > res  (should not happen)")
             spaces = " " * 20
             msg = "sp=%d  nIt=%d   k=%f  %s res=%f"
-            logging.debug(msg % (n_spln_prts, i, xs[-1], spaces, self.res))
+            self.log_debug(msg%(n_spln_prts, i, xs[-1], spaces, self.res))
             
             self.cond_abs_tol = self.res <= self.tol
             if self.res > 1:
@@ -315,7 +316,7 @@ class Solver:
             self.cond_num_steps = i >= self.maxIt
 
             if interfaceserver.has_message(interfaceserver.messages.lmshell_outer):
-                logging.debug("lm: outer loop shell")
+                self.log_debug("lm: outer loop shell")
                 mo = self.masterobject
                 sx1 = mo.eqs.trajectories.splines['x1']
                 IPS()
@@ -331,17 +332,17 @@ class Solver:
                 plt.show()
 
             if interfaceserver.has_message(interfaceserver.messages.change_w):
-                logging.info("start lm again with chaged weights")
+                self.log_info("start lm again with chaged weights")
                 self.set_weights("random")
                 return self.leven()
 
             if interfaceserver.has_message(interfaceserver.messages.change_x):
-                logging.debug("lm: change x")
+                self.log_debug("lm: change x")
                 dx = (np.random.rand(len(x))*0.5-1)*0.1 * np.abs(x)
                 x2 = x + dx
-                logging.debug("lm: alternative value: %s" % norm(self.F(x2)) )
+                self.log_debug("lm: alternative value: %s"%norm(self.F(x2)))
                 self.x0 = x2
-                logging.info("start lm again")
+                self.log_info("start lm again")
                 return self.leven()
                 # IPS()
 
@@ -381,4 +382,4 @@ class Solver:
             reasons.append("num steps")
         if self.cond_external_interrupt:
             reasons.append("ext intrpt")
-        logging.debug("LM-Break reason: {}".format(", ".join(reasons)))
+        self.log_debug("LM-Break reason: {}".format(", ".join(reasons)))

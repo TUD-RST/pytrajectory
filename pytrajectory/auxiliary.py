@@ -44,6 +44,7 @@ class Container(object):
     def dict(self):
         return self.__dict__
 
+
 class ResultContainer(Container):
     """
     Data structure which serves for holding the solution of a problem
@@ -1504,7 +1505,7 @@ def multi_solve_arglist(**kwargs):
     # add progress information (to be printed out later)
     n = len(multiarglist)
     for i, d in enumerate(multiarglist):
-        d["progress_info"] = (i, n)
+        d["progress_info"] = (i + 1, n)
 
     return multiarglist
 
@@ -1523,7 +1524,7 @@ def _solveTP(argdict):
 
     # extract progress information:
 
-    index, total = argdict.pop("progress_info", (None, None))
+    index, total = argdict.get("progress_info", (1, 1))
 
     print("Run {} / {}; \n with arguments: {}".format(index, total, argdict))
     TP = TransitionProblem(**argdict)
@@ -1531,12 +1532,14 @@ def _solveTP(argdict):
 
 
 # noinspection PyPep8Naming
-def parallelizedTP(poolsize=3, save_results=True, **kwargs):
+def parallelizedTP(poolsize=3, save_results=True, debug=False, **kwargs):
     """
     Parallelize the solution of a TransitionProblem with a cartesian product of the arguments.
 
-    :param poolsize:  how many processors will be used (positive int)
-    :param kwargs:    arguments which will be passed to TransitionProblem
+    :param poolsize:        how many processors will be used (positive int)
+    :param save_results:    save the list of results as a pickle file
+    :param debug:           default: False; use conventional `map` facilitate debugging
+    :param kwargs:          arguments which will be passed to TransitionProblem
 
     :return:          list of return-Values of the individual solve()-Methods
     """
@@ -1565,10 +1568,13 @@ def parallelizedTP(poolsize=3, save_results=True, **kwargs):
     # use `Pool` from multiprocessing
     processor_pool = Pool(poolsize)
 
-    # rr = _solveTP(arglist[0])
 
-    # result_list = list(map(_solveTP, arglist))
-    result_list = processor_pool.map(_solveTP, arglist)
+    if debug:
+        # rr = _solveTP(arglist[0])
+        result_list = list(map(_solveTP, arglist))
+    else:
+
+        result_list = processor_pool.map(_solveTP, arglist)
 
     if save_results:
         with open(timestamped_fname("results.pcl"), 'wb') as dumpfile:

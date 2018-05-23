@@ -9,11 +9,11 @@ import itertools
 from ipydex import IPS
 
 import auxiliary as aux
-from log import logging
+from log import Logger
 
 
 # noinspection PyPep8Naming
-class DynamicalSystem(object):
+class DynamicalSystem(Logger):
     """
     Provides access to information about the dynamical system that is the
     object of the control process.
@@ -40,8 +40,10 @@ class DynamicalSystem(object):
     """
 
     # TODO: improve interface w.r.t additional free parameters
-    def __init__(self, f_sym, a=0., b=1., xa=None, xb=None, ua=None, ub=None, uref=None,
-                 **kwargs):
+    def __init__(self, f_sym, masterobject, a=0., b=1., xa=None, xb=None,
+                 ua=None, ub=None, uref=None, **kwargs):
+        self.masterobject = masterobject
+        self.init_logger(masterobject)
 
         if xa is None:
             msg = "Initial value required."
@@ -137,7 +139,7 @@ class DynamicalSystem(object):
         """
 
         # first, determine system dimensions
-        logging.debug("Determine system/input dimensions")
+        self.log_debug("Determine system/input dimensions")
 
         # the number of system variables can be determined via the length
         # of the boundary value lists
@@ -183,7 +185,7 @@ class DynamicalSystem(object):
                 # too many values to unpack
 
                 if not ("value" in err.message and "to unpack" in err.message):
-                    logging.error("unexpected ValueError")
+                    self.log_error("unexpected ValueError")
                     raise err
                 else:
                     # unpacking error inside f_sym
@@ -193,7 +195,7 @@ class DynamicalSystem(object):
                 flag = "<lambda>() takes" in err.message and \
                        "arguments" in err.message and "given" in err.message
                 if not flag:
-                    logging.error("unexpected TypeError")
+                    self.log_error("unexpected TypeError")
                     raise err
                 else:
                     # calling error for lambda -> dimensions do not match
@@ -212,10 +214,10 @@ class DynamicalSystem(object):
 
         n_penalties = len(return_value) - n_states
 
-        logging.debug("--> state: {}".format(n_states))
-        logging.debug("--> input: {}".format(n_inputs))
-        logging.debug("--> a.f.p.: {}".format(n_par))
-        logging.debug("--> penalties: {}".format(n_penalties))
+        self.log_debug("--> state: {}".format(n_states))
+        self.log_debug("--> input: {}".format(n_inputs))
+        self.log_debug("--> a.f.p.: {}".format(n_par))
+        self.log_debug("--> penalties: {}".format(n_penalties))
 
         self.n_states = n_states
         self.n_inputs = n_inputs
@@ -299,7 +301,7 @@ class DynamicalSystem(object):
         ff = self.f_sym_matrix.subs(zip(self.uus, [0]*self.n_inputs))
         gg = self.f_sym_matrix.jacobian(self.uus)
         if gg.atoms(sp.Symbol).intersection(self.uus):
-            logging.warn("System is not input affine. -> VF g has no meaning.")
+            self.log_warn("System is not input affine. -> VF g has no meaning.")
 
         # vf_f and vf_g are not really neccessary, just for scientific playing
         fnc_factory = aux.expr2callable
