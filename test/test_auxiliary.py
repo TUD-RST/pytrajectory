@@ -473,6 +473,8 @@ class TestAuxFunctions(object):
         # noinspection PyTypeChecker
         assert np.all(aux.ensure_sequence(np.r_[1, 2, 3]) == np.r_[1, 2, 3])
 
+        assert aux.ensure_sequence({"x7": [-4, 4]}) == ({"x7": [-4, 4]}, )
+
     def test_multi_solve_arglist(self):
 
         msal = aux.multi_solve_arglist(seed=range(3), Tb=[1.0, 1.2, 1.4])
