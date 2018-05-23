@@ -275,12 +275,16 @@ class Solver:
                     logging.debug("lm: inner loop shell")
                     IPS()
 
+                locally_stuck_flag = False
                 if self.mu > 100:
-                    # just for breakpoint (dbg)
-                    IPS()
+                    if abs(R1 / normFx) < reltol:
+                        locally_stuck_flag = True
+                    else:
+                        # unexpexted situation
+                        IPS()
                 
                 # if the system more or less behaves linearly 
-                break_inner_loop = rho > b0
+                break_inner_loop = rho > b0 or locally_stuck_flag
                 count_inner += 1
 
             Fx = Fxs  # F(x+h) -> Fx_new
