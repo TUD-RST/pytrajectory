@@ -1468,12 +1468,6 @@ def multi_solve_arglist(**kwargs):
     """
 
     # 1st handle special cases (seed, xa, xb)
-    # (for convenience we allow e.g. seed=range(100) but finally we need every seed value
-    # wrapped in a dict and associate that sequence to `first_guess`)
-    seed_list = ensure_sequence(kwargs.pop("seed", None))
-
-    # create a list of dicts for compatibility
-    kwargs["first_guess"] = [{"seed": s} for s in seed_list]
 
     # wrap start and end state with a length-1-list if necessary
     if "xa" in kwargs:
