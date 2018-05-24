@@ -11,6 +11,9 @@ from numbers import Number
 import copy
 import time
 import inspect
+import itertools as it
+import pickle
+from multiprocessing import Pool
 
 import splines
 from simulation import Simulator
@@ -40,6 +43,24 @@ class Container(object):
     @property
     def dict(self):
         return self.__dict__
+
+
+class ResultContainer(Container):
+    """
+    Data structure which serves for holding the solution of a problem
+    """
+
+    def __init__(self, **kwargs):
+        super(ResultContainer, self).__init__(**kwargs)
+        self.reached_accuracy = None
+        self.solver_res = None
+        self.final_state_err = None
+
+    def __repr__(self):
+        sim_err_str = ", ".join(["{:.3f}".format(e) for e in self.final_state_err])
+        s = "RC(accurate={}; res={}, err={})".format(self.reached_accuracy,
+                                                     self.solver_res, sim_err_str)
+        return s
 
 
 class IntegChain(object):
@@ -344,7 +365,8 @@ def expr2callable(expr, xxs, uus, uurefs, ts, pps, uref_fnc, cse=False, squeeze_
         uref = uref_fnc(tt)
         if not uref.shape == uu.shape:
             # IPS()
-            assert False
+            msg = "shape mismatch: uref.shape={} but uu.shape={}".format(uref.shape, uu.shape)
+            raise ValueError(msg)
         xutp = stack((xx, uu, uref, tt, pp))
         res = _f_num_bc(*xutp)
         return res
@@ -445,6 +467,7 @@ def eval_replacements_fnc(args):
     else:
         exec code in locals()
 
+    # noinspection PyUnboundLocalVariable
     return eval_replacements_fnc
 
 
@@ -1408,4 +1431,150 @@ def get_attributes_from_object(obj):
         results = results[0]
 
     return results
+
+
+def timestamped_fname(basename):
+    tstring = time.strftime(r"%Y%m%d-%H%M%S")
+    return "{}-{}".format(tstring, basename)
+
+
+def ensure_sequence(arg):
+    """
+    if arg is not a sequence (but not dict-like) then return (arg,) else return arg
+
+    :param arg:
+    :return:
+    """
+    if isinstance(arg, (basestring, dict, OrderedDict)):
+        return arg,
+    if hasattr(arg, '__len__'):
+        return arg
+    else:
+        return arg,
+
+
+def multi_solve_arglist(**kwargs):
+    """
+    create a list of lists of arguments for TransitionProblem(...). Each combination will occur.
+    -> (cartesian product)
+
+    Example:
+    >>> multi_solve_arglist(seed=[1, 2], Tb=[1.0, 1.2, 1.4])
+    creates a list of six lists where `seed` and `Tb` are as specified (each combination)
+    and the rest or the parameters takes the default values
+
+
+    :param kwargs:
+    :return:
+    """
+
+    # 1st handle special cases (seed, xa, xb)
+
+    # wrap start and end state with a length-1-list if necessary
+    if "xa" in kwargs:
+        if is_flat_sequence_of_numbers(kwargs["xa"]):
+            kwargs["xa"] = [kwargs["xa"]]
+
+    if "xb" in kwargs:
+        if is_flat_sequence_of_numbers(kwargs["xb"]):
+            kwargs["xb"] = [kwargs["xb"]]
+
+    #
+    # now handle all arguments the same way
+    #
+
+    keys, oringinal_values = zip(*kwargs.items())
+    values = [ensure_sequence(v) for v in oringinal_values]
+
+    # example:
+    # -> keys = ['Tb', 'eps']
+    # -> values = [[1.0, 1.2, 1.4], [1e-3, 1e-2]]
+
+    prod = it.product(*values)
+    # -> prod = [(1.0, 1e-3), (1.0, e-2), (1.2, 1e-3), ...]
+
+    # now create a list of dictionaries
+    multiarglist = [dict(zip(keys, p)) for p in prod]
+    # -> multiarglist = [{'Tb': 1.0, 'eps': 1e-3}, {'Tb': 1.0, 'eps': 1e-2}, ...]
+
+    # add progress information (to be printed out later)
+    n = len(multiarglist)
+    for i, d in enumerate(multiarglist):
+        d["progress_info"] = (i + 1, n)
+
+    return multiarglist
+
+
+# noinspection PyPep8Naming
+def _solveTP(argdict):
+    """
+    Function that will be called by parallelizedTP with pool.map
+
+    (must be defined on module level due to technical restrictions)
+
+    :param argdict:
+    :return:
+    """
+    from pytrajectory.system import TransitionProblem  # import here to avoid circular dependency
+
+    # extract progress information:
+
+    index, total = argdict.get("progress_info", (1, 1))
+
+    print("Run {} / {}; \n with arguments: {}".format(index, total, argdict))
+    TP = TransitionProblem(**argdict)
+    return TP.solve(return_format="info_container")
+
+
+# noinspection PyPep8Naming
+def parallelizedTP(poolsize=3, save_results=True, debug=False, **kwargs):
+    """
+    Parallelize the solution of a TransitionProblem with a cartesian product of the arguments.
+
+    :param poolsize:        how many processors will be used (positive int)
+    :param save_results:    save the list of results as a pickle file
+    :param debug:           default: False; use conventional `map` facilitate debugging
+    :param kwargs:          arguments which will be passed to TransitionProblem
+
+    :return:          list of return-Values of the individual solve()-Methods
+    """
+    from pytrajectory.system import TransitionProblem  # import here to avoid circular dependency
+
+    # find out whether all important arguments have been passed
+    argspec = inspect.getargspec(TransitionProblem.__init__)
+    assert argspec.args.pop(0) == "self"
+
+    required_arguments = argspec.args[:-len(argspec.defaults)]
+    # optional_args = argspec.args[-len(argspec.defaults):]
+
+    arglist = multi_solve_arglist(**kwargs)
+
+    for ra in required_arguments:
+        if not ra in kwargs:
+            msg = "The required argument {} for the class TransitionProblem " \
+                  "is missing.".format(ra)
+            raise ValueError(msg)
+
+    msg = "Using {} parallel processes to solve {} TransitionProblems.\n" \
+          "This might take a while... \n\n".format(poolsize, len(arglist))
+
+    print(msg)
+
+    # use `Pool` from multiprocessing
+    processor_pool = Pool(poolsize)
+
+    if debug:
+        save_results = False
+
+        # this calling modus is better to debug
+        result_list = list(map(_solveTP, arglist))
+        # result_list = rr = _solveTP(arglist[0])
+    else:
+        result_list = processor_pool.map(_solveTP, arglist)
+
+    if save_results:
+        with open(timestamped_fname("results.pcl"), 'wb') as dumpfile:
+            pickle.dump(result_list, dumpfile)
+
+    return result_list
 

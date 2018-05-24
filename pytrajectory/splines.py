@@ -6,13 +6,13 @@ from scipy.sparse.linalg import spsolve
 from scipy.interpolate import interp1d
 import auxiliary as aux
 
-from log import logging
+from log import Logger, logging
 
 # DEBUG
 from ipydex import IPS
 
 
-class Spline(object):
+class Spline(Logger):
     """
     This class provides a representation of a cubic spline function.
 
@@ -62,9 +62,10 @@ class Spline(object):
         # until this issue is resolved the user is enabled to choose between
         # the two approaches be altering the following attribute
 
-        self._init_bc(bv)
-
         self.masterobject = kwargs.get("masterobject")
+        self.init_logger(self.masterobject)
+
+        self._init_bc(bv)
 
         self._use_std_approach = use_std_approach
 
@@ -354,15 +355,15 @@ class Spline(object):
 
             # first a little check
             if not (self.n == coeffs.shape[0]):
-                logging.error('Dimension mismatch in number of spline parts ({}) and \
+                self.log_error('Dimension mismatch in number of spline parts ({}) and \
                             rows in coefficients array ({})'.format(self.n, coeffs.shape[0]))
                 raise ValueError('Dimension mismatch in number of spline parts ({}) and \
                             rows in coefficients array ({})'.format(self.n, coeffs.shape[0]))
             elif not (coeffs.shape[1] == 4):
-                logging.error('Dimension mismatch in number of polynomial coefficients (4) and \
+                self.log_error('Dimension mismatch in number of polynomial coefficients (4) and \
                             columns in coefficients array ({})'.format(coeffs.shape[1]))
             # elif not (self._indep_coeffs.size == coeffs.shape[1]):
-            #     logging.error('Dimension mismatch in number of free coefficients ({}) and \
+            #     self.log_error('Dimension mismatch in number of free coefficients ({}) and \
             #                 columns in coefficients array ({})'.format(self._indep_coeffs.size, coeffs.shape[1]))
             #     raise ValueError
 
@@ -379,7 +380,7 @@ class Spline(object):
             if not (self._indep_coeffs.size == free_coeffs.size):
                 msg = 'Got {} values for the {} independent coefficients.'\
                        .format(free_coeffs.size, self._indep_coeffs.size)
-                logging.error(msg)
+                self.log_error(msg)
                 raise ValueError(msg)
 
             # set the numerical values
@@ -394,7 +395,7 @@ class Spline(object):
                 self._P[k] = np.poly1d(coeffs_k[::-1])
         else:
             # not sure...
-            logging.error('Not sure what to do, please either pass `coeffs` or `free_coeffs`.')
+            self.log_error('Not sure what to do, please either pass `coeffs` or `free_coeffs`.')
             raise ValueError('Not sure what to do, please either pass `coeffs` or `free_coeffs`.')
 
         # now we have numerical values for the coefficients so we can set this to False
@@ -725,7 +726,7 @@ class Spline(object):
         elif self._prov_flag:
             # spline cannot be plotted, because there are no numeric
             # values for its polynomial coefficients
-            logging.error("There are no numeric values for the spline's\
+            self.log_error("There are no numeric values for the spline's\
                             polynomial coefficients.")
             return
 
@@ -739,7 +740,7 @@ class Spline(object):
                 plt.plot(tt,St)
                 plt.show()
             except ImportError:
-                logging.error('Could not import matplotlib for plotting the curve.')
+                self.log_error('Could not import matplotlib for plotting the curve.')
 
         if ret_array:
             return St

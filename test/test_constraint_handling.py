@@ -31,7 +31,8 @@ xb = [1.0, 0.0]
 class TestConstraintHandler(object):
 
     def test_di_identity_map(self):
-        dynsys = ds.DynamicalSystem(rhs_di, 0, 2, xa, xb)
+        # set masterobject=None
+        dynsys = ds.DynamicalSystem(rhs_di, None, 0, 2, xa, xb)
         constraints = None  # equivalent to {}
         chandler = ch.ConstraintHandler(None, dynsys, constraints)
 
@@ -87,7 +88,8 @@ class TestConstraintHandler(object):
             TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa, xb=xb, ua=[0], ub=ub_bad, **kwargs)
 
     def test_di_constrain_all(self):
-        dynsys = ds.DynamicalSystem(rhs_di, 0, 2, xa, xb)
+        # set masterobject=None
+        dynsys = ds.DynamicalSystem(rhs_di, None, 0, 2, xa, xb)
         constraints = {'x1': [-5, 5], 'x2': [-.1, 3], 'u1': [-4, 4]}  # equivalent to {}
         chandler = ch.ConstraintHandler(None, dynsys, constraints)
 

@@ -109,6 +109,31 @@ class TestExamples(object):
         S1.solve()
         assert S1.reached_accuracy
 
+    def test_di_integrator_pure_seed(self):
+        S1 = TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
+                               show_ir=False,
+                               ierr=None,
+                               use_chains=False,
+                               maxIt=1,
+                               seed=0)
+        S1.solve()
+
+        S2 = TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
+                               show_ir=False,
+                               ierr=None,
+                               use_chains=False,
+                               maxIt=1,
+                               seed=1141)
+
+        S2.solve()
+
+        # assert that the different seed has taken effect
+        assert S1.eqs.solver.res_list[0] != S2.eqs.solver.res_list[0]
+        assert S2.eqs._first_guess == {"seed": 1141}
+
+        assert S1.reached_accuracy
+        assert S2.reached_accuracy
+
     def test_di_integrator_pure_with_random_guess(self):
         first_guess = {'seed': 20}
         S1 = TransitionProblem(rhs_di, a=0.0, b=2.0, xa=xa_di, xb=xb_di, ua=0, ub=0,
@@ -244,11 +269,31 @@ class TestExamples(object):
         S1.solve()
         assert S1.reached_accuracy
 
+
+# noinspection PyPep8Naming
+class TestExamplesParallel(object):
+
+    def test_di_integrator_pure(self):
+
+        # only one run
+        results = aux.parallelizedTP(ff=rhs_di, xa=xa_di, xb=xb_di, ua=0, ub=0, use_chains=False)
+
+        assert len(results) == 1
+        assert results[0].reached_accuracy
+
+        # now vary two parameters
+        results = aux.parallelizedTP(ff=rhs_di, xa=xa_di, xb=xb_di, ua=0, ub=0, use_chains=False,
+                                     seed=[0, 1, 2], b=[1, 2])
+
+        assert len(results) == 6
+        assert [r.reached_accuracy for r in results] == [True]*len(results)
+
 if __name__ == "__main__":
     print("\n"*2 + r"   please run py.test -s -k-slow %filename.py"+ "\n")
     # or: py.test -s --pdbcls=IPython.terminal.debugger:TerminalPdb %filename
 
     tests = TestExamples()
+    tests2 = TestExamplesParallel()
 
     log.console_handler.setLevel(10)
 
@@ -260,6 +305,6 @@ if __name__ == "__main__":
     # tests.test_di_integrator_pure_with_penalties()
     # tests.test_di_integrator_pure_with_random_guess()
     print "-"*10
-    tests.test_di_timescaled_with_penalties()
+    tests2.test_di_integrator_pure()
     # tests.test_di_timescaled()
 

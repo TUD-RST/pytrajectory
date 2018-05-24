@@ -6,13 +6,13 @@ from collections import OrderedDict
 
 from splines import Spline, differentiate
 import splines
-from log import logging
+from log import Logger
 import auxiliary
 
 from ipydex import IPS
 
 
-class Trajectory(object):
+class Trajectory(Logger):
     """
     This class handles the creation and managing of the spline functions
     that are intended to approximate the desired systems trajectory.
@@ -28,6 +28,7 @@ class Trajectory(object):
     def __init__(self, masterobject, sys, **kwargs):
 
         self.masterobject = masterobject
+        self.init_logger(masterobject)
 
         # save the dynamical system
         self.sys = sys
@@ -114,7 +115,7 @@ class Trajectory(object):
         """
         
         if not self.sys.a <= t <= self.sys.b:
-            logging.warning("Time point 't' has to be in (a,b)")
+            self.log_warning("Time point 't' has to be in (a,b)")
             arr = None
         else:
             arr = np.array([self.x_fnc[xx](t) for xx in self.sys.states])
@@ -133,7 +134,7 @@ class Trajectory(object):
         """
         
         if not self.sys.a <= t <= self.sys.b:
-            #logging.warning("Time point 't' has to be in (a,b)")
+            #self.log_warning("Time point 't' has to be in (a,b)")
             arr = np.array([self.u_fnc[uu](self.sys.b) for uu in self.sys.inputs])
             ##:: self.u_fnc= {'u1':method Spline ddf} (because of chain 'x1'->'x2'->'u1')
         else:
@@ -153,7 +154,7 @@ class Trajectory(object):
         """
         
         if not self.sys.a <= t <= self.sys.b:
-            logging.warning("Time point 't' has to be in (a,b)")
+            self.log_warning("Time point 't' has to be in (a,b)")
             arr = None
         else:
             arr = np.array([self.dx_fnc[xx](t) for xx in self.sys.states])
@@ -170,7 +171,7 @@ class Trajectory(object):
         export : bool
             Whether or not return the created objects
         """
-        logging.debug("Initialise Splines")
+        self.log_debug("Initialise Splines")
         
         # store the old splines to calculate the guess later
         if not export:
@@ -246,6 +247,8 @@ class Trajectory(object):
                         if (i == 2):
                             splines[upper]._boundary_values[2] = bv[elem]
                             x_fnc[elem] = splines[upper].ddf  ##:: x_fnc={'x1': method Spline.f, x2': Spline.df, 'x3': Spline.f, 'x4': Spline.df}
+
+        # End of chain-handling
 
         # now handle the variables which are not part of any chain
         for i, xx in enumerate(self.sys.states):  ##:: ('x1',...,'xn')
@@ -327,7 +330,7 @@ class Trajectory(object):
 
         """
         # TODO: look for bugs here!
-        logging.debug("Set spline coefficients")
+        self.log_debug("Set spline coefficients")
 
         # task: find which of the free parameters (coeffs) belong to which spline object
         sol_bak = sol.copy()

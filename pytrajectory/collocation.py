@@ -6,7 +6,7 @@ from collections import OrderedDict
 from scipy import linalg
 import matplotlib.pyplot as plt
 
-from log import logging
+from log import Logger, logging
 from trajectories import Trajectory
 from solver import Solver
 
@@ -19,7 +19,7 @@ np.set_printoptions(threshold='nan') ##??
 
 
 # noinspection PyPep8Naming
-class CollocationSystem(object):
+class CollocationSystem(Logger):
     """
     This class represents the collocation system that is used
     to determine a solution for the free parameters of the
@@ -35,6 +35,7 @@ class CollocationSystem(object):
 
     def __init__(self, masterobject, dynsys, **kwargs):
         self.masterobject = masterobject  # reference for the supervising object
+        self.init_logger(masterobject)
 
         self.sys = dynsys  # the dynamical system under consideration
 
@@ -48,7 +49,7 @@ class CollocationSystem(object):
 
         tmp_par = kwargs.get('k', [1.0]*self.sys.n_par)
         if len(tmp_par) > self.sys.n_par:
-            logging.warning("Ignoring superfluous default values for afp.")
+            self.log_warning("Ignoring superfluous default values for afp.")
             tmp_par = tmp_par[:self.sys.n_par]
         elif len(tmp_par) < self.sys.n_par:
             raise ValueError("Insufficient number of default values for afp.")
@@ -62,6 +63,10 @@ class CollocationSystem(object):
 
         self.n_dof = None
         self.debugContainer = None
+
+        # storage for the actual function of the optimiziation Problem and its derivative
+        self.opt_problem_F = None
+        self.opt_problem_DF = None
 
         # get vectorized versions of the control system's vector field
         # and its jacobian for the faster evaluation of the collocation equation system `G`
@@ -88,7 +93,7 @@ class CollocationSystem(object):
 
         Parameters p are not affected by this kind of constraints
         """
-        logging.debug("Building Equation System")
+        self.log_debug("Building Equation System")
 
         # make symbols local
         states = self.sys.states  ##:: ('x1', 'x2', 'x3', 'x4')
@@ -537,10 +542,13 @@ class CollocationSystem(object):
                 return res
 
         # dbg (call the new functions)
-        z = np.zeros((F.argdim,))
         z = np.ones((F.argdim,))
         F(z)
         DF(z)
+
+        # save the optimization problem (for debugging)
+        self.opt_problem_F = F
+        self.opt_problem_DF = DF
 
         C = Container(F=F, DF=DF,
                       Mx=SMC.Mx, Mx_abs=SMC.Mx_abs,
@@ -794,7 +802,7 @@ class CollocationSystem(object):
 
                     # This is equivalent to `if True` from above
                     if (spline_type == 'x') or (spline_type == 'u'):
-                        logging.debug("Get new guess for spline {}".format(k))
+                        self.log_debug("Get new guess for spline {}".format(k))
 
                         s_new = self.trajectories.splines[k]
                         s_old = self.trajectories.old_splines[k]
@@ -952,7 +960,7 @@ class CollocationSystem(object):
         tt = refsol.tt
 
         for fnc, (k, v) in zip(fnc_list, self.trajectories.indep_vars.items()):
-            logging.debug("Get guess from refsol for spline {}".format(k))
+            self.log_debug("Get guess from refsol for spline {}".format(k))
             s_new = self.trajectories.splines[k]
 
             free_coeffs_guess = s_new.interpolate(fnc)
@@ -1014,7 +1022,7 @@ class CollocationSystem(object):
                      be initialized (default True)
         """
 
-        logging.debug("Solving Equation System")
+        self.log_debug("Solving Equation System")
 
         # create our solver
         ##:: note: x0 = [u,x,z_par]
