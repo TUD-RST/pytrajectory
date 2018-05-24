@@ -733,7 +733,7 @@ class TransitionProblem(Logger):
         mm = 1./25.4  # mm to inch
         scale = 8
         fs = [75*mm*scale, 35*mm*scale]
-        rows = np.round((len(data) + 1)/2.0 + .25)  # round up
+        rows = np.round((len(data) + 2)/2.0 + .25)  # round up
 
         par = self.get_par_values()
 
@@ -768,6 +768,14 @@ class TransitionProblem(Logger):
             plt.grid(1)
             plt.ylabel(labels[i])
         plt.legend(loc='best')
+
+        # show error between sim and col
+        plt.subplot(rows, 2, i + 2)
+        err = np.linalg.norm(np.array(data) - np.array(actual_spline_values), axis=0)
+        plt.title("log error")
+        plt.semilogy(tt, err)
+        plt.gca().axis([tt[0], tt[-1], 1e-5, 1e2])
+        plt.grid(1)
 
         # plt.subplot(rows, 2, i + 2)
         # plt.title("vf: f")
