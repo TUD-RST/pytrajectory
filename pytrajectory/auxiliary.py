@@ -365,7 +365,8 @@ def expr2callable(expr, xxs, uus, uurefs, ts, pps, uref_fnc, cse=False, squeeze_
         uref = uref_fnc(tt)
         if not uref.shape == uu.shape:
             # IPS()
-            assert False
+            msg = "shape mismatch: uref.shape={} but uu.shape={}".format(uref.shape, uu.shape)
+            raise ValueError(msg)
         xutp = stack((xx, uu, uref, tt, pp))
         res = _f_num_bc(*xutp)
         return res
@@ -1562,12 +1563,13 @@ def parallelizedTP(poolsize=3, save_results=True, debug=False, **kwargs):
     # use `Pool` from multiprocessing
     processor_pool = Pool(poolsize)
 
-
     if debug:
-        # rr = _solveTP(arglist[0])
-        result_list = list(map(_solveTP, arglist))
-    else:
+        save_results = False
 
+        # this calling modus is better to debug
+        result_list = list(map(_solveTP, arglist))
+        # result_list = rr = _solveTP(arglist[0])
+    else:
         result_list = processor_pool.map(_solveTP, arglist)
 
     if save_results:

@@ -64,6 +64,10 @@ class CollocationSystem(Logger):
         self.n_dof = None
         self.debugContainer = None
 
+        # storage for the actual function of the optimiziation Problem and its derivative
+        self.opt_problem_F = None
+        self.opt_problem_DF = None
+
         # get vectorized versions of the control system's vector field
         # and its jacobian for the faster evaluation of the collocation equation system `G`
         # and its jacobian `DG` (--> see self.build())
@@ -538,10 +542,13 @@ class CollocationSystem(Logger):
                 return res
 
         # dbg (call the new functions)
-        z = np.zeros((F.argdim,))
         z = np.ones((F.argdim,))
         F(z)
         DF(z)
+
+        # save the optimization problem (for debugging)
+        self.opt_problem_F = F
+        self.opt_problem_DF = DF
 
         C = Container(F=F, DF=DF,
                       Mx=SMC.Mx, Mx_abs=SMC.Mx_abs,
