@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-import sympy as sp
 import pickle
-import copy
 import time
 from collections import OrderedDict
+import numbers
 
 from collocation import CollocationSystem
 from simulation import Simulator
@@ -127,10 +126,14 @@ class TransitionProblem(Logger):
         self._parameters['show_ir'] = kwargs.get('show_ir', False)
         self._parameters['show_refsol'] = kwargs.get('show_refsol', False)
 
-
-        self.refsol = kwargs.get('refsol', None)  # this serves to reproduce a given trajectory
+        # this serves to reproduce a given trajectory
+        self.refsol = kwargs.get('refsol', None)
 
         self.tmp_sol = None  # place to store the result of the server
+
+        # if necessary change kwargs such that the seed value is in `first_guess`
+        # (needed before the creation of DynamicalSystem)
+        self._process_seed(kwargs)
 
         # create an object for the dynamical system
         self.dyn_sys = DynamicalSystem(f_sym=ff, masterobject=self, a=a, b=b, xa=xa, xb=xb,
@@ -552,6 +555,30 @@ class TransitionProblem(Logger):
                 self.log_warn("unexpected state in mainloop of outer iteration -> break loop")
                 break
 
+    def _process_seed(self, init_kwargs):
+        """
+        If the Parameter `seed` is passed, this should be the same as
+        first_guess={'seed': xyz}. (Calling convenience)
+
+        -> update kwargs["first_guess"] if necessary
+
+        :return: None
+        """
+
+        first_guess = init_kwargs.get("first_guess", None)
+        seed = init_kwargs.get("seed", None)
+
+        # only one of the two arguments is allowed -> at least one must be None
+        assert (first_guess is None) or (seed is None)
+
+        if seed is None:
+            # leave kwargs unchanged
+            return
+
+        assert isinstance(seed, numbers.Real)
+
+        init_kwargs["first_guess"] = {"seed": seed}
+
     def _process_first_guess(self):
         """
         In case of a provided guess of all free parameters (coefficients) this is the place to
@@ -560,6 +587,7 @@ class TransitionProblem(Logger):
         :return: None
         -------
         """
+
 
         if self.eqs._first_guess is None:
             return
