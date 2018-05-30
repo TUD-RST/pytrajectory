@@ -305,8 +305,8 @@ class Solver(Logger):
             if i > 1 and self.res > self.res_old:
                 self.log_warn("res_old > res  (should not happen)")
             spaces = " " * 20
-            msg = "sp=%d  nIt=%d   k=%f  %s res=%f"
-            self.log_debug(msg%(n_spln_prts, i, xs[-1], spaces, self.res))
+            msg = "sp=%d  LM_it=%d   k=%f  %s res=%f"
+            self.log_debug(msg % (n_spln_prts, i, xs[-1], spaces, self.res))
             
             self.cond_abs_tol = self.res <= self.tol
             if self.res > 1:
