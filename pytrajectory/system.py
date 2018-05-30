@@ -87,6 +87,8 @@ class TransitionProblem(Logger):
         first_guess   None            to initiate free parameters (might be useful: {'seed': value})
         refsol        Container       optional data (C.tt, C.xx, C.uu) for the reference trajectory
         progress_info (1, 1)          2-tuple which indicates the actual run w.r.t multiprocessing
+        mpc_th        np.inf          Threshold in which iteration switch on mpc for simulation
+                                      (default: +inf)
         ============= =============   ============================================================
     """
 
@@ -129,6 +131,7 @@ class TransitionProblem(Logger):
         # this serves to reproduce a given trajectory
         self.refsol = kwargs.get('refsol', None)
 
+        self.mpc_sim_threshold = kwargs.get("mpc_th", np.inf)  # mpc turned off by default
         self.tmp_sol = None  # place to store the result of the server
 
         # if necessary change kwargs such that the seed value is in `first_guess`
@@ -145,7 +148,7 @@ class TransitionProblem(Logger):
         # 2017-05-09 14:41:14
         # Note: there are two kinds of constraints handling:
         # (1) variable transformation (old, tested, also used by Graichen et al.)
-        # (2) penalty term (new, currently under development)
+        # (2) penalty term (new, currently under development)-> seems to work not so good
 
         self._preprocess_constraints(constraints)  # (constr.-type: "variable transformation")
 
@@ -165,6 +168,7 @@ class TransitionProblem(Logger):
         self.sim_data_xx = None
         self.sim_data_uu = None
         self.sim_data_tt = None
+        self.simulator = None
 
         # storage for the error w.r.t desired state
         self.sim_err = None
@@ -814,13 +818,16 @@ class TransitionProblem(Logger):
 
         par = self.get_par_values()
         # create simulation object
-        u_fnc = self.get_constrained_spline_fncs()[2]
-        S = Simulator(ff, T, start, u_fnc, z_par=par, dt=self._parameters['dt_sim'])
+        x_fncs, xdot_fncs, u_fnc = self.get_constrained_spline_fncs()
+
+        mpc_flag = self.nIt >= self.mpc_sim_threshold
+        self.simulator = Simulator(ff, T, start, x_col_fnc=x_fncs, u_col_fnc=u_fnc, z_par=par,
+                      dt=self._parameters['dt_sim'], mpc_flag=mpc_flag)
 
         self.log_debug("start: %s"%str(start))
 
         # forward simulation
-        self.sim_data = S.simulate()
+        self.sim_data = self.simulator.simulate()
 
         ##:: S.simulate() is a method,
         # returns a list [np.array(self.t), np.array(self.xt), np.array(self.ut)]

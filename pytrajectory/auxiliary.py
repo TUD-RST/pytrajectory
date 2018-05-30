@@ -1027,7 +1027,8 @@ def siumlate_with_input(tp, inputseq, n_parts ):
     tt = np.linspace(tp.a, tp.b, len(inputseq))
     # currently only for single input systems
     su1 = new_spline(tp.b, n_parts, (tt, inputseq), 'u1')
-    sim = Simulator(tp.dyn_sys.f_num_simulation, tp.b, tp.dyn_sys.xa, su1.f)
+    sim = Simulator(tp.dyn_sys.f_num_simulation, tp.b, tp.dyn_sys.xa, x_col_fnc=None,
+                    u_col_fnc=su1.f)
     tt, xx, uu = sim.simulate()
 
     return tt, xx, uu
@@ -1220,7 +1221,7 @@ def make_refsol_by_simulation(tp, u_values, plot_u=False, plot_x_idx=0):
     nu = len(np.atleast_1d(ufunc(Ta)))
     uref_func = broadcasting_wrapper(ufunc, original_shape=(nu, ))
 
-    sim = Simulator(ff, Tb, x_start, uref_func)
+    sim = Simulator(ff, Tb, x_start, x_col_fnc=None, u_col_fnc=uref_func)
     tt, xx, uu = sim.simulate()
     uu = np.atleast_2d(uu)
 
