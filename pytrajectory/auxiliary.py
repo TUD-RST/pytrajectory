@@ -624,7 +624,7 @@ def broadcasting_wrapper(original_fnc, original_shape=None, squeeze_axis=None):
         n_args = len(args_info)
     else:
         argspec = inspect.getargspec(original_fnc)
-        if not argspec.varargs is None and argspec.keywords is None and argspec.defaults is None:
+        if argspec.varargs is not None and argspec.keywords is None and argspec.defaults is None:
             msg = "Unexpected calling signature of original fnc"
             raise ValueError(msg)
 
