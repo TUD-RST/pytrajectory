@@ -20,7 +20,8 @@ from scipy.interpolate import interp1d
 
 import scipy as sc
 from ipydex import IPS, activate_ips_on_exception
-
+from sympy_to_c import sympy_to_c as sp2c
+import hashlib as hl
 
 activate_ips_on_exception()
 
@@ -57,21 +58,28 @@ def feedback_factory(vf_f, vf_g, xx, clcp_coeffs):
     # dieser schritt dauert ca. 1 min
     # ggf. sinnvoll: Konvertierung in c-code
 
+    # stack all 1-forms together
+    omega_matrix = sp.Matrix(omega_symb_list)
+    IPS()
 
-
-
-    omega_func_list = [st.expr_to_func(xx, w_i) for w_i in omega_symb_list]
+    omega_matrix_func = sp2c.convert_to_c(xx, omega_matrix, cfilepath="omega.c")
 
     # noinspection PyPep8Naming
     def feedback(xx_ref):
 
-        omega_list = [fnc(*xx_ref) for fnc in omega_func_list]
-        feedback_gain = st.to_np( sum([rho_i*w for (rho_i, w) in zip(clcp_coeffs, omega_list)]) )
+        omega_matrix = omega_matrix_func(*xx_ref)
+
+        # iterate row-wise over the matrix
+        feedback_gain = st.to_np( sum([rho_i*w for (rho_i, w) in zip(clcp_coeffs, omega_matrix)]) )
 
         return feedback_gain
 
     # now return that fabricated function
     return feedback
+
+
+def time_variant_controllability_matrix(vf_f, vf_g, xx_ref):
+    pass
 
 # test tracking control
 l = 5.
@@ -90,7 +98,6 @@ ggl = bb
 ff = ff2 = st.multi_taylor_matrix(ff, xx, x0=[0]*4, order=2)
 gg = gg2 = st.multi_taylor_matrix(gg, xx, x0=[0]*4, order=2)
 
-IPS()
 mod1 = st.SimulationModel(ff, gg, xx)
 
 # create some simple reference trajectory
@@ -98,14 +105,14 @@ mod1 = st.SimulationModel(ff, gg, xx)
 rhs1 = mod1.create_simfunction()
 
 tt = np.linspace(0, 10, 10000)
-xx0 = [0, 1, 0, 0]
+xx0 = np.array([0, .2, 0, 0])
 
 res1 = odeint(rhs1, xx0, tt)
 
 xref_fnc = interp1d(tt, res1.T)
 
 
-clcp_coeffs = st.coeffs((x1 + 3)**4)[::-1]
+clcp_coeffs = st.coeffs((x1 + 1)**4)[::-1]
 feedback_gain_func = feedback_factory(ff, gg, xx, clcp_coeffs)
 feedback_gain_func(xx0)
 
@@ -124,7 +131,7 @@ rhs2 = mod1.create_simfunction(controller_function=controller)
 # rhs2 = st.SimulationModel.exceptionwrapper(rhs2)
 
 # slight deviateion which we want to correct
-xx0b = [0, 1.02, 0, 0]
+xx0b = xx0 * 1.01
 res2 = odeint(rhs2, xx0b, tt)
 
 err = res1 - res2
