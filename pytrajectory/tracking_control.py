@@ -233,6 +233,7 @@ def time_variant_controllability_matrix(vf_f, vf_g, xx, uu):
     return st.col_stack(*cols)
 
 
+# noinspection PyPep8Naming
 def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
     """
 
@@ -240,16 +241,22 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
     :param gg:
     :param xx:
     :param uu:
+    :param clcp_coeffs:
     :return:
     """
 
     n = len(ff)
     assert len(xx) == n
 
+    clcp_coeffs = st.to_np(clcp_coeffs)
+    assert len(clcp_coeffs) == n + 1
+
     cfilepath = "k_timev.c"
 
-    # if we want to reuse the controller, we can skip the complete caluclation
-    # but we neet to know the number of arguments
+    # if we reuse the compiled code for the controller,
+    # we can skip the complete caluclation
+
+    input_data_hash = sp2c.reproducible_fast_hash([ff, gg, xx, uu])
 
     if use_exisiting_so == "smart":
         try:
@@ -257,7 +264,6 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
         except FileNotFoundError as ferr:
             use_exisiting_so = False
         else:
-            input_data_hash = sp2c.reproducible_fast_hash([ff, gg, xx, uu])
 
             if lib_meta_data.get("input_data_hash") == input_data_hash:
                 pass
@@ -295,7 +301,7 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
 
         ll = [diffop.MA_vect(lmd, order=i, subs_xref=False) for i in range(n+1)]
         # append a vector which contains kappa as first entries and 0s elsewhere
-        kappa_vector = sp.Matrix([kappa] + [0]*(n-1))
+        kappa_vector = sp.Matrix([kappa] + [0]*(n-1)).T
         ll.append(kappa_vector)
 
         L_matrix = st.row_stack(*ll)
@@ -310,37 +316,21 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
         L_matrix_func = sp2c.convert_to_c(xxuu, L_matrix_r, cfilepath=cfilepath,
                                           use_exisiting_so=False)
 
-    """
-
-        # this now comes from global
-        # clcp_coeffs = st.coeffs((x1 + 2) ** 4)[::-1]
-        assert len(clcp_coeffs) == len(ll)
-
-        k = lmd*0
-        for p, li in zip(clcp_coeffs, ll):
-            k += p*li
-        k = (k/kappa)
-
-
-        # noinspection PyUnresolvedReferences
-        kr = k.subs(rplm)
-
-        xxuu = list(zip(*rplm))[1]
-        nu = len(xxuu) - len(xx)
-    """
-
     def tv_feedback_gain(xref):
         args = list(xref) + [0]*nu
 
         ll_num_ext = L_matrix_func(*args)
-        ll_num = ll_num_ext[:n, :]
+        ll_num = ll_num_ext[:n+1, :]
 
         # extract kappa which we inserted into the L_matrix for convenience
-        kappa = ll_num_ext[n, 0]
+        kappa = ll_num_ext[n+1, 0]
 
         k = np.dot(clcp_coeffs, ll_num)/kappa
 
         return k
+
+    # return the fucntion
+    return tv_feedback_gain
 
 
 # test tracking control
@@ -365,51 +355,8 @@ else:
     ff = ff_o
     gg = gg_o
 
-
-K1 = time_variant_controllability_matrix(ff, gg, xx, uu)
-kappa = K1.det()
-
-#K1_inv = K1.inverse_ADJ()
-K1_adj = K1.adjugate()
-
-lmd = K1_adj[-1, :]
-
-diffop = DiffOpTimeVarSys(ff, gg, xx, uu)
-
-l0 = lmd
-l1 = diffop.MA_vect(lmd, subs_xref=False)
-l2 = diffop.MA_vect(lmd, order=2, subs_xref=False)
-l3 = diffop.MA_vect(lmd, order=3, subs_xref=False)
-l4 = diffop.MA_vect(lmd, order=4, subs_xref=False)
-
-ll = [l0, l1, l2, l3, l4]
-
-
-clcp_coeffs = st.coeffs((x1 + 2)**4)[::-1]
-assert len(clcp_coeffs) == len(ll)
-
-k = lmd * 0
-for p, li in zip(clcp_coeffs, ll):
-    k += p*li
-k = (k / kappa)
-IPS()
-
-maxorder = max([0] + [symb.difforder for symb in k.s])
-rplm = diffop.get_orig_ref_replm(maxorder)
-
-# noinspection PyUnresolvedReferences
-kr = k.subs(rplm)
-
-xxuu = list(zip(*rplm))[1]
-nu = len(xxuu) - len(xx)
-
-kfunc = sp2c.convert_to_c(xxuu, kr, cfilepath="k_timev.c",  use_exisiting_so=False)
-
-
-def tv_feedback_gain(xref):
-    args = list(xref) + [0]*nu
-    return kfunc(*args)
-
+clcp_coeffs = st.coeffs((x1 + 2) ** 4)[::-1]
+tv_feedback_gain = tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs)
 
 if 0:
     ff2 = st.multi_taylor_matrix(ff, xx, x0=[0]*4, order=2)
