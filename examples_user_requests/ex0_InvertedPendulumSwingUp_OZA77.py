@@ -14,8 +14,12 @@ import sys
 import matplotlib as mpl
 from pytrajectory.visualisation import Animation
 
+from pytrajectory import log
+log.console_handler.setLevel(10)
+
+
 # first, we define the function that returns the vectorfield
-def f(x,u):
+def f(x, u, uref=None, t=None, pp=None):
     x1, x2, x3, x4 = x  # system variables
     u1, = u             # input variable
 
@@ -24,21 +28,26 @@ def f(x,u):
 #x3 ... poloha voziku
 #x4 ... rychlost voziku
 #u1 ... zrychleni voziku (vstup)
-    
- 
+
+
     l = 0.15    # length of the pendulum
     g = 9.81    # gravitational acceleration
     b=0.0225    # tlumeni, treci koeficient
     bcoff=0.07   #b~
-    
+
     # this is the vectorfield
     ff = [          x2,
-                    g/l*sin(x1)-b/l*x2+1/l*u1*cos(x1),             #Case 1: pendulum mass concentrated in a mass point M
-                    #3/4*g/l*sin(x1)-bcoff*x2+3/4*1/l*u1*cos(x1),    #Case 2: pendulum mass is represented by a homogenous valve-shaped rod
+                    # g/l*sin(x1)-b/l*x2+1/l*u1*cos(x1),             #Case 1: pendulum mass concentrated in a mass point M
+                    3./4*g/l*sin(x1)-bcoff*x2 + 3./4*1/l*u1*cos(x1),    #Case 2: pendulum mass is represented by a homogenous valve-shaped rod
                     x4,
                     u1]
-    
+
     return ff
+
+## I used this for debugging (opens an interactive shell on the command line)
+## you can install the module with pip install ipydex
+# from ipydex import IPS
+# IPS()
 
 # then we specify all boundary conditions
 a = 0.0
