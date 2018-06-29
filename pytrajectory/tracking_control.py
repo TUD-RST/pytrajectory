@@ -30,7 +30,6 @@ activate_ips_on_exception()
 if sys.version_info[0] == 2:
     FileNotFoundError = IOError
 
-
 # noinspection PyPep8Naming
 def feedback_factory(vf_f, vf_g, xx, clcp_coeffs):
 
@@ -233,7 +232,7 @@ def time_variant_controllability_matrix(vf_f, vf_g, xx, uu):
     return st.col_stack(*cols)
 
 
-# noinspection PyPep8Naming
+# noinspection PyPep8Naming,PyShadowingNames
 def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
     """
 
@@ -242,6 +241,7 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
     :param xx:
     :param uu:
     :param clcp_coeffs:
+    :param use_exisiting_so:
     :return:
     """
 
@@ -257,6 +257,7 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
     # we can skip the complete caluclation
 
     input_data_hash = sp2c.reproducible_fast_hash([ff, gg, xx, uu])
+    print(input_data_hash)
 
     if use_exisiting_so == "smart":
         try:
@@ -278,17 +279,17 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
         try:
             nargs = sp2c.get_meta_data(cfilepath, reload_lib=True)["nargs"]
         except FileNotFoundError as ferr:
-            raise ferr
+            print("File not found. Unable to use exisiting shared libray.")
+            # noinspection PyTypeChecker
+            return tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so=False)
+
+        # now load the existing function
+        sopath = sp2c._get_so_path(cfilepath)
+        L_matrix_func = sp2c.load_func(sopath)
+
+        nu = nargs - n
 
     else:
-
-        """
-        Problemchen: "smart" nützt mir nich so viel, da zur hash-Berechnung der aufwendige
-        Algorithmus durchlaufen müsste.
-        
-        Was aber ginge: die Eingangsdaten (ff, gg, usw. hashen)
-        """
-
         K1 = time_variant_controllability_matrix(ff, gg, xx, uu)
         kappa = K1.det()
 
@@ -313,9 +314,14 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
         xxuu = list(zip(*rplm))[1]
         nu = len(xxuu) - len(xx)
 
-        L_matrix_func = sp2c.convert_to_c(xxuu, L_matrix_r, cfilepath=cfilepath,
-                                          use_exisiting_so=False)
+        # additional metadata
+        amd = dict(input_data_hash=input_data_hash,
+                   variables=xxuu)
 
+        L_matrix_func = sp2c.convert_to_c(xxuu, L_matrix_r, cfilepath=cfilepath,
+                                          use_exisiting_so=False, additional_metadata=amd)
+
+    # noinspection PyShadowingNames
     def tv_feedback_gain(xref):
         args = list(xref) + [0]*nu
 
@@ -417,18 +423,6 @@ IPS()
 Ideen, wie es weitergeht:
 
 C-Code erstellen
-
-echo `date`
-
-
-NAME="approx_lin_feedback$1"
-
-echo $NAME
-gcc -c -fPIC -lm $NAME.c
-gcc -shared $NAME.o -o $NAME.so
-
-
-
 
 LTI-Vergleich (klassische Ackermann-Formel)
 
