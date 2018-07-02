@@ -19,11 +19,20 @@ before_install:
   - conda update --yes conda
 
 install:
- - conda install --yes -c conda conda-env sympy numpy pytest ipython scipy matplotlib
+ - conda install --yes -c conda conda-env numpy pytest ipython scipy matplotlib
 # - conda create -n testenv --yes $DEPS pip python=$TRAVIS_PYTHON_VERSION
 # - source activate testenv
+# due to https://github.com/sympy/sympy/issues/12895
+# we need to install sympy directly from master
+ - pip install https://github.com/sympy/sympy/archive/master.zip
  - python -c "import sympy; print(sympy.__version__)"
  - python setup.py install
 
 # command to run tests
-script: py.test -v
+#script: py.test -v
+script:
+# run all tests
+  - py.test -v
+# for debugging one can execute some specific examples
+  # - python examples/ex1_InvertedPendulumTranslation.py log
+  # - python examples/ex3_Aircraft.py log

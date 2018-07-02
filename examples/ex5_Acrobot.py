@@ -1,9 +1,14 @@
 # acrobot
 
 # import trajectory class and necessary dependencies
-from pytrajectory import TransitionProblem
+import sys
+from pytrajectory import TransitionProblem, log
 import numpy as np
 from sympy import cos, sin
+
+
+if "log" in sys.argv:
+    log.console_handler.setLevel(10)
 
 
 def f(xx, uu, uuref, t, pp):

@@ -1,9 +1,14 @@
 # translation of the inverted pendulum
 
 # import trajectory class and necessary dependencies
-from pytrajectory import TransitionProblem
+import sys
+from pytrajectory import TransitionProblem, log
 from sympy import sin, cos
 import numpy as np
+
+
+if "log" in sys.argv:
+    log.console_handler.setLevel(10)
 
 
 def f(xx, uu, uref, t, p):
@@ -62,6 +67,7 @@ S.solve()
 import sys
 import matplotlib as mpl
 from pytrajectory.visualisation import Animation
+
 
 def draw(xti, image):
     x = xti[0]
