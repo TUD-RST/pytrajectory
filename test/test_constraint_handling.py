@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from pip.cmdoptions import constraints
 
 from pytrajectory import TransitionProblem
 import pytrajectory.auxiliary as aux
