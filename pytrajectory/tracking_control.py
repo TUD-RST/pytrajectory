@@ -30,6 +30,7 @@ activate_ips_on_exception()
 if sys.version_info[0] == 2:
     FileNotFoundError = IOError
 
+
 # noinspection PyPep8Naming
 def feedback_factory(vf_f, vf_g, xx, clcp_coeffs):
 
@@ -322,8 +323,12 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
                                           use_exisiting_so=False, additional_metadata=amd)
 
     # noinspection PyShadowingNames
-    def tv_feedback_gain(xref):
-        args = list(xref) + [0]*nu
+    def tv_feedback_gain(xref, uuref=None):
+
+        if uuref is None:
+            args = list(xref) + [0]*nu
+        else:
+            args = list(xref) + list(uuref)
 
         ll_num_ext = L_matrix_func(*args)
         ll_num = ll_num_ext[:n+1, :]
@@ -335,6 +340,8 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
 
         return k
 
+    # store the information about how many derivatives of u are needed (incl. 0th)
+    tv_feedback_gain.nu = nu
     # return the fucntion
     return tv_feedback_gain
 
@@ -373,11 +380,75 @@ if 0:
 
 mod1 = st.SimulationModel(ff, gg, xx)
 
-# create some simple reference trajectory
-# assume input zero
-rhs1 = mod1.create_simfunction()
 
-tt = np.linspace(0, 10, 10000)
+Tend = 10
+
+# calculate ref-input for swingup:
+
+ffl = sp.lambdify(list(xx)+list(uu), list(ff+gg*u1), modules=["sympy"])
+
+
+def pytraj_f(xx, uu, uuref, t, pp):
+
+    args = list(xx) + list(uu)
+    return ffl(*args)
+
+
+from pytrajectory import TransitionProblem
+from pytrajectory import log, aux
+log.console_handler.setLevel(10)
+
+a = 0.0
+xa = [0.0, 0.0, 0.0, 0.0]
+
+b = 3.0
+xb = [0.0, np.pi, 0.0, 0.0]
+
+ua = [0.0]
+ub = [0.0]
+
+
+pfname = "swingup_splines.pcl"
+if 1:
+    first_guess = {'seed': 20}
+    S = TransitionProblem(pytraj_f, a, b, xa, xb, ua, ub, first_guess=first_guess, kx=2, eps=5e-2,
+                          use_chains=False) # , sol_steps=1300
+
+    # time to run the iteration
+    solC = S.solve(return_format="info_container")
+
+    cont_dict = aux.containerize_splines(S.eqs.trajectories.splines)
+
+    with open(pfname, "wb") as pfile:
+        pickle.dump(cont_dict, pfile)
+
+else:
+    with open(pfname, "rb") as pfile:
+        cont_dict = pickle.load(pfile)
+
+
+
+# speichern, laden, und als ref-input verwenden.
+
+# ggf. Eingang mit Gauss-Prozess interpolieren, um C-inf Verlauf zu bekommen
+
+IPS()
+exit()
+
+
+def refinput(t, difforder=0):
+    if difforder == 0:
+        return 1
+    else:
+        return 0
+
+
+
+# create some simple reference trajectory
+rhs1 = mod1.create_simfunction(input_function=refinput)
+
+
+tt = np.linspace(0, Tend, 10000)
 xx0 = np.array([0, .2, 0, 0])
 
 res1 = odeint(rhs1, xx0, tt)
@@ -389,10 +460,16 @@ def controller(x, t):
     xref = xref_fnc(min(t, tt[-1]))
     x = np.atleast_1d(x)
 
+    nu = tv_feedback_gain.nu
+    uuref = [refinput(t, i) for i in range(nu+1)]
+
     # u_corr = - np.dot(feedback_gain_func(xref), (x-xref))
     u_corr = - np.dot(tv_feedback_gain(xref), (x-xref))
-    print(t, u_corr)
-    return u_corr
+    print(t, uuref, u_corr, np.linalg.norm(x-xref))
+
+    u_total = refinput(t) + u_corr
+
+    return u_total
 
 
 rhs2 = mod1.create_simfunction(controller_function=controller)
@@ -400,7 +477,7 @@ rhs2 = mod1.create_simfunction(controller_function=controller)
 # rhs2 = st.SimulationModel.exceptionwrapper(rhs2)
 
 # slight deviateion which we want to correct
-xx0b = xx0 * 2
+xx0b = xx0 * 1.2
 res2 = odeint(rhs2, xx0b, tt)
 
 err = res1 - res2

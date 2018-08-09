@@ -364,7 +364,7 @@ class TransitionProblem(Logger):
 
         :return:   Conainer
         """
-        import pytrajectory  # avoid circular imports
+        import pytrajectory  # this import is not placed at the to to avoid circular imports
 
         msg = "See system.return_sol_info_container for information about the attributes."
         sol_info = auxiliary.ResultContainer(aaa_info=msg)
