@@ -1265,35 +1265,70 @@ def get_xx_uu_funcs_from_containerdict(cdict):
     """
     traj_splines = unpack_splines_from_containerdict(cdict)
 
-    xx_splines = [v for k,v in traj_splines.items() if k.startswith("x")]
-    uu_splines = [v for k,v in traj_splines.items() if k.startswith("u")]
+    xx_splines = [v for k, v in traj_splines.items() if k.startswith("x")]
+    uu_splines = [v for k, v in traj_splines.items() if k.startswith("u")]
+
+    x1spl = xx_splines[0]
+    a, b = x1spl.a, x1spl.b
+
+    def cond(tt):
+        c0 = tt < a
+        c1 = (a <= tt) * (tt <= b)
+        c2 = b < tt
+
+        return c0, c1, c2
 
     def xx_func(tt):
-        return np.array([spl.f_vectorized(tt) for spl in xx_splines]).T
+        c0, c1, c2 = cond(tt)
+
+        ttc = np.clip(tt, a, b)
+        res = np.array([spl.f_vectorized(ttc) for spl in xx_splines]).T*c1
+
+        # constant continuation in both directions (byond [a, b])
+        res += c0*np.array([spl.f_vectorized(a) for spl in xx_splines]).T
+        res += c2*np.array([spl.f_vectorized(b) for spl in xx_splines]).T
+        return res
 
     def uu_func(tt):
-        return np.array([spl.f_vectorized(tt) for spl in uu_splines]).T
+        c0, c1, c2 = cond(tt)
+
+        ttc = np.clip(tt, a, b)
+        res = np.array([spl.f_vectorized(ttc) for spl in uu_splines]).T*c1
+
+        # constant continuation in both directions (byond [a, b])
+        res += c0*np.array([spl.f_vectorized(a) for spl in uu_splines]).T
+        res += c2*np.array([spl.f_vectorized(b) for spl in uu_splines]).T
+        return res
+
+    # ship the interval boundaries as attributes
+
+    xx_func.a = a
+    xx_func.b = b
+    uu_func.a = a
+    uu_func.b = b
 
     # define the derivatives as attributes of the functions
     fnc_spl_tuples = [(xx_func, xx_splines), (uu_func, uu_splines)]
     names = ["df", "ddf", "dddf"]
 
+    def fnc_factory(attrname, spl_list):
+        def tmpfnc(tt):
+            c0, c1, c2 = cond(tt)
+
+            ttc = np.clip(tt, a, b)
+            # set all derivatives to zero outside [a, b]
+            res = np.array([getattr(spl, attrname)(ttc) for spl in spl_list]).T*c1
+            return res
+
+        return tmpfnc
+
     for fnc, spl_list in fnc_spl_tuples:
         for n in names:
             attrname = n + "_vectorized"
-
-            def tmpfnc(tt):
-                return np.array([getattr(spl, attrname)(tt) for spl in spl_list]).T
+            tmpfnc = fnc_factory(attrname, spl_list)
 
             setattr(fnc, n, tmpfnc)
 
-    # ship the interval boundaries as attributes
-    x1spl = xx_splines[0]
-
-    xx_func.a = x1spl.a
-    xx_func.b = x1spl.b
-    uu_func.a = x1spl.a
-    uu_func.b = x1spl.b
 
     return xx_func, uu_func
 
