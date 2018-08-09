@@ -1275,7 +1275,20 @@ def get_xx_uu_funcs_from_containerdict(cdict):
     def uu_func(tt):
         return np.array([spl.f_vectorized(tt) for spl in uu_splines]).T
 
-    # ship the interval borders as attributes to the functions
+    # define the derivatives as attributes of the functions
+    fnc_spl_tuples = [(xx_func, xx_splines), (uu_func, uu_splines)]
+    names = ["df", "ddf", "dddf"]
+
+    for fnc, spl_list in fnc_spl_tuples:
+        for n in names:
+            attrname = n + "_vectorized"
+
+            def tmpfnc(tt):
+                return np.array([getattr(spl, attrname)(tt) for spl in spl_list]).T
+
+            setattr(fnc, n, tmpfnc)
+
+    # ship the interval boundaries as attributes
     x1spl = xx_splines[0]
 
     xx_func.a = x1spl.a
