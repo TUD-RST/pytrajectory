@@ -1219,11 +1219,11 @@ def containerize_splines(splinedict):
     return res
 
 
-def unpack_splines_from_containerdict(self):
+def unpack_splines_from_containerdict(cdict):
     """
     Iterate over all containers of self and return the matching Spline
 
-    :param self: OderedDict of Containers
+    :param cdict: OderedDict of Containers
     :return: OrderedDict of Splines
     """
 
@@ -1242,13 +1242,48 @@ def unpack_splines_from_containerdict(self):
         S._coeffs_sym = c._coeffs_sym.copy()
         S._prov_flag = c._prov_flag
         S._indep_coeffs = c._indep_coeffs.copy()
+
+        # convenience functions:
+
+        S.f_vectorized = np.vectorize(S.f)
+        S.df_vectorized = np.vectorize(S.df)
+        S.ddf_vectorized = np.vectorize(S.ddf)
+        S.dddf_vectorized = np.vectorize(S.dddf)
+
         return S
 
     res = OrderedDict()
-    for k, v in self.items():
+    for k, v in cdict.items():
         res[k] = container_to_spline(v)
 
     return res
+
+
+def get_xx_uu_funcs_from_containerdict(cdict):
+    """
+    Create convenient vectorized functions for evaluating the collocation solution
+    :return:
+    """
+    traj_splines = unpack_splines_from_containerdict(cdict)
+
+    xx_splines = [v for k,v in traj_splines.items() if k.startswith("x")]
+    uu_splines = [v for k,v in traj_splines.items() if k.startswith("u")]
+
+    def xx_func(tt):
+        return np.array([spl.f_vectorized(tt) for spl in xx_splines]).T
+
+    def uu_func(tt):
+        return np.array([spl.f_vectorized(tt) for spl in uu_splines]).T
+
+    # ship the interval borders as attributes to the functions
+    x1spl = xx_splines[0]
+
+    xx_func.a = x1spl.a
+    xx_func.b = x1spl.b
+    uu_func.a = x1spl.a
+    uu_func.b = x1spl.b
+
+    return xx_func, uu_func
 
 
 # noinspection PyPep8Naming
