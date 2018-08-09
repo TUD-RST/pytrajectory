@@ -14,6 +14,7 @@ import inspect
 import itertools as it
 import pickle
 from multiprocessing import Pool
+import types
 
 import splines
 from simulation import Simulator
@@ -30,11 +31,6 @@ class Container(object):
     """
     Simple and flexible data structure to store all kinds of objects
     """
-
-    # prevent pycharm from complaining (in a special usecase of this class)
-    tt = None
-    xx = None
-    uu = None
 
     def __init__(self, **kwargs):
         for key, value in kwargs.iteritems():
@@ -1191,6 +1187,70 @@ def copy_splines(splinedict):
     return res
 
 
+def containerize_splines(splinedict):
+    """
+    Store all relevant attributes of the splines in Containers and return a dict of these.
+    Used to pickle the splines without information loss.
+
+    :param splinedict:
+    :return:
+    """
+
+    if splinedict is None:
+        return None
+
+    res = OrderedDict()
+    for k, v in splinedict.items():
+        # noinspection PyProtectedMember
+        C = Container(a=v.a, b=v.b, n=v.n, tag=v.tag,
+                      _boundary_values=v._boundary_values,
+                      _use_std_approach=v._use_std_approach,
+                      masterobject=None,
+                      _dep_array=v._dep_array,
+                      _dep_array_abs = v._dep_array_abs,
+                      _steady_flag=v._steady_flag,
+                      _coeffs=v._coeffs,
+                      _coeffs_sym=v._coeffs_sym,
+                      _prov_flag=v._prov_flag,
+                      _indep_coeffs=v._indep_coeffs.copy(),
+                      )
+        res[k] = C
+
+    return res
+
+
+def unpack_splines_from_containerdict(self):
+    """
+    Iterate over all containers of self and return the matching Spline
+
+    :param self: OderedDict of Containers
+    :return: OrderedDict of Splines
+    """
+
+    # noinspection PyProtectedMember
+    def container_to_spline(c):
+        S = splines.Spline(c.a, c.b, n=c.n, tag=c.tag, bv=c._boundary_values,
+                           use_std_approach=c._use_std_approach)
+        S.masterobject = c.masterobject
+        S._dep_array = c._dep_array.copy()
+        S._dep_array_abs = c._dep_array_abs.copy()
+        # S._steady_flag = v._steady_flag
+        if c._steady_flag:
+            S.make_steady()
+        S._coeffs = c._coeffs.copy()
+        S.set_coefficients(coeffs=c._coeffs)
+        S._coeffs_sym = c._coeffs_sym.copy()
+        S._prov_flag = c._prov_flag
+        S._indep_coeffs = c._indep_coeffs.copy()
+        return S
+
+    res = OrderedDict()
+    for k, v in self.items():
+        res[k] = container_to_spline(v)
+
+    return res
+
+
 # noinspection PyPep8Naming
 def make_refsol_by_simulation(tp, u_values, plot_u=False, plot_x_idx=0):
     """
@@ -1310,7 +1370,7 @@ def random_refsol_xx(tt, xa, xb, n_points, x_lower, x_upper, seed=0):
     """
     Generates some random spline curves respecting boundaray conditions and limits.
     This "solution" will in general not be compatible with the system dynamics.
-     It might serve as (random) initial guess.
+    It might serve as (random) initial guess.
 
     :param tt:
     :param xa:
@@ -1396,7 +1456,7 @@ def get_attributes_from_object(obj):
     Use some magic from inspect module to get the left-hand-side of the line calling this function
     and from this information we get the desired names
 
-    x, y, z, a, b, c = get_variables_from_object(myContainer)
+    x, y, z, a, b, c = get_attributes_from_object(myContainer)
 
     This function is intended to avoid redundancy and space in situations like
     x = myContainer.x

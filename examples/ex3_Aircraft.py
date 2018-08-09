@@ -1,10 +1,15 @@
 # vertical take-off aircraft
 
 # import trajectory class and necessary dependencies
-from pytrajectory import TransitionProblem
+import sys
+from pytrajectory import TransitionProblem, log
 from sympy import sin, cos
 import numpy as np
 from numpy import pi
+
+
+if "log" in sys.argv:
+    log.console_handler.setLevel(10)
 
 
 def f(xx, uu, uuref, t, pp):
