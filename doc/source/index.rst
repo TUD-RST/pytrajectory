@@ -10,7 +10,7 @@ Welcome to PyTrajectory's documentation!
 This documentation is built automatically from the source code.
 
 * Repo: `https://github.com/TUD-RST/pytrajectory <https://github.com/TUD-RST/pytrajectory>`_.
-* commit-date: 2018-07-02 17:39:41
+* commit-date: 2018-08-09 18:08:55
 
 .. +++ Marker-Comment: the line two lines above will be changed by pre-commit-hook +++
 

@@ -26,7 +26,7 @@ from distutils.version import LooseVersion
 __version__ = '1.5.1'
 
 # +++ Marker-Comment: next line will be changed by pre-commit-hook +++
-__date__ = "2018-07-02 17:39:41"
+__date__ = "2018-08-09 18:08:55"
 
 
 # check versions of dependencies
