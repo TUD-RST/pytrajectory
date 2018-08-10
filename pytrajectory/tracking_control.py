@@ -22,7 +22,6 @@ from scipy.interpolate import interp1d
 import scipy as sc
 from ipydex import IPS, activate_ips_on_exception
 from sympy_to_c import sympy_to_c as sp2c
-import hashlib as hl
 
 activate_ips_on_exception()
 
@@ -340,8 +339,10 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
 
         return k
 
-    # store the information about how many derivatives of u are needed (incl. 0th)
+    # ship the information and internal functions to the outside
     tv_feedback_gain.nu = nu
+    tv_feedback_gain.n = n
+    tv_feedback_gain.L_matrix_func = L_matrix_func
     # return the fucntion
     return tv_feedback_gain
 
@@ -368,7 +369,7 @@ else:
     ff = ff_o
     gg = gg_o
 
-clcp_coeffs = st.coeffs((x1 + 2) ** 4)[::-1]
+clcp_coeffs = st.coeffs((x1 + 3) ** 4)[::-1]
 tv_feedback_gain = tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs)
 
 if 0:
@@ -380,8 +381,9 @@ if 0:
 
 mod1 = st.SimulationModel(ff, gg, xx)
 
+detQc = st.nl_cont_matrix(ff, gg, xx, n_extra_cols=0).berkowitz_det()
+detQc_func = sp.lambdify(xx, detQc, modules="numpy")
 
-Tend = 10
 
 # calculate ref-input for swingup:
 
@@ -407,9 +409,11 @@ xb = [0.0, np.pi, 0.0, 0.0]
 ua = [0.0]
 ub = [0.0]
 
+Tend = b + 5  # ensure meaningfull input if increasing
+
 
 pfname = "swingup_splines.pcl"
-if 1:
+if 0:
     first_guess = {'seed': 20}
     S = TransitionProblem(pytraj_f, a, b, xa, xb, ua, ub, first_guess=first_guess, kx=2, eps=5e-2,
                           use_chains=False) # , sol_steps=1300
@@ -426,34 +430,69 @@ else:
     with open(pfname, "rb") as pfile:
         cont_dict = pickle.load(pfile)
 
+xxf, uuf = aux.get_xx_uu_funcs_from_containerdict(cont_dict)
+
+tt = np.linspace(uuf.a, uuf.b, 1000)
+
+if 0:
+    # Visualize derivative
+    dt = tt[1] - tt[0]
+    uu_0 = uuf(tt)[:, 0]
+    uu_1 = np.diff(uu_0) / dt
+    uu_2 = np.diff(uu_0, 2) / dt**2
+    uu_3 = np.diff(uu_0, 3) / dt**3
+
+    plt.plot(tt[1:-2], uu_3)
+    plt.plot(tt, uuf.dddf(tt))
+    plt.show()
+    exit()
+
+# Vorgehen: alle höheren Ableitungen 0 setzen
+zerof = lambda tt: 0*tt
+# ggf. Eingang mit Gauss-Prozess interpolieren, um C-inf Verlauf zu bekommen)
 
 
-# speichern, laden, und als ref-input verwenden.
-
-# ggf. Eingang mit Gauss-Prozess interpolieren, um C-inf Verlauf zu bekommen
-
-IPS()
-exit()
+refinput_list = [uuf, uuf.df, uuf.ddf, uuf.dddf] + [zerof]*10
 
 
-def refinput(t, difforder=0):
+def refinput_old(t, difforder=0):
     if difforder == 0:
         return 1
     else:
         return 0
 
+w = 2*sp.pi*0.3
+ts = sp.Symbol("t")
+uexpr = 0.3*sp.cos(w*ts)
+uu_funcs = [sp.lambdify(ts, uexpr.diff(ts, i), modules="numpy") for i in range(10)]
 
+
+def refinput_sin(t, difforder=0):
+    if difforder > 10:
+        return 0
+
+    return uu_funcs[difforder](t)
+
+
+def refinput_new(t, difforder=0):
+    return refinput_list[difforder](t)
+
+
+refinput = refinput_sin
 
 # create some simple reference trajectory
 rhs1 = mod1.create_simfunction(input_function=refinput)
 
 
-tt = np.linspace(0, Tend, 10000)
+tt = np.linspace(0, Tend, 1000)
+xx0 = np.array(xa)
 xx0 = np.array([0, .2, 0, 0])
 
 res1 = odeint(rhs1, xx0, tt)
 
 xref_fnc = interp1d(tt, res1.T)
+
+IPS()
 
 
 def controller(x, t):
@@ -461,28 +500,109 @@ def controller(x, t):
     x = np.atleast_1d(x)
 
     nu = tv_feedback_gain.nu
-    uuref = [refinput(t, i) for i in range(nu+1)]
+    uuref = [refinput(t, i) for i in range(nu)]
 
     # u_corr = - np.dot(feedback_gain_func(xref), (x-xref))
-    u_corr = - np.dot(tv_feedback_gain(xref), (x-xref))
+    u_corr = - np.dot(tv_feedback_gain(xref, uuref), (x-xref))
     print(t, uuref, u_corr, np.linalg.norm(x-xref))
 
-    u_total = refinput(t) + u_corr
+    u_total = refinput(t) + u_corr*1
 
-    return u_total
+    limit = 1e5
+
+    u_total_clipped = np.clip(u_total, -limit, limit)
+
+    return u_total_clipped
+
+
+def ll_ext_values(tt):
+    """
+    Evaluate the C-Code for debugging
+
+    :param tt:
+    :return:
+    """
+
+    res = []
+    for t in tt:
+        xref = xref_fnc(t)
+        nu = tv_feedback_gain.nu
+        uuref = [refinput(t, i) for i in range(nu)]
+
+        args = list(xref) + list(uuref)
+
+        ll_num_ext = tv_feedback_gain.L_matrix_func(*args)
+
+        res.append(ll_num_ext)
+
+    return np.array(res)
+
 
 
 rhs2 = mod1.create_simfunction(controller_function=controller)
 
 # rhs2 = st.SimulationModel.exceptionwrapper(rhs2)
 
-# slight deviateion which we want to correct
-xx0b = xx0 * 1.2
+# slight deviation which we want to correct
+xx0b = xx0*1.1
+tto = tt*1
+
+tmax = 5.5
+tt = tto[tto < tmax]
+
 res2 = odeint(rhs2, xx0b, tt)
 
-err = res1 - res2
+plt.figure(figsize=(15, 10))
+Nplots = 4
 
-plt.plot(tt, err)
+ax1 = plt.subplot(Nplots, 1, 1)
+
+plt.plot(tto, res1, '--', label="orig")
+plt.plot(tt, res2, label="new")
+plt.legend()
+
+
+plt.subplot(Nplots, 1, 2, sharex=ax1)
+err = res1[tto < tmax, :] - res2
+
+# plt.plot(tt, err)
+plt.semilogy(tt, np.abs(err))
+
+plt.subplot(Nplots, 1, 3, sharex=ax1)
+
+if 1:
+    u_final = np.array([controller(state, t) for state, t in zip(res2, tt)])
+    plt.plot(tt, u_final)
+    plt.plot(tt, refinput(tt))
+
+    plt.subplot(Nplots, 1, 4, sharex=ax1)
+
+    plt.plot(tt, refinput(tt, difforder=1))
+    plt.plot(tt, refinput(tt, difforder=2))
+    plt.plot(tt, refinput(tt, difforder=3))
+
+elif 1:
+
+    LLe = ll_ext_values(tt)
+    kappa = LLe[:, -1, 0]  # = detQctv
+    LL = LLe[:, :-1, :]
+    # shape: (n_tt,  nx+1, nx)
+    # we want (n_tt, (nx+1)*nx)
+    LL2 = LL.reshape(LL.shape[0], -1)
+    plt.plot(tt, LL2)
+    plt.title("ll")
+
+    plt.subplot(Nplots, 1, 4, sharex=ax1)
+    plt.plot(tt, 1/kappa)
+
+    plt.plot(tto, 1/detQc_func(*res1.T))
+
+
+    plt.title("1/det")
+
+# plt.semilogy(tto, np.abs(detQc_func(*res1.T)))
+# plt.title("det")
+
 plt.show()
 
 
