@@ -369,7 +369,7 @@ else:
     ff = ff_o
     gg = gg_o
 
-clcp_coeffs = st.coeffs((x1 + 3) ** 4)[::-1]
+clcp_coeffs = st.coeffs((x1 + 2) ** 4)[::-1]
 tv_feedback_gain = tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs)
 
 if 0:
@@ -409,7 +409,7 @@ xb = [0.0, np.pi, 0.0, 0.0]
 ua = [0.0]
 ub = [0.0]
 
-Tend = b + 5  # ensure meaningfull input if increasing
+Tend = b + 0  # ensure meaningfull input if increasing
 
 
 pfname = "swingup_splines.pcl"
@@ -455,7 +455,7 @@ zerof = lambda tt: 0*tt
 refinput_list = [uuf, uuf.df, uuf.ddf, uuf.dddf] + [zerof]*10
 
 
-def refinput_old(t, difforder=0):
+def refinput_const(t, difforder=0):
     if difforder == 0:
         return 1
     else:
@@ -474,19 +474,19 @@ def refinput_sin(t, difforder=0):
     return uu_funcs[difforder](t)
 
 
-def refinput_new(t, difforder=0):
+def refinput_swingup(t, difforder=0):
     return refinput_list[difforder](t)
 
 
-refinput = refinput_sin
+refinput = refinput_swingup
 
 # create some simple reference trajectory
 rhs1 = mod1.create_simfunction(input_function=refinput)
 
 
 tt = np.linspace(0, Tend, 1000)
-xx0 = np.array(xa)
 xx0 = np.array([0, .2, 0, 0])
+xx0 = np.array(xa)
 
 res1 = odeint(rhs1, xx0, tt)
 
@@ -544,10 +544,10 @@ rhs2 = mod1.create_simfunction(controller_function=controller)
 # rhs2 = st.SimulationModel.exceptionwrapper(rhs2)
 
 # slight deviation which we want to correct
-xx0b = xx0*1.1
+xx0b = xx0 + np.array([0, 0.1*np.pi/180, 0, 0])
 tto = tt*1
 
-tmax = 5.5
+tmax = 1.9
 tt = tto[tto < tmax]
 
 res2 = odeint(rhs2, xx0b, tt)
@@ -559,6 +559,7 @@ ax1 = plt.subplot(Nplots, 1, 1)
 
 plt.plot(tto, res1, '--', label="orig")
 plt.plot(tt, res2, label="new")
+plt.plot(tto, tto*0+np.pi, 'k:')
 plt.legend()
 
 
@@ -570,7 +571,7 @@ plt.semilogy(tt, np.abs(err))
 
 plt.subplot(Nplots, 1, 3, sharex=ax1)
 
-if 1:
+if 0:
     u_final = np.array([controller(state, t) for state, t in zip(res2, tt)])
     plt.plot(tt, u_final)
     plt.plot(tt, refinput(tt))
