@@ -3,9 +3,7 @@ This file is part of PyTrajectory.
 """
 
 from distutils.core import setup
-import pytrajectory
-
-__version__ = pytrajectory.__version__
+from pytrajectory.release import __version__
 
 with open("requirements.txt") as requirements_file:
     requirements = requirements_file.read()

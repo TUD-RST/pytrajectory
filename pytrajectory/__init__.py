@@ -10,23 +10,23 @@ import numpy
 import scipy
 import sympy
 
-from system import TransitionProblem, ControlSystem
-from trajectories import Trajectory
-from splines import Spline
+from .system import TransitionProblem, ControlSystem
+from .trajectories import Trajectory
+from .splines import Spline
 import splines
-from solver import Solver
-from simulation import Simulator
-from visualisation import Animation
-from log import logging
+from .solver import Solver
+from .simulation import Simulator
+from .visualisation import Animation
+from .log import logging
 from auxiliary import penalty_expression
 import auxiliary as aux
 from distutils.version import LooseVersion
 
 # current version
-__version__ = '1.5.1'
+from release import __version__
 
 # +++ Marker-Comment: next line will be changed by pre-commit-hook +++
-__date__ = "2018-08-17 16:47:29"
+__date__ = "2019-03-04 15:01:29"
 
 
 # check versions of dependencies
