@@ -206,7 +206,7 @@ where :math:`[x_1, x_2, x_3, x_4] = [x_w, \dot{x_w}, \varphi, \dot{\varphi}]` an
    \end{eqnarray*}
 
 To solve this problem we first have to define a function that returns the vectorfield of
-the system above. Therefor it is important that you use SymPy functions if necessary, which is
+the system above. Therefore it is important that you use SymPy functions if necessary, which is
 the case here with :math:`sin` and :math:`cos`.
 
 So in Python this would be ::

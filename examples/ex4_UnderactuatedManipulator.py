@@ -1,14 +1,24 @@
 # underactuated manipulator
 
 # import trajectory class and necessary dependencies
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 import numpy as np
 from sympy import cos, sin
 
-# define the function that returns the vectorfield
-def f(x,u):
-    x1, x2, x3, x4  = x     # state variables
-    u1, = u                 # input variable
+
+def f(xx, uu, uuref, t, pp):
+    """ Right hand side of the vectorfield defining the system dynamics
+
+    :param xx:       state
+    :param uu:       input
+    :param uuref:    reference input (not used)
+    :param t:        time (not used)
+    :param pp:       additionial free parameters  (not used)
+
+    :return:        xdot
+    """
+    x1, x2, x3, x4  = xx     # state variables
+    u1, = uu                 # input variable
     
     e = 0.9     # inertia coupling
     
@@ -39,7 +49,7 @@ ua = [0.0]
 ub = [0.0]
 
 # create trajectory object
-S = ControlSystem(f, a=0.0, b=1.8, xa=xa, xb=xb, ua=ua, ub=ub)
+S = TransitionProblem(f, a=0.0, b=1.8, xa=xa, xb=xb, ua=ua, ub=ub)
 
 # also alter some method parameters to increase performance
 S.set_param('su', 20)

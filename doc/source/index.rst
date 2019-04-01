@@ -6,9 +6,14 @@
 Welcome to PyTrajectory's documentation!
 ========================================
 
-.. Placeholder for the datetime string of latest commit
 
-This documentation is built automatically from the source code (commit: 2016-01-15 14:12:08)
+This documentation is built automatically from the source code.
+
+* Repo: `https://github.com/TUD-RST/pytrajectory <https://github.com/TUD-RST/pytrajectory>`_.
+* commit-date: 2019-04-01 21:31:03
+
+.. +++ Marker-Comment: the line two lines above will be changed by pre-commit-hook +++
+
 
 .. toctree::
    :maxdepth: 2

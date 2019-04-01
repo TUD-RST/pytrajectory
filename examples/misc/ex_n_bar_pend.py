@@ -1,7 +1,7 @@
 # N-bar pendulum
 
 # import all we need for solving the problem
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 import numpy as np
 import sympy as sp
 from sympy import cos, sin
@@ -347,7 +347,7 @@ if __name__=='__main__':
            1 : [-5.0, 5.0]}
     
     # now we create our Trajectory object and alter some method parameters via the keyword arguments
-    S = ControlSystem(f, a, b, xa, xb, ua, ub, constraints=con, eps=4e-1, su=20, kx=2, use_chains=False)
+    S = TransitionProblem(f, a, b, xa, xb, ua, ub, constraints=con, eps=4e-1, su=20, kx=2, use_chains=False)
     
     # time to run the iteration
     x, u = S.solve()

@@ -211,6 +211,28 @@ remain as the free parameters of the spline function.
    Optionally, there is available an alternative approach for defining the candidate functions, see :ref:`non-standard-approach`.
 
 
+In both cases internally the concept of dependence-arrays (``dep_array``, ``dep_array_abs``) is used to express all coefficients
+:math:`\boldsymbol{c}` by the free coefficients :math:`\boldsymbol{a}`. Background (:math:`\boldsymbol{P}` is a Permutation matrix):
+
+.. math::
+   :nowrap:
+
+   \begin{eqnarray*}
+       \boldsymbol{c} & = & \boldsymbol{P} \left(\begin{matrix}
+        \boldsymbol{a} \\
+        \boldsymbol{b}
+      \end{matrix} \right) \\
+      & = & \boldsymbol{P}_1 \boldsymbol{a} + \boldsymbol{P}_2 \boldsymbol{b}\\
+      & = & \underbrace{
+      (\boldsymbol{P}_1 - \boldsymbol{P}_2\boldsymbol{B}^{-1} \boldsymbol{A})
+      }_{=:\boldsymbol{d}_1}\boldsymbol{a} +
+      \underbrace{
+       \boldsymbol{P}_2 \boldsymbol{B}^{-1}\boldsymbol{r}
+       }_{=:\boldsymbol{d}_2}
+   \end{eqnarray*}
+   
+Relation to variables in sources: :math:`\boldsymbol{d}_1` =: ``dep_array``, :math:`\boldsymbol{d}_2` =:  ``dep_array_abs``
+   
 .. _system_structure:
 
 Use of the system structure

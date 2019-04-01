@@ -1,16 +1,29 @@
-'''
+"""
 This example of the inverted pendulum demonstrates how to handle possible state constraints.
-'''
+"""
 
 # import all we need for solving the problem
-from pytrajectory import ControlSystem
+from pytrajectory import TransitionProblem
 import numpy as np
 from sympy import cos, sin
 
-# first, we define the function that returns the vectorfield
-def f(x,u):
-    x1, x2, x3, x4 = x  # system variables
-    u1, = u             # input variable
+from pytrajectory import log
+log.console_handler.setLevel(30)
+
+
+def f(xx, uu, uuref, t, pp):
+    """ Right hand side of the vectorfield defining the system dynamics
+
+    :param xx:       state
+    :param uu:       input
+    :param uuref:    reference input (not used)
+    :param t:        time (not used)
+    :param pp:       additionial free parameters  (not used)
+
+    :return:        xdot
+    """
+    x1, x2, x3, x4 = xx  # system variables
+    u1, = uu             # input variable
     
     l = 0.5     # length of the pendulum
     g = 9.81    # gravitational acceleration
@@ -34,14 +47,18 @@ ua = [0.0]
 ub = [0.0]
 
 # next, this is the dictionary containing the constraints
-con = { 0 : [-0.8, 0.3], 
-        1 : [-2.0, 2.0] }
+con = { 'x1': [-0.8, 0.3],
+        'x2': [-2.0, 2.0] }
 
+first_guess = {'seed': 50}
 # now we create our Trajectory object and alter some method parameters via the keyword arguments
-S = ControlSystem(f, a, b, xa, xb, ua, ub, constraints=con, kx=5, use_chains=False)
+S = TransitionProblem(f, a, b, xa, xb, ua, ub, constraints=con, kx=2, eps=5e-2,
+                      first_guess=first_guess, use_chains=False, sol_steps=1300,
+                      reltol=2e-5)
 
 # time to run the iteration
-S.solve()
+S.solve(tcpport=5006)
+# S.solve()
 
 
 # the following code provides an animation of the system above
@@ -49,6 +66,7 @@ S.solve()
 import sys
 import matplotlib as mpl
 from pytrajectory.visualisation import Animation
+
 
 def draw(xt, image):
     x = xt[0]

@@ -1,14 +1,29 @@
 # acrobot
 
 # import trajectory class and necessary dependencies
-from pytrajectory import ControlSystem
+import sys
+from pytrajectory import TransitionProblem, log
 import numpy as np
 from sympy import cos, sin
 
-# define the function that returns the vectorfield
-def f(x,u):
-    x1, x2, x3, x4 = x
-    u1, = u
+
+if "log" in sys.argv:
+    log.console_handler.setLevel(10)
+
+
+def f(xx, uu, uuref, t, pp):
+    """ Right hand side of the vectorfield defining the system dynamics
+
+    :param xx:       state
+    :param uu:       input
+    :param uuref:    reference input (not used)
+    :param t:        time (not used)
+    :param pp:       additionial free parameters  (not used)
+
+    :return:        xdot
+    """
+    x1, x2, x3, x4 = xx
+    u1, = uu
     
     m = 1.0             # masses of the rods [m1 = m2 = m]
     l = 0.5             # lengths of the rods [l1 = l2 = l]
@@ -49,7 +64,7 @@ ub = [0.0]
 
 # create System
 first_guess = {'seed' : 1529} # choose a seed which leads to quick convergence
-S = ControlSystem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=ua, ub=ub, use_chains=True, first_guess=first_guess)
+S = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb, ua=ua, ub=ub, use_chains=True, first_guess=first_guess)
 
 # alter some method parameters to increase performance
 S.set_param('su', 10)

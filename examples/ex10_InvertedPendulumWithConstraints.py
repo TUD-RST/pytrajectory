@@ -5,9 +5,10 @@ PyTrajectory as well as its visualisation capabilities.
 
 # import all we need for solving the problem
 from pytrajectory import TransitionProblem
+from pytrajectory import penalty_expression as pe
 import numpy as np
-from sympy import cos, sin
 from numpy import pi
+from sympy import cos, sin, symbols, plot
 
 # the next imports are necessary for the visualisatoin of the system
 import sys
@@ -15,30 +16,34 @@ import matplotlib as mpl
 from pytrajectory.visualisation import Animation
 
 
-def f(xx, uu, uuref, t, pp):
-    """ Right hand side of the vectorfield defining the system dynamics
-
-    :param xx:       state
-    :param uu:       input
-    :param uuref:    reference input (not used)
-    :param t:        time (not used)
-    :param pp:       additionial free parameters  (not used)
-
-    :return:        xdot
-    """
-    x1, x2, x3, x4 = xx  # system variables
-    u1, = uu             # input variable
-
+# first, we define the function that returns the vectorfield
+def f(x, u, evalconstr=True):
+    x1, x2, x3, x4 = x  # system variables
+    u1, = u             # input variable
+    
     l = 0.5     # length of the pendulum
     g = 9.81    # gravitational acceleration
-
+    
     # this is the vectorfield
     ff = [          x2,
                     u1,
                     x4,
             (1/l)*(g*sin(x3)+u1*cos(x3))]
 
+    # append equations for the constraints
+    if 1 and evalconstr:
+        res = pe(x1, -10, 10)
+        res += pe(x2, -10, 10)
+        res += pe(x3, -10, 10)
+        res += pe(x4, -10, 10)
+        res += pe(u1, -30, 20)
+        ff.append(res)
+    
     return ff
+
+
+x = symbols("x")
+# plot(pe(x, 0, 10), (x, -20, 20))
 
 # then we specify all boundary conditions
 a = 0.0
@@ -51,7 +56,7 @@ ua = [0.0]
 ub = [0.0]
 
 from pytrajectory import log
-log.console_handler.setLevel(20)
+log.console_handler.setLevel(10)
 
 # now we create our Trajectory object and alter some method parameters via the keyword arguments
 
@@ -124,7 +129,7 @@ if not 'no-pickle' in sys.argv:
     # the iteration again in case the following fails
     S.save(fname='ex0_InvertedPendulumSwingUp.pcl')
 
-# now we can create an instance of the `Animation` class
+# now we can create an instance of the `Animation` class 
 # with our draw function and the simulation results
 #
 
@@ -153,7 +158,7 @@ export_array = np.hstack((tt.reshape(-1, 1), xx, uu))
 # to plot the curves of some trajectories along with the picture
 # we also pass the appropriate lists as arguments (see documentation)
 if 'plot' in sys.argv or 'animate' in sys.argv:
-    A = Animation(drawfnc=draw, simdata=S.sim_data,
+    A = Animation(drawfnc=draw, simdata=S.sim_data, 
                   plotsys=[(0,'x'), (2,'phi')], plotinputs=[(0,'u')])
 
     # as for now we have to explicitly set the limits of the figure

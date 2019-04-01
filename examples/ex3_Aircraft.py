@@ -1,15 +1,30 @@
 # vertical take-off aircraft
 
 # import trajectory class and necessary dependencies
-from pytrajectory import ControlSystem
+import sys
+from pytrajectory import TransitionProblem, log
 from sympy import sin, cos
 import numpy as np
 from numpy import pi
 
-# define the function that returns the vectorfield
-def f(x,u):
-    x1, x2, x3, x4, x5, x6 = x  # system state variables
-    u1, u2 = u                  # input variables
+
+if "log" in sys.argv:
+    log.console_handler.setLevel(10)
+
+
+def f(xx, uu, uuref, t, pp):
+    """ Right hand side of the vectorfield defining the system dynamics
+
+    :param xx:       state
+    :param uu:       input
+    :param uuref:    reference input (not used)
+    :param t:        time (not used)
+    :param pp:       additionial free parameters  (not used)
+
+    :return:        xdot
+    """
+    x1, x2, x3, x4, x5, x6 = xx  # system state variables
+    u1, u2 = uu                  # input variables
     
     # coordinates for the points in which the engines engage [m]
     l = 1.0
@@ -45,7 +60,7 @@ ua = [0.5*9.81*50.0/(cos(5/360.0*2*pi)), 0.5*9.81*50.0/(cos(5/360.0*2*pi))]
 ub = [0.5*9.81*50.0/(cos(5/360.0*2*pi)), 0.5*9.81*50.0/(cos(5/360.0*2*pi))]
 
 # create trajectory object
-S = ControlSystem(f, a=0.0, b=3.0, xa=xa, xb=xb, ua=ua, ub=ub)
+S = TransitionProblem(f, a=0.0, b=3.0, xa=xa, xb=xb, ua=ua, ub=ub)
 
 # don't take advantage of the system structure (integrator chains)
 # (this will result in a faster solution here)

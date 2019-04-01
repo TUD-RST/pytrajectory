@@ -1,14 +1,29 @@
 # translation of the inverted pendulum
 
 # import trajectory class and necessary dependencies
-from pytrajectory import ControlSystem
+import sys
+from pytrajectory import TransitionProblem, log
 from sympy import sin, cos
 import numpy as np
 
-# define the function that returns the vectorfield
-def f(x,u):
-    x1, x2, x3, x4 = x       # system state variables
-    u1, = u                  # input variable
+
+if "log" in sys.argv:
+    log.console_handler.setLevel(10)
+
+
+def f(xx, uu, uref, t, p):
+    """ Right hand side of the vectorfield defining the system dynamics
+
+    :param xx:       state
+    :param uu:       input
+    :param uuref:    reference input (not used)
+    :param t:        time (not used)
+    :param pp:       additionial free parameters  (not used)
+
+    :return:        xdot
+    """
+    x1, x2, x3, x4 = xx       # system state variables
+    u1, = uu                  # input variable
 
     l = 0.5     # length of the pendulum rod
     g = 9.81    # gravitational acceleration
@@ -38,7 +53,7 @@ xb = [  1.0,
         0.0]
 
 # create trajectory object
-S = ControlSystem(f, a=0.0, b=2.0, xa=xa, xb=xb)
+S = TransitionProblem(f, a=0.0, b=2.0, xa=xa, xb=xb)
 
 # change method parameter to increase performance
 S.set_param('use_chains', False)
@@ -52,6 +67,7 @@ S.solve()
 import sys
 import matplotlib as mpl
 from pytrajectory.visualisation import Animation
+
 
 def draw(xti, image):
     x = xti[0]
