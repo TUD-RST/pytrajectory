@@ -15,7 +15,6 @@ import auxiliary as aux
 
 from ipydex import IPS
 
-np.set_printoptions(threshold='nan') ##??
 
 
 # noinspection PyPep8Naming
