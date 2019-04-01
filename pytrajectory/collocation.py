@@ -1,6 +1,5 @@
 # IMPORTS
 import numpy as np
-import sympy as sp
 from scipy import sparse
 from collections import OrderedDict
 from scipy import linalg
@@ -14,7 +13,6 @@ from auxiliary import Container, NanError
 import auxiliary as aux
 
 from ipydex import IPS
-
 
 
 # noinspection PyPep8Naming
@@ -935,7 +933,6 @@ class CollocationSystem(Logger):
 
         self.guess = guess
 
-
     # TODO: handle free parameters
     def interpolate_refsol(self):
         """
@@ -973,10 +970,6 @@ class CollocationSystem(Logger):
             # free_coeffs_guess = s_new.new_interpolate(fnc, method='cheby')
 
             guess = np.hstack((guess, free_coeffs_guess))
-
-            if 'u' in k:
-                pass
-                # IPS()
 
         # dbg
         if 0 and self.masterobject._parameters.get('show_refsol', False):
@@ -1126,6 +1119,7 @@ def _get_derivation_order(fnc):
         return 3
     else:
         raise ValueError()
+
 
 def _build_sol_from_free_coeffs(splines):
     """
