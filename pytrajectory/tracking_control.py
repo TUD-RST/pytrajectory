@@ -12,6 +12,7 @@ import time
 import sys
 import pickle
 from matplotlib import pyplot as plt
+from pytrajectory.auxiliary import lzip
 
 import symbtools as st
 
@@ -124,7 +125,7 @@ class DiffOpTimeVarSys(object):
         self.MA_vect_cache = dict()
 
         # to replace x1 with x1_ref etc (incl. u)
-        self.orig_ref_rplm = zip(list(xx) + list(uu), list(xx_ref) + list(uu_ref))
+        self.orig_ref_rplm = lzip(list(xx) + list(uu), list(xx_ref) + list(uu_ref))
 
         # to replace x1_ref with x1 etc (incl. u)
         self.ref_orig_rplm = st.rev_tuple(self.orig_ref_rplm)
@@ -217,7 +218,7 @@ class DiffOpTimeVarSys(object):
                 u_orig_list.append(tmp1)
                 u_ref_list.append(tmp2)
 
-        res = list(zip(self.xx, self.xx_ref)) + list(zip(u_orig_list, u_ref_list))
+        res = lzip(self.xx, self.xx_ref) + lzip(u_orig_list, u_ref_list)
         return res
 
 
@@ -311,7 +312,7 @@ def tv_feedback_factory(ff, gg, xx, uu, clcp_coeffs, use_exisiting_so="smart"):
         rplm = diffop.get_orig_ref_replm(maxorder)
 
         L_matrix_r = L_matrix.subs(rplm)
-        xxuu = list(zip(*rplm))[1]
+        xxuu = lzip(*rplm)[1]
         nu = len(xxuu) - len(xx)
 
         # additional metadata

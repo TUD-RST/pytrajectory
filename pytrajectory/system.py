@@ -9,6 +9,7 @@ import numbers
 from collocation import CollocationSystem
 from simulation import Simulator
 import auxiliary
+from auxiliary import lzip
 import visualisation
 import splines
 from log import Logger
@@ -657,7 +658,7 @@ class TransitionProblem(Logger):
                     # dbg:
                     # IPS()
 
-                sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)
+                sym_num_tuples = lzip(s._indep_coeffs_sym, coeffs)
                 # List of tuples like (cx1_0_0, 2.41)
 
                 new_params.update(sym_num_tuples)
@@ -719,7 +720,7 @@ class TransitionProblem(Logger):
             old_spline_values.append(auxiliary.vector_eval(s_old.f, tt))
 
             # generate a pseudo "solution" (for dbg)
-            sym_num_tuples = zip(s._indep_coeffs_sym, coeffs)  # List of tuples like (cx1_0_0, 2.41)
+            sym_num_tuples = lzip(s._indep_coeffs_sym, coeffs)  # List of tuples like (cx1_0_0, 2.41)
             new_params.update(sym_num_tuples)
 
         # calculate a new "solution" (sampled simulation result

@@ -443,7 +443,7 @@ def eval_replacements_fnc(args):
     if ret_filter is not None:
         replacements_str = ','.join(str(r) for r in ret_filter)
     else:
-        replacements_str = ','.join(str(r) for r in zip(*replacement_pairs)[0])
+        replacements_str = ','.join(str(r) for r in lzip(*replacement_pairs)[0])
 
     # ensure iterable return type (also in case of only one result)
     replacements_str = "({},)".format(replacements_str)
@@ -522,7 +522,7 @@ def cse_lambdify(args, expr, **kwargs):
 
     # now we are looking for those arguments that are part of the reduced expression(s)
     # find out the shortcut-symbols
-    shortcuts = zip(*cse_pairs)[0]
+    shortcuts = lzip(*cse_pairs)[0]
     atoms = sp.Set(red_exprs).atoms(sp.Symbol)
     cse_args = [arg for arg in tuple(args) + tuple(shortcuts) if arg in atoms]
 
@@ -692,7 +692,7 @@ def broadcasting_wrapper(original_fnc, original_shape=None, squeeze_axis=None):
         else:
             tmp_shape = original_shape
 
-        scalar_args = zip(*bc_args)
+        scalar_args = lzip(*bc_args)
 
         # now: evaluation
         for arg in scalar_args:
@@ -1473,7 +1473,7 @@ def random_refsol_xx(tt, xa, xb, n_points, x_lower, x_upper, seed=0):
 
     np.random.seed(seed)
 
-    for i, (va, vb, bl, bu) in enumerate(zip(xa, xb, x_lower, x_upper)):
+    for i, (va, vb, bl, bu) in enumerate(lzip(xa, xb, x_lower, x_upper)):
         assert bl < bu
         rr = np.random.random(n_points)*(bu - bl) + bl
         rr = np.r_[va, rr, vb]
@@ -1627,7 +1627,7 @@ def multi_solve_arglist(**kwargs):
     # now handle all arguments the same way
     #
 
-    keys, oringinal_values = zip(*kwargs.items())
+    keys, oringinal_values = lzip(*kwargs.items())
     values = [ensure_sequence(v) for v in oringinal_values]
 
     # example:
@@ -1638,7 +1638,7 @@ def multi_solve_arglist(**kwargs):
     # -> prod = [(1.0, 1e-3), (1.0, e-2), (1.2, 1e-3), ...]
 
     # now create a list of dictionaries
-    multiarglist = [dict(zip(keys, p)) for p in prod]
+    multiarglist = [dict(lzip(keys, p)) for p in prod]
     # -> multiarglist = [{'Tb': 1.0, 'eps': 1e-3}, {'Tb': 1.0, 'eps': 1e-2}, ...]
 
     # add progress information (to be printed out later)
@@ -1721,4 +1721,8 @@ def parallelizedTP(poolsize=3, save_results=True, debug=False, **kwargs):
             pickle.dump(result_list, dumpfile)
 
     return result_list
+
+
+def lzip(*args):
+    return list(zip(*args))
 

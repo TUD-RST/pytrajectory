@@ -6,6 +6,7 @@ import pytest
 import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
+from pytrajectory.auxiliary import lzip
 
 from ipydex import IPS
 
@@ -185,7 +186,7 @@ class TestCseLambdify(object):
             tn = tt[i]
             pn = pp[:, i]
 
-            rplmts = zip([x1, x2, x3], xn) + zip([u], un) + [(t, tn)] + zip([p], pn)
+            rplmts = lzip([x1, x2, x3], xn) + lzip([u], un) + [(t, tn)] + lzip([p], pn)
             tmp_res = aux.to_np(Jf3.subs(rplmts).evalf())
 
             assert np.allclose(tmp_res, res4[:, :, i])
@@ -203,7 +204,7 @@ class TestCseLambdify(object):
 
         assert isinstance(r1, np.ndarray) and isinstance(r2, np.ndarray)
 
-        rplmts = zip(xx + uu + pp, a1)
+        rplmts = lzip(xx + uu + pp, a1)
         Jx1_num = aux.to_np(Jx1.subs(rplmts))
         Jx2_num = aux.to_np(Jx2.subs(rplmts))
 
@@ -220,7 +221,7 @@ class TestCseLambdify(object):
 
         for i in xrange(N):
             ai = allargs[:, i]
-            rplmts = zip(xx + uu + pp, ai)
+            rplmts = lzip(xx + uu + pp, ai)
             Jx1_num = aux.to_np(Jx1.subs(rplmts))
             Jx2_num = aux.to_np(Jx2.subs(rplmts))
 
@@ -240,7 +241,7 @@ class TestCseLambdify(object):
 
         assert isinstance(r1, np.ndarray) and isinstance(r2, np.ndarray)
 
-        rplmts = zip(xx + uu + pp, a1)
+        rplmts = lzip(xx + uu + pp, a1)
         Jx1_num = aux.to_np(Jx1.subs(rplmts))
         Jx2_num = aux.to_np(Jx2.subs(rplmts))
 
@@ -273,7 +274,7 @@ class TestCseLambdify(object):
         assert w2.shape == Jx2.shape + (N,)
 
         for i in xrange(N):
-            rplmts = zip(xx + uu + pp, allargs[:, i])
+            rplmts = lzip(xx + uu + pp, allargs[:, i])
             Jx1_num = aux.to_np(Jx1.subs(rplmts))
             Jx2_num = aux.to_np(Jx2.subs(rplmts))
 

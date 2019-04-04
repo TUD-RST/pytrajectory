@@ -5,6 +5,7 @@ import scipy.sparse as sparse
 from scipy.sparse.linalg import spsolve
 from scipy.interpolate import interp1d
 import auxiliary as aux
+from pytrajectory.auxiliary import lzip
 
 from log import Logger, logging
 
@@ -489,7 +490,7 @@ class Spline(Logger):
         Nc_slope_additional = Nc_slope - 2
 
         # select points in the middle by using the distance to median as sorting key
-        mid_first_tuples = sorted(zip(np.abs(tt - np.median(tt)), tt))
+        mid_first_tuples = sorted(lzip(np.abs(tt - np.median(tt)), tt))
         mid_first = np.array(mid_first_tuples)[:, 1]  # second column contains the t-values
 
         slope_places.extend(mid_first[:Nc_slope_additional])

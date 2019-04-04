@@ -9,6 +9,7 @@ import itertools
 from ipydex import IPS
 
 import auxiliary as aux
+from auxiliary import lzip
 from log import Logger
 
 
@@ -298,7 +299,7 @@ class DynamicalSystem(Logger):
 
         # create vectorfields f and g (symbolically and as numerical function)
 
-        ff = self.f_sym_matrix.subs(zip(self.uus, [0]*self.n_inputs))
+        ff = self.f_sym_matrix.subs(lzip(self.uus, [0]*self.n_inputs))
         gg = self.f_sym_matrix.jacobian(self.uus)
         if gg.atoms(sp.Symbol).intersection(self.uus):
             self.log_warn("System is not input affine. -> VF g has no meaning.")

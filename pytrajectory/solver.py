@@ -4,7 +4,7 @@ from numpy.linalg import solve, norm
 import scipy as scp
 import time
 
-from auxiliary import NanError
+from auxiliary import NanError, lzip
 
 from log import Logger
 import interfaceserver
@@ -220,7 +220,7 @@ class Solver(Logger):
                     # plt.plot(s)
                     plt.show()
                     IPS()
-                    ll = zip(abs(s), self.masterobject.eqs.all_free_parameters)
+                    ll = lzip(abs(s), self.masterobject.eqs.all_free_parameters)
                     ll.sort()
                     # sehen, welche Parmeter sich wie stark verändern...
                     # IPS()

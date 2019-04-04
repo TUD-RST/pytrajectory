@@ -9,7 +9,7 @@ from log import Logger, logging
 from trajectories import Trajectory
 from solver import Solver
 
-from auxiliary import Container, NanError
+from auxiliary import Container, NanError, lzip
 import auxiliary as aux
 
 from ipydex import IPS
@@ -411,7 +411,7 @@ class CollocationSystem(Logger):
                         x = X[:, i1]
                         u = U[:, i1]
                         # TODO: check whether additional free parameters are handled correctly
-                        args = zip(self.sys.states, x) + zip(self.sys.inputs, u)
+                        args = lzip(self.sys.states, x) + lzip(self.sys.inputs, u)
                         sym_res = np.float(self.Df.subs(args).evalf()[i2, i3])
                         if np.isnan(sym_res):
                             msg = "NaN-fallback did not work"
