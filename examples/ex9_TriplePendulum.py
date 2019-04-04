@@ -298,10 +298,11 @@ def f(x, u):
     # now we can replace all placeholders in the function string buffer
     fnc_str = fnc_str_buffer%(x_str, u_str, par_str, cse_str, ff_str)
     # and finally execute it which will create a python function 'f'
-    exec(fnc_str)
+    globals_locals = dict()
+    exec(fnc_str, globals_locals)
     
     # now we have defined a callable function that can be used within PyTrajectory
-    return f
+    return globals_locals['f']
 
 # we consider the case of a 3-bar pendulum
 N = 3
