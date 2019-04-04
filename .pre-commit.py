@@ -77,7 +77,7 @@ for path in file_paths:
             f.writelines(out_lines)
     except Exception as err:
         print("Could not change file: {}".format(path[-1]))
-        print(err.message)
+        print(str(err))
         print("Commit will be aborted!")
         sys.exit(1)
 
@@ -88,7 +88,7 @@ for path in file_paths:
     try:
         os.system('git add {}'.format(f_path))
     except Exception as err:
-        print(err.message)
+        print(str(err))
         print("Commit will be aborted!")
         sys.exit(1)
 

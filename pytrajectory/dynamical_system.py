@@ -185,7 +185,7 @@ class DynamicalSystem(Logger):
                 # need more than 2 values to unpack
                 # too many values to unpack
 
-                if not ("value" in err.message and "to unpack" in err.message):
+                if not ("value" in str(err) and "to unpack" in str(err)):
                     self.log_error("unexpected ValueError")
                     raise err
                 else:
@@ -193,8 +193,8 @@ class DynamicalSystem(Logger):
                     # (that means the dimensions don't match)
                     continue
             except TypeError as err:
-                flag = "<lambda>() takes" in err.message and \
-                       "arguments" in err.message and "given" in err.message
+                flag = "<lambda>() takes" in str(err) and \
+                       "arguments" in str(err) and "given" in str(err)
                 if not flag:
                     self.log_error("unexpected TypeError")
                     raise err
