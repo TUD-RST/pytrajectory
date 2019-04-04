@@ -13,17 +13,17 @@ import sympy
 from .system import TransitionProblem, ControlSystem
 from .trajectories import Trajectory
 from .splines import Spline
-import splines
+from . import splines
 from .solver import Solver
 from .simulation import Simulator
 from .visualisation import Animation
 from .log import logging
-from auxiliary import penalty_expression
-import auxiliary as aux
+from .auxiliary import penalty_expression
+from . import auxiliary as aux
 from distutils.version import LooseVersion
 
 # current version
-from release import __version__
+from .release import __version__
 
 # +++ Marker-Comment: next line will be changed by pre-commit-hook +++
 __date__ = "2019-04-01 21:31:03"

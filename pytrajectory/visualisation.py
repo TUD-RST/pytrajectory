@@ -123,7 +123,7 @@ class Animation():
         else:
             axes['ax_img'] = self.fig.add_subplot(gs[:,1:])
 
-        for i in xrange(len(sys)):
+        for i in range(len(sys)):
             axes['ax_x%d'%i] = self.fig.add_subplot(gs[i,0])
 
             curve = mpl.lines.Line2D([], [], color='black')
@@ -132,7 +132,7 @@ class Animation():
             axes['ax_x%d'%i].add_line(curve)
 
         lensys = len(sys)
-        for i in xrange(len(inputs)):
+        for i in range(len(inputs)):
             axes['ax_u%d'%i] = self.fig.add_subplot(gs[lensys+i,0])
 
             curve = mpl.lines.Line2D([], [], color='black')
@@ -254,7 +254,7 @@ class Animation():
         if len(ut.shape) == 1:
             ut = ut.reshape(-1, 1)
 
-        for i in xrange(add_frames):
+        for i in range(add_frames):
             t = np.hstack((t[0],t,t[-1]))
             xt = np.vstack((xt[0],xt,xt[-1]))
             ut = np.vstack((ut[0],ut,ut[-1]))
@@ -273,7 +273,7 @@ class Animation():
         def _animate(frame_nbr):
             idx = f_idcs[frame_nbr]
             out = "frame = {f}, t = {t}, x = {x}, u = {u}"
-            print out.format(f=frame_nbr, t=t[idx], x=xt[idx, :], u=ut[idx, :])
+            print(out.format(f=frame_nbr, t=t[idx], x=xt[idx, :], u=ut[idx, :]))
 
             # draw picture
             image = self.image
@@ -336,4 +336,4 @@ class Animation():
         else:
             FFWriter = animation.FFMpegFileWriter()
             self.anim.save(fname, fps=fps, dpi=dpi, writer='mencoder')
-        print("File written: {}".format(fname))
+        print(("File written: {}".format(fname)))

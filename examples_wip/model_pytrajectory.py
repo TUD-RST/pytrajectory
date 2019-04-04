@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import  division
+
 import sys
 import scipy.integrate as integrate
 import matplotlib.pyplot as plt
@@ -17,15 +17,15 @@ from numpy import pi
 
 # Daten des Modells laden
 
-print("\n"*2 + "Wegen eines pickle-Fehlers habe ich hier noch das alte Modell geladen."
-      " Siehe Quell-Code\n\n")
-raw_input("OK?")
+print(("\n"*2 + "Wegen eines pickle-Fehlers habe ich hier noch das alte Modell geladen."
+      " Siehe Quell-Code\n\n"))
+input("OK?")
 
 
 fname = "pickles/model_alt.pcl"
 with open(fname, "rb") as pfile:
     pdict = pickle.load(pfile)
-    print fname, "gelesen"
+    print(fname, "gelesen")
 
 
 # Aus dem dict in "normale" Variablen laden
@@ -88,7 +88,7 @@ S = ControlSystem(model_rhs, Ta, Tb, xa, xb, ua, ub, constraints=None,
 # dt_sim=0.004
 # time to run the iteration
 x, u = S.solve()
-print "successed!"
+print("successed!")
 
 IPS()
 
@@ -153,7 +153,7 @@ def draw(xt, image):
     y_p.append( rod_lengths[0] * cos(phi[0]) )
     
     # the rest
-    for i in xrange(1,3):
+    for i in range(1,3):
         x_p.append( x_p[i-1] + rod_lengths[i] * sin(phi[i]) )
         y_p.append( y_p[i-1] + rod_lengths[i] * cos(phi[i]) )
         
@@ -168,7 +168,7 @@ def draw(xt, image):
     image.patches.append(joint)
     
     # then the pendulums
-    for i in xrange(3):
+    for i in range(3):
         image.patches.append( mpl.patches.Circle(xy=(x_p[i], y_p[i]), 
                                                  radius=pendulum_sizes[i], 
                                                  color='black') )

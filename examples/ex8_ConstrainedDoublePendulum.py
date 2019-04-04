@@ -95,7 +95,7 @@ def f(x, u, uuref, t, pp):
     ############################
     # --> leads to par_str
     par_str = ''
-    for k, v in parameters_values.items():
+    for k, v in list(parameters_values.items()):
         # 'k' is the name of a system parameter such as mass or gravitational acceleration
         # 'v' is its value in SI units
         par_str += '%s = %s; '%(str(k), str(v))
@@ -119,7 +119,7 @@ def f(x, u, uuref, t, pp):
         cse_str += '%s = %s; '%(str(cse_pair[0]), str(cse_pair[1]))
 
     # add result of cse
-    for i in xrange(M_shape[0]):
+    for i in range(M_shape[0]):
         cse_str += 'q%d_dd = %s; '%(i, str(cse_res[0][i]))
 
     cse_str = cse_str[:-2]
@@ -130,7 +130,7 @@ def f(x, u, uuref, t, pp):
     # --> leads to ff_str
     ff_str = 'ff = ['
 
-    for i in xrange(M_shape[0]):
+    for i in range(M_shape[0]):
         ff_str += '%s, '%str(state_vars[2*i+1])
         ff_str += 'q%s_dd, '%(i)
 

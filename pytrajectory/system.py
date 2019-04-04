@@ -6,16 +6,16 @@ import time
 from collections import OrderedDict
 import numbers
 
-from collocation import CollocationSystem
-from simulation import Simulator
-import auxiliary
-from auxiliary import lzip
-import visualisation
-import splines
-from log import Logger
-import interfaceserver
-from dynamical_system import DynamicalSystem
-from constraint_handling import ConstraintHandler
+from .collocation import CollocationSystem
+from .simulation import Simulator
+from . import auxiliary
+from .auxiliary import lzip
+from . import visualisation
+from . import splines
+from .log import Logger
+from . import interfaceserver
+from .dynamical_system import DynamicalSystem
+from .constraint_handling import ConstraintHandler
 
 import matplotlib.pyplot as plt
 
@@ -227,7 +227,7 @@ class TransitionProblem(Logger):
         con_x = OrderedDict()
         con_u = OrderedDict()
 
-        for k, v in constraints.iteritems():
+        for k, v in constraints.items():
             assert isinstance(k, str)
             if k.startswith('x'):
                 con_x[k] = v
@@ -238,8 +238,8 @@ class TransitionProblem(Logger):
                 raise ValueError(msg)
 
         self.constraints = OrderedDict()
-        self.constraints.update(sorted(con_x.iteritems()))
-        self.constraints.update(sorted(con_u.iteritems()))
+        self.constraints.update(sorted(con_x.items()))
+        self.constraints.update(sorted(con_u.items()))
 
         if self.use_chains:
             msg = "Currently not possible to make use of integrator chains together with " \
@@ -260,10 +260,10 @@ class TransitionProblem(Logger):
         """
 
         # TODO: the attribute names of the splines have to be adjusted
-        y_fncs = self.eqs.trajectories.x_fnc.values()
-        ydot_fncs = self.eqs.trajectories.dx_fnc.values()
+        y_fncs = list(self.eqs.trajectories.x_fnc.values())
+        ydot_fncs = list(self.eqs.trajectories.dx_fnc.values())
         # sequence of funcs vi(.)
-        v_fncs = self.eqs.trajectories.u_fnc.values()
+        v_fncs = list(self.eqs.trajectories.u_fnc.values())
 
         return self.dyn_sys.constraint_handler.get_constrained_spline_fncs(y_fncs, ydot_fncs,
                                                                            v_fncs)
@@ -647,7 +647,7 @@ class TransitionProblem(Logger):
             new_spline_values = []
             fnclist = self.refsol.xxfncs + self.refsol.uufncs
 
-            for i, (key, s) in enumerate(C.splines.iteritems()):
+            for i, (key, s) in enumerate(C.splines.items()):
                 coeffs = s.interpolate(fnclist[i], set_coeffs=True)
                 new_spline_values.append(auxiliary.vector_eval(s.f, tt))
 
@@ -671,7 +671,7 @@ class TransitionProblem(Logger):
             labels = self.dyn_sys.states + self.dyn_sys.inputs
 
             plt.figure(figsize=fs)
-            for i in xrange(len(new_spline_values)):
+            for i in range(len(new_spline_values)):
                 plt.subplot(rows, 2, i + 1)
                 plt.plot(tt, self.refsol.xu_list[i], 'k', lw=3, label='sim')
                 plt.plot(tt, new_spline_values[i], label='new')
@@ -707,7 +707,7 @@ class TransitionProblem(Logger):
         guessed_spline_values = auxiliary.eval_sol(self, self.eqs.guess, tt)
 
         data = list(self.sim_data_xx.T) + list(self.sim_data_uu.T)
-        for i, (key, s) in enumerate(C.splines.iteritems()):
+        for i, (key, s) in enumerate(C.splines.items()):
             coeffs = s.interpolate((self.sim_data_tt, data[i]), set_coeffs=True)
             new_spline_values.append(auxiliary.vector_eval(s.f, tt))
 
@@ -760,7 +760,7 @@ class TransitionProblem(Logger):
         labels = self.dyn_sys.states + self.dyn_sys.inputs
 
         plt.figure(figsize=fs)
-        for i in xrange(len(data)):
+        for i in range(len(data)):
             plt.subplot(rows, 2, i + 1)
             plt.plot(tt, data[i], 'k', lw=3, label='sim')
             plt.plot(tt, old_spline_values[i], lw=3, label='old')

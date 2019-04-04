@@ -70,7 +70,7 @@ S = ControlSystem(f, a, b, xa, xb, ua, ub,
 # time to run the iteration
 S.solve()
 x, u, par = S.solve()
-print('x1(b)={}, x2(b)={}, u(b)={}, k={}'.format(S.sim_data[1][-1][0], S.sim_data[1][-1][1], S.sim_data[2][-1][0], S.sim_data[-1][0]))
+print(('x1(b)={}, x2(b)={}, u(b)={}, k={}'.format(S.sim_data[1][-1][0], S.sim_data[1][-1][1], S.sim_data[2][-1][0], S.sim_data[-1][0])))
 
 
 import matplotlib.pyplot as plt

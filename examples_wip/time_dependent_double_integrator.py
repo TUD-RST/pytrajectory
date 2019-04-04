@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import  division
+
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
@@ -100,7 +100,7 @@ def rhs2(state, ua, uref, t, pp,):
     uref1, = uref
 
     u1 = ua1 + uref1
-    print ua, uref
+    print(ua, uref)
 
     ff = [x2, u1]
 

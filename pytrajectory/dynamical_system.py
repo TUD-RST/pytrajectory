@@ -8,9 +8,9 @@ import itertools
 
 from ipydex import IPS
 
-import auxiliary as aux
-from auxiliary import lzip
-from log import Logger
+from . import auxiliary as aux
+from .auxiliary import lzip
+from .log import Logger
 
 
 # noinspection PyPep8Naming
@@ -77,8 +77,8 @@ class DynamicalSystem(Logger):
         self.f_sym.n_par = self.n_par
         # set names of the state and input variables
         # (will be used as keys in various dictionaries)
-        self.states = tuple(['x{}'.format( i + 1) for i in xrange(self.n_states)])
-        self.inputs = tuple(['u{}'.format( j + 1) for j in xrange(self.n_inputs)])
+        self.states = tuple(['x{}'.format( i + 1) for i in range(self.n_states)])
+        self.inputs = tuple(['u{}'.format( j + 1) for j in range(self.n_inputs)])
 
         # TODO_ck: what does this mean??
         # Todo_yx: if self.par is a list,then the following 2 sentences
@@ -86,7 +86,7 @@ class DynamicalSystem(Logger):
         # self.par.append(tuple('z_par')) ##:: [('z_par',)]
 
         self.par = tuple \
-            (['z_par_{}'.format( k + 1) for k in xrange(self.n_par)])  # z_par_1, z_par_2,
+            (['z_par_{}'.format( k + 1) for k in range(self.n_par)])  # z_par_1, z_par_2,
 
         self.xxs = sp.symbols(self.states)
         self.uus = sp.symbols(self.inputs)
@@ -154,7 +154,7 @@ class DynamicalSystem(Logger):
 
         max_dim = 100
         # create a sequence like ([0, 0], [0, 1], ... [0, 99], [1, 1,], ...)
-        dim_combinations = itertools.product(xrange(max_dim), xrange(max_dim))
+        dim_combinations = itertools.product(range(max_dim), range(max_dim))
 
         # get most likely combinations first:
         dim_combinations = sorted(dim_combinations, key=sum)

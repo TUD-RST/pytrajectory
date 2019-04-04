@@ -289,7 +289,7 @@ class TestExamplesParallel(object):
         assert [r.reached_accuracy for r in results] == [True]*len(results)
 
 if __name__ == "__main__":
-    print("\n"*2 + r"   please run py.test -s -k-slow %filename.py"+ "\n")
+    print(("\n"*2 + r"   please run py.test -s -k-slow %filename.py"+ "\n"))
     # or: py.test -s --pdbcls=IPython.terminal.debugger:TerminalPdb %filename
 
     tests = TestExamples()
@@ -304,7 +304,7 @@ if __name__ == "__main__":
     # tests.test_di_con_u1_x2_projective_integrator()
     # tests.test_di_integrator_pure_with_penalties()
     # tests.test_di_integrator_pure_with_random_guess()
-    print "-"*10
+    print("-"*10)
     tests2.test_di_integrator_pure()
     # tests.test_di_timescaled()
 

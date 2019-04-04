@@ -20,7 +20,7 @@ from ipydex import IPS
 pfname = "swingup_splines.pcl"
 with open(pfname, "rb") as pfile:
     cont_dict = pickle.load(pfile)
-    print("Trajectories loaded from {}".format(pfname))
+    print(("Trajectories loaded from {}".format(pfname)))
 
 traj_splines = aux.unpack_splines_from_containerdict(cont_dict)
 xxf, uuf = aux.get_xx_uu_funcs_from_containerdict(cont_dict)

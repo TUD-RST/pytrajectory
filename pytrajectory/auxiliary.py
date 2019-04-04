@@ -16,11 +16,12 @@ import pickle
 from multiprocessing import Pool
 import types
 
-import splines
-from simulation import Simulator
-from log import logging, Timer
+from . import splines
+from .simulation import Simulator
+from .log import logging, Timer
 
 from ipydex import IPS
+from functools import reduce
 
 
 class NanError(ValueError):
@@ -33,7 +34,7 @@ class Container(object):
     """
 
     def __init__(self, **kwargs):
-        for key, value in kwargs.iteritems():
+        for key, value in kwargs.items():
             self.__setattr__(str(key), value)
 
     @property
@@ -171,7 +172,7 @@ def find_integrator_chains(dyn_sys):
     assert dyn_sys.n_states == len(f)
 
     chaindict = {}
-    for i in xrange(len(f)):
+    for i in range(len(f)):
         # substitution because of sympy difference betw. 1.0 and 1
         if isinstance(f[i], sp.Expr):
             f[i] = f[i].subs(1.0, 1)
@@ -189,8 +190,8 @@ def find_integrator_chains(dyn_sys):
 
     # find upper ends of integrator chains
     uppers = []
-    for vv in chaindict.values():
-        if (not chaindict.has_key(vv)):
+    for vv in list(chaindict.values()):
+        if (vv not in chaindict):
             uppers.append(vv)
     # uppers=[x1, x3]
     # create ordered lists that temporarily represent the integrator chains
@@ -198,14 +199,14 @@ def find_integrator_chains(dyn_sys):
 
     # therefore we flip the dictionary to walk through its keys
     # (former values)
-    dictchain = {v:k for k,v in chaindict.items()} # chaindict.items()=[(u1, x2), (x4, x3), (x2, x1)]
+    dictchain = {v:k for k,v in list(chaindict.items())} # chaindict.items()=[(u1, x2), (x4, x3), (x2, x1)]
     # {x1: x2, x2: u1, x3: x4}
     for var in uppers:
         tmpchain = []
         vv = var
         tmpchain.append(vv)
 
-        while dictchain.has_key(vv):
+        while vv in dictchain:
             vv = dictchain[vv]
             tmpchain.append(vv)
 
@@ -234,11 +235,11 @@ def find_integrator_chains(dyn_sys):
 
         # if every integrator chain ended with input variable
         if not eqind:
-            eqind = range(dyn_sys.n_states)
+            eqind = list(range(dyn_sys.n_states))
     else:
         # if integrator chains should not be used
         # then every equation has to be solved by collocation
-        eqind = range(dyn_sys.n_states)
+        eqind = list(range(dyn_sys.n_states))
 
     return chains, eqind
 
@@ -458,10 +459,10 @@ def eval_replacements_fnc(args):
 
     # execute the code (in namespace if given)
     if namespace is not None:
-        exec code in namespace
+        exec(code, namespace)
         eval_replacements_fnc = namespace.get('eval_replacements_fnc')
     else:
-        exec code in locals()
+        exec(code, locals())
 
     # noinspection PyUnboundLocalVariable
     return eval_replacements_fnc
@@ -518,7 +519,7 @@ def cse_lambdify(args, expr, **kwargs):
     # typically cse_pairs looks like [(r0, cos(x1)), (r1, sin(x1))], ...
     if not cse_pairs:
         # add a meaningless mapping r0 |-→ 0 to avoid empty list
-        cse_pairs = [(symbol_generator.next(), 0)]
+        cse_pairs = [(next(symbol_generator), 0)]
 
     # now we are looking for those arguments that are part of the reduced expression(s)
     # find out the shortcut-symbols
@@ -713,7 +714,7 @@ def broadcasting_wrapper(original_fnc, original_shape=None, squeeze_axis=None):
 # TODO: Unittest
 def is_flat_sequence_of_numbers(obj, test_all=False):
 
-    if isinstance(obj, basestring):
+    if isinstance(obj, str):
         return False
 
     if not hasattr(obj, '__iter__'):
@@ -946,7 +947,7 @@ def datefname(ext, timestamp=None):
     :return:            fname (string)
     """
 
-    assert isinstance(ext, basestring)
+    assert isinstance(ext, str)
 
     if timestamp is None:
         timestamp = time.time()
@@ -1005,7 +1006,7 @@ def eval_sol(masterobject, sol, tt):
     traj.set_coeffs(sol)
 
     res = []
-    for s in traj.splines.values():
+    for s in list(traj.splines.values()):
         res.append(vector_eval(s.f, tt))
 
     return res
@@ -1051,7 +1052,7 @@ def calc_chebyshev_nodes(a, b, npts, include_borders=True):
         nc += 2
 
     # calculate zero points of chebychev polynomial --> in [-1,1]
-    cheb_cpts = [np.cos((2.0*i + 1)/(2*(nc + 1))*np.pi) for i in xrange(nc)]
+    cheb_cpts = [np.cos((2.0*i + 1)/(2*(nc + 1))*np.pi) for i in range(nc)]
     cheb_cpts.sort()
 
     # map chebychev nodes from [-1,1] to our interval [a,b],
@@ -1168,7 +1169,7 @@ def copy_splines(splinedict):
         return None
 
     res = OrderedDict()
-    for k, v in splinedict.items():
+    for k, v in list(splinedict.items()):
         S = splines.Spline(v.a, v.b, n=v.n, tag=v.tag, bv=v._boundary_values,
                            use_std_approach=v._use_std_approach)
         S.masterobject = v.masterobject
@@ -1200,7 +1201,7 @@ def containerize_splines(splinedict):
         return None
 
     res = OrderedDict()
-    for k, v in splinedict.items():
+    for k, v in list(splinedict.items()):
         # noinspection PyProtectedMember
         C = Container(a=v.a, b=v.b, n=v.n, tag=v.tag,
                       _boundary_values=v._boundary_values,
@@ -1253,7 +1254,7 @@ def unpack_splines_from_containerdict(cdict):
         return S
 
     res = OrderedDict()
-    for k, v in cdict.items():
+    for k, v in list(cdict.items()):
         res[k] = container_to_spline(v)
 
     return res
@@ -1266,8 +1267,8 @@ def get_xx_uu_funcs_from_containerdict(cdict):
     """
     traj_splines = unpack_splines_from_containerdict(cdict)
 
-    xx_splines = [v for k, v in traj_splines.items() if k.startswith("x")]
-    uu_splines = [v for k, v in traj_splines.items() if k.startswith("u")]
+    xx_splines = [v for k, v in list(traj_splines.items()) if k.startswith("x")]
+    uu_splines = [v for k, v in list(traj_splines.items()) if k.startswith("u")]
 
     x1spl = xx_splines[0]
     a, b = x1spl.a, x1spl.b
@@ -1394,7 +1395,7 @@ def make_refsol_by_simulation(tp, u_values, plot_u=False, plot_x_idx=0):
         plt.figure()
         plt.plot(tt, xx[:, :n])
         plt.grid(1)
-        plt.legend([str(i+1) for i in xrange(n)])
+        plt.legend([str(i+1) for i in range(n)])
         plot_flag = True
 
     if plot_flag:
@@ -1589,7 +1590,7 @@ def ensure_sequence(arg):
     :param arg:
     :return:
     """
-    if isinstance(arg, (basestring, dict, OrderedDict)):
+    if isinstance(arg, (str, dict, OrderedDict)):
         return arg,
     if hasattr(arg, '__len__'):
         return arg
@@ -1627,7 +1628,7 @@ def multi_solve_arglist(**kwargs):
     # now handle all arguments the same way
     #
 
-    keys, oringinal_values = lzip(*kwargs.items())
+    keys, oringinal_values = lzip(*list(kwargs.items()))
     values = [ensure_sequence(v) for v in oringinal_values]
 
     # example:
@@ -1665,7 +1666,7 @@ def _solveTP(argdict):
 
     index, total = argdict.get("progress_info", (1, 1))
 
-    print("Run {} / {}; \n with arguments: {}".format(index, total, argdict))
+    print(("Run {} / {}; \n with arguments: {}".format(index, total, argdict)))
     TP = TransitionProblem(**argdict)
     return TP.solve(return_format="info_container")
 

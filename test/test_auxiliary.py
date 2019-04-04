@@ -180,7 +180,7 @@ class TestCseLambdify(object):
 
         assert np.alltrue(res4[:4, :] == res4_croped)
 
-        for i in xrange(N):
+        for i in range(N):
             xn = xx3[:, i]
             un = uu[:, i]
             tn = tt[i]
@@ -219,7 +219,7 @@ class TestCseLambdify(object):
             # test refusal of array-args
             _ = fnc2(*allargs)
 
-        for i in xrange(N):
+        for i in range(N):
             ai = allargs[:, i]
             rplmts = lzip(xx + uu + pp, ai)
             Jx1_num = aux.to_np(Jx1.subs(rplmts))
@@ -273,7 +273,7 @@ class TestCseLambdify(object):
         assert w1.shape == Jx1.shape + (N,)
         assert w2.shape == Jx2.shape + (N,)
 
-        for i in xrange(N):
+        for i in range(N):
             rplmts = lzip(xx + uu + pp, allargs[:, i])
             Jx1_num = aux.to_np(Jx1.subs(rplmts))
             Jx2_num = aux.to_np(Jx2.subs(rplmts))
@@ -470,17 +470,17 @@ class TestAuxFunctions(object):
         assert aux.ensure_sequence([1, 2, 3]) == [1, 2, 3]
 
         # xrange objects cannot be compared directly
-        assert tuple(aux.ensure_sequence(xrange(100))) == tuple(xrange(100))
+        assert tuple(aux.ensure_sequence(range(100))) == tuple(range(100))
         # noinspection PyTypeChecker
         assert np.all(aux.ensure_sequence(np.r_[1, 2, 3]) == np.r_[1, 2, 3])
 
         assert aux.ensure_sequence({"x7": [-4, 4]}) == ({"x7": [-4, 4]}, )
         assert aux.ensure_sequence("abc") == ("abc", )
-        assert aux.ensure_sequence(u"äüö") == (u"äüö", )
+        assert aux.ensure_sequence("äüö") == ("äüö", )
 
     def test_multi_solve_arglist(self):
 
-        msal = aux.multi_solve_arglist(seed=range(3), Tb=[1.0, 1.2, 1.4])
+        msal = aux.multi_solve_arglist(seed=list(range(3)), Tb=[1.0, 1.2, 1.4])
         assert len(msal) == 9
 
         ref = [
@@ -501,7 +501,7 @@ class TestAuxFunctions(object):
                                        xa=[0, 0], xb=[1, 0], ua=0, ub=0,
                                        use_chains=False, ierr=None, maxIt=4,
                                        eps=4e-1, kx=2, use_std_approach=False,
-                                       seed=range(10), constraints=con,
+                                       seed=list(range(10)), constraints=con,
                                        b=[0.9, 1.0, 1.2, 1.5, 1.7])
         assert len(msal) == 50
 
@@ -521,7 +521,7 @@ def understand_einsum():
     # noinspection PyShadowingNames
     def symbolic_tensor(base_symb, shape):
         r = np.empty(shape, dtype=object)
-        idx_lists = [range(l) for l in shape]
+        idx_lists = [list(range(l)) for l in shape]
         combined_idx_list = itertools.product(*idx_lists)
 
         for idcs in combined_idx_list:
@@ -566,7 +566,7 @@ def understand_einsum():
 
 
 if __name__ == "__main__":
-    print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")
+    print(("\n"*2 + r"   please run py.test -s %filename.py" + "\n"))
 
     tests = TestCseLambdify()
-    print "no test run."
+    print("no test run.")

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import  division
+
 import sys
 import scipy.integrate as integrate
 import matplotlib.pyplot as plt
@@ -39,7 +39,7 @@ OK?
 fname = "pickles/model_alt.pcl"
 with open(fname, "rb") as pfile:
     pdict = pickle.load(pfile)
-    print fname, "gelesen"
+    print(fname, "gelesen")
 
 
 # Aus dem dict in "normale" Variablen laden
@@ -138,9 +138,9 @@ S = TransitionProblem(model_rhs, a=Ta, b=Tb, xa=xa, xb=xb, ua=0, ub=0, use_chain
 # time to run the iteration
 x, u = S.solve()
 if S.reached_accuracy:
-    print "successed!"
+    print("successed!")
 else:
-    print "Not successed!"
+    print("Not successed!")
 
 S.save(fname='pickles/model_trajectory' + str(Tb) + '.pcl')
 
@@ -175,7 +175,7 @@ def draw(xt, image):
     y_p.append( rod_lengths[0] * cos(phi[0]) )
     
     # the rest
-    for i in xrange(1,3):
+    for i in range(1,3):
         x_p.append( x_p[i-1] + rod_lengths[i] * sin(phi[i]) )
         y_p.append( y_p[i-1] + rod_lengths[i] * cos(phi[i]) )
         
@@ -190,7 +190,7 @@ def draw(xt, image):
     image.patches.append(joint)
     
     # then the pendulums
-    for i in xrange(3):
+    for i in range(3):
         image.patches.append( mpl.patches.Circle(xy=(x_p[i], y_p[i]), 
                                                  radius=pendulum_sizes[i], 
                                                  color='black') )

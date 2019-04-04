@@ -4,10 +4,10 @@ import sympy as sp
 import scipy.sparse as sparse
 from scipy.sparse.linalg import spsolve
 from scipy.interpolate import interp1d
-import auxiliary as aux
+from . import auxiliary as aux
 from pytrajectory.auxiliary import lzip
 
-from log import Logger, logging
+from .log import Logger, logging
 
 # DEBUG
 from ipydex import IPS
@@ -100,7 +100,7 @@ class Spline(Logger):
         #   key: spline part
         #   value: corresponding polynomial
         self._P = dict()
-        for i in xrange(self.n):
+        for i in range(self.n):
             # create polynomials, e.g. for cubic spline:
             #   P_i(t)= c_i_3*t^3 + c_i_2*t^2 + c_i_1*t + c_i_0
 
@@ -372,7 +372,7 @@ class Spline(Logger):
             self._coeffs = coeffs
 
             # update polynomial parts
-            for k in xrange(self.n):
+            for k in range(self.n):
                 # respect the decreasing coeff order of poly1d
                 self._P[k] = np.poly1d(self._coeffs[k][::-1])
 
@@ -388,7 +388,7 @@ class Spline(Logger):
             self._indep_coeffs = free_coeffs
 
             # update the spline coefficients and polynomial parts
-            for k in xrange(self.n):
+            for k in range(self.n):
                 coeffs_k = self._dep_array[k].dot(free_coeffs) + self._dep_array_abs[k]
                 self._coeffs[k] = coeffs_k
 
@@ -568,13 +568,13 @@ class Spline(Logger):
             h = np.diff(self.nodes)
 
             # create diagonals for the coefficient matrix of the equation system
-            l = np.array([h[k+1] / (h[k] + h[k+1]) for k in xrange(self.nodes.size-2)])
+            l = np.array([h[k+1] / (h[k] + h[k+1]) for k in range(self.nodes.size-2)])
             d = 2.0*np.ones(self.nodes.size-2)
-            u = np.array([h[k] / (h[k] + h[k+1]) for k in xrange(self.nodes.size-2)])
+            u = np.array([h[k] / (h[k] + h[k+1]) for k in range(self.nodes.size-2)])
 
             # right hand side of the equation system
             r = np.array([(3.0/h[k])*l[k]*(vv[k+1] - vv[k]) + (3.0/h[k+1])*u[k]*(vv[k+2]-vv[k+1])\
-                          for k in xrange(self.nodes.size-2)])
+                          for k in range(self.nodes.size-2)])
             # add conditions for unique solution
 
             # boundary derivatives
@@ -604,14 +604,14 @@ class Spline(Logger):
 
             # compute the coefficients of the interpolant
             if self._use_std_approach:
-                for i in xrange(self.n):
+                for i in range(self.n):
                     coeffs[i, :] = [vv[i],
                                     sol[i],
                                     3.0/h[i]**2 * (vv[i+1]-vv[i]) - 1.0/h[i] * (2*sol[i]+sol[i+1]),
                                     -2.0/h[i]**3 * (vv[i+1]-vv[i]) + 1.0/h[i]**2 * (sol[i]+sol[i+1]),
                                     ]
             else:
-                for i in xrange(self.n):
+                for i in range(self.n):
                     coeffs[i, :] = [vv[i+1],
                                     sol[i+1],
                                     3.0/h[i]**2 * (vv[i]-vv[i+1]) + 1.0/h[i] * (sol[i]+2*sol[i+1]),
@@ -791,12 +791,12 @@ def differentiate(spline_fnc):
     """
     # `im_func` is the function's id
     # `im_self` is the object of which `func` is the method
-    if spline_fnc.im_func == Spline.f.im_func:
-        return spline_fnc.im_self.df
-    elif spline_fnc.im_func == Spline.df.im_func:
-        return spline_fnc.im_self.ddf
-    elif spline_fnc.im_func == Spline.ddf.im_func:
-        return spline_fnc.im_self.dddf
+    if spline_fnc.__func__ == Spline.f.__func__:
+        return spline_fnc.__self__.df
+    elif spline_fnc.__func__ == Spline.df.__func__:
+        return spline_fnc.__self__.ddf
+    elif spline_fnc.__func__ == Spline.ddf.__func__:
+        return spline_fnc.__self__.dddf
     else:
         raise NotImplementedError()
 
@@ -828,7 +828,7 @@ def make_steady(S):
 
     # nu represents degree of boundary conditions
     nu = -1  ##:: equations about boundary conditions at the begin and end of the spline
-    for k, v in S._boundary_values.items():
+    for k, v in list(S._boundary_values.items()):
         if all(item is not None for item in v):  ##:: Note: 0 != None.
             nu += 1
 
@@ -1006,13 +1006,13 @@ def get_smoothness_matrix(S, nu):
 
     # Note: This function assumes lexical ordering of the coefficients
 
-    for k in xrange(n-1):
+    for k in range(n-1):
         M[3*k:3*(k+1), 4*k:4*(k+2)] = block
 
     # add equations for boundary values
     if S._use_std_approach:
         # for the spline function itself
-        if S._boundary_values.has_key(0):
+        if 0 in S._boundary_values:
             if S._boundary_values[0][0] is not None:
                 # left boundary
                 M[3*(n-1),0:4] = np.array([1, 0.0, 0.0, 0.0])
@@ -1023,7 +1023,7 @@ def get_smoothness_matrix(S, nu):
                 r[3*(n-1)+1] = S._boundary_values[0][1]
 
         # for its 1st derivative
-        if S._boundary_values.has_key(1):
+        if 1 in S._boundary_values:
             if S._boundary_values[1][0] is not None:
                 M[3*(n-1)+2,0:4] = np.array([0.0, 1.0, 0.0, 0.0])
                 r[3*(n-1)+2] = S._boundary_values[1][0]
@@ -1031,7 +1031,7 @@ def get_smoothness_matrix(S, nu):
                 M[3*(n-1)+3,-4:] = np.array([0.0, 1.0, 2*h, 3*h**2])
                 r[3*(n-1)+3] = S._boundary_values[1][1]
         # and for its 2nd derivative
-        if S._boundary_values.has_key(2):
+        if 2 in S._boundary_values:
             if S._boundary_values[2][0] is not None:
                 M[3*(n-1)+4, 0:4] = np.array([0.0, 2.0, 0.0, 0.0])
                 r[3*(n-1)+4] = S._boundary_values[2][0]
@@ -1042,7 +1042,7 @@ def get_smoothness_matrix(S, nu):
         # in this branch we use the older non-stdandard-approach to construct the equations
 
         # for the spline function itself
-        if S._boundary_values.has_key(0):
+        if 0 in S._boundary_values:
             if S._boundary_values[0][0] is not None:
                 M[3*(n-1),0:4] = np.array([1.0, - h, h**2, -h**3])
                 r[3*(n-1)] = S._boundary_values[0][0]
@@ -1050,7 +1050,7 @@ def get_smoothness_matrix(S, nu):
                 M[3*(n-1)+1,-4:] = np.array([1.0, 0.0, 0.0, 0.0])
                 r[3*(n-1)+1] = S._boundary_values[0][1]
         # for its 1st derivative
-        if S._boundary_values.has_key(1):
+        if 1 in S._boundary_values:
             if S._boundary_values[1][0] is not None:
                 M[3*(n-1)+2,0:4] = np.array([0.0, 1.0, -2*h, 3*h**2])
                 r[3*(n-1)+2] = S._boundary_values[1][0]
@@ -1058,7 +1058,7 @@ def get_smoothness_matrix(S, nu):
                 M[3*(n-1)+3,-4:] = np.array([0.0, 1.0, 0.0, 0.0])
                 r[3*(n-1)+3] = S._boundary_values[1][1]
         # and for its 2nd derivative
-        if S._boundary_values.has_key(2):
+        if 2 in S._boundary_values:
             if S._boundary_values[2][0] is not None:
                 M[3*(n-1)+4,0:4] = np.array([0.0, 0.0, 2.0, -6*h])
                 r[3*(n-1)+4] = S._boundary_values[2][0]

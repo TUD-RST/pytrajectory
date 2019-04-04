@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import  division
+
 import matplotlib.pyplot as plt
 import sys
 import time
@@ -31,7 +31,7 @@ Dieser Prozess kann (hoffentlich) iterativ fortgesetzt werden
 fname = "pickles/model.pcl"
 with open(fname, "rb") as pfile:
     pdict = pickle.load(pfile)
-    print fname, "gelesen"
+    print(fname, "gelesen")
 
 
 # Aus dem dict in "normale" Variablen laden
@@ -121,9 +121,9 @@ while i <= N:
     S.solve()
 
     if S.reached_accuracy:
-        print "{}: i={};  Successed!\n".format(time.ctime(), i)
+        print("{}: i={};  Successed!\n".format(time.ctime(), i))
     else:
-        print "i={};  Failed!".format(i)
+        print("i={};  Failed!".format(i))
         IPS()
     # if S.eqs.trajectories.n_parts_x > 80:
     #     # the last step was too big,
@@ -144,9 +144,9 @@ while i <= N:
 # time to run the iteration
 
 if S.reached_accuracy:
-    print "successed!"
+    print("successed!")
 else:
-    print "Not successed!"
+    print("Not successed!")
 IPS()
 
 S.save(fname='pickles/model_trajectory' + str(Tb) + '.pcl')
@@ -182,7 +182,7 @@ def draw(xt, image):
     y_p.append( rod_lengths[0] * cos(phi[0]) )
 
     # the rest
-    for i in xrange(1,3):
+    for i in range(1,3):
         x_p.append( x_p[i-1] + rod_lengths[i] * sin(phi[i]) )
         y_p.append( y_p[i-1] + rod_lengths[i] * cos(phi[i]) )
 
@@ -197,7 +197,7 @@ def draw(xt, image):
     image.patches.append(joint)
 
     # then the pendulums
-    for i in xrange(3):
+    for i in range(3):
         image.patches.append( mpl.patches.Circle(xy=(x_p[i], y_p[i]),
                                                  radius=pendulum_sizes[i],
                                                  color='black') )

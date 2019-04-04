@@ -129,7 +129,7 @@ class TestConstraintHandler(object):
         assert zz.shape == zz_tilde.shape
         assert JJ_Gamma.shape == JJ.shape
 
-        for i in xrange(n_points):
+        for i in range(n_points):
             z_tilde = zz_tilde[:, i]  # unbounded values
             z = zz[:, i]  # bounded values (after transformation Psi)
 
@@ -164,6 +164,6 @@ class TestConstraintHandler(object):
 
 
 if __name__ == "__main__":
-    print("\n"*2 + r"   please run py.test -s %filename.py" + "\n")
+    print(("\n"*2 + r"   please run py.test -s %filename.py" + "\n"))
     T = TestConstraintHandler()
     T.test_di_identity_map()

@@ -5,12 +5,12 @@ from collections import OrderedDict
 from scipy import linalg
 import matplotlib.pyplot as plt
 
-from log import Logger, logging
-from trajectories import Trajectory
-from solver import Solver
+from .log import Logger, logging
+from .trajectories import Trajectory
+from .solver import Solver
 
-from auxiliary import Container, NanError, lzip
-import auxiliary as aux
+from .auxiliary import Container, NanError, lzip
+from . import auxiliary as aux
 
 from ipydex import IPS
 
@@ -115,7 +115,7 @@ class CollocationSystem(Logger):
         if self.trajectories._parameters['use_chains']:
             eqind = self.trajectories._eqind
         else:
-            eqind = range(len(states))
+            eqind = list(range(len(states)))
 
         # `eqind` now contains the indices of the equations/rows of the vector field
         # that have to be solved
@@ -147,7 +147,7 @@ class CollocationSystem(Logger):
         n_pconstraints = self.sys.n_pconstraints
         n_vars = n_states + n_inputs + n_par
 
-        for i in xrange(n_cpts):
+        for i in range(n_cpts):
             dYV_dc.append(np.vstack(( SMC.Mx[n_states * i: n_states * (i+1)].toarray(),
                                     SMC.Mu[n_inputs * i: n_inputs * (i+1)].toarray(), )) )
 
@@ -167,7 +167,7 @@ class CollocationSystem(Logger):
         # Dense Matrix Container:
         DMC = Container()
         # convert all 2d arrays (from MC) to sparse datatypes (to SMC)
-        for k, v in SMC.dict.items():
+        for k, v in list(SMC.dict.items()):
             DMC.dict[k] = v.toarray()
         DMC.DdY = DMC.Mdx[take_indices, :]
 
@@ -581,7 +581,7 @@ class CollocationSystem(Logger):
         # iterate over spline quantities; OrderedDict like e.g.:
         # [('x1', array([cx1_0_1, cx1_0_3, ...]), ... ('z_par_1', array([k0], dtype=object))])
 
-        for k, v in self.trajectories.indep_vars.items():
+        for k, v in list(self.trajectories.indep_vars.items()):
             # increase j by the number of indep coeffs on which it depends
             j += len(v)
             idx_dict[k] = (i, j)
@@ -676,8 +676,8 @@ class CollocationSystem(Logger):
                 assert dorder_dfx == dorder_fx + 1
 
                 # get dependence vector for the collocation point and spline variable
-                mx, mx_abs = x_fnc[xx].im_self.get_dependence_vectors(p, d=dorder_fx)
-                mdx, mdx_abs = dx_fnc[xx].im_self.get_dependence_vectors(p, d=dorder_dfx)
+                mx, mx_abs = x_fnc[xx].__self__.get_dependence_vectors(p, d=dorder_fx)
+                mdx, mdx_abs = dx_fnc[xx].__self__.get_dependence_vectors(p, d=dorder_dfx)
 
                 k = ip * self.sys.n_states + ix
 
@@ -694,7 +694,7 @@ class CollocationSystem(Logger):
                 dorder_fu = _get_derivation_order(u_fnc[uu])
 
                 # get dependence vector for the collocation point and spline variable
-                mu, mu_abs = u_fnc[uu].im_self.get_dependence_vectors(p, d=dorder_fu)
+                mu, mu_abs = u_fnc[uu].__self__.get_dependence_vectors(p, d=dorder_fu)
 
                 k = ip * self.sys.n_inputs + iu
 
@@ -776,7 +776,7 @@ class CollocationSystem(Logger):
             guess_add_finish = False
             # now we compute a new guess for every free coefficient of every new (finer) spline
             # by interpolating the corresponding old (coarser) spline
-            for k, v in self.trajectories.indep_vars.items():
+            for k, v in list(self.trajectories.indep_vars.items()):
                 # must be sure that 'self.sys.par' is the last one for 'k'
                 if not guess_add_finish:
                     # TODO: introduce a parameter `ku`
@@ -866,7 +866,7 @@ class CollocationSystem(Logger):
 
             # iterate over the system quantities (x_i, u_j)
 
-            for k, v in self.trajectories.indep_vars.items():
+            for k, v in list(self.trajectories.indep_vars.items()):
 
                 if k in self._first_guess:
                     # this can be used e.g. to set a zero function for u1
@@ -923,7 +923,7 @@ class CollocationSystem(Logger):
             # first_guess and refsol are None
             # user neither defines initial value of free coefficients nor reference solution
 
-            free_vars_all = np.hstack(self.trajectories.indep_vars.values())
+            free_vars_all = np.hstack(list(self.trajectories.indep_vars.values()))
             ##:: self.trajectories.indep_vars.values() contains all the free-par. e.g.:
             ##:: (5 x 11): free_coeffs_all =
             # array([cx3_0_0, cx3_1_0, ..., cx3_8_0, cx1_0_0, ..., cx1_14_0, cx1_15_0, cx1_16_0, k]
@@ -955,7 +955,7 @@ class CollocationSystem(Logger):
         new_spline_values = []
         tt = refsol.tt
 
-        for fnc, (k, v) in zip(fnc_list, self.trajectories.indep_vars.items()):
+        for fnc, (k, v) in zip(fnc_list, list(self.trajectories.indep_vars.items())):
             self.log_debug("Get guess from refsol for spline {}".format(k))
             s_new = self.trajectories.splines[k]
 
@@ -982,7 +982,7 @@ class CollocationSystem(Logger):
             labels = self.masterobject.dyn_sys.states + self.masterobject.dyn_sys.inputs
 
             plt.figure(figsize=fs)
-            for i in xrange(len(new_spline_values)):
+            for i in range(len(new_spline_values)):
                 plt.subplot(rows, 2, i + 1)
                 plt.plot(tt, refsol.xu_list[i], 'k', lw=3, label='sim')
                 plt.plot(tt, new_spline_values[i], label='new')
@@ -1109,13 +1109,13 @@ def _get_derivation_order(fnc):
 
     from .splines import Spline
 
-    if fnc.im_func == Spline.f.im_func:
+    if fnc.__func__ == Spline.f.__func__:
         return 0
-    elif fnc.im_func == Spline.df.im_func:
+    elif fnc.__func__ == Spline.df.__func__:
         return 1
-    elif fnc.im_func == Spline.ddf.im_func:
+    elif fnc.__func__ == Spline.ddf.__func__:
         return 2
-    elif fnc.im_func == Spline.dddf.im_func:
+    elif fnc.__func__ == Spline.dddf.__func__:
         return 3
     else:
         raise ValueError()
@@ -1131,7 +1131,7 @@ def _build_sol_from_free_coeffs(splines):
 
     sol = np.empty(0)
     assert isinstance(splines, OrderedDict)
-    for k, v in splines.items():
+    for k, v in list(splines.items()):
         assert not v._prov_flag
         sol = np.hstack([sol, v._indep_coeffs])
 

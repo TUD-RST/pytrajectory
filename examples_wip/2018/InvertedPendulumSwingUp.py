@@ -72,5 +72,5 @@ cont_dict = aux.containerize_splines(S.eqs.trajectories.splines)
 pfname = "swingup_splines.pcl"
 with open(pfname, "wb") as pfile:
     pickle.dump(cont_dict, pfile)
-    print("Trajectories written to {}".format(pfname))
+    print(("Trajectories written to {}".format(pfname)))
 

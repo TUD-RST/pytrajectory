@@ -3,7 +3,7 @@ import numpy as np
 import sympy as sp
 from collections import OrderedDict
 
-import auxiliary as aux
+from . import auxiliary as aux
 
 from ipydex import IPS
 
@@ -62,7 +62,7 @@ class ConstraintHandler(object):
             current_constr = self.constraints.get(var)
             var_symb = sp.Symbol(var)  # convert string to Symbol
 
-            assert isinstance(var, basestring)
+            assert isinstance(var, str)
             new_name = var.replace('x', 'y').replace('u', 'v')
             new_var = sp.Symbol(new_name)
             self.z_tilde.append(new_var)
@@ -227,7 +227,7 @@ class ConstraintHandler(object):
         self.con_x = OrderedDict()
         self.con_u = OrderedDict()
 
-        for k, v in constraints.iteritems():
+        for k, v in constraints.items():
             assert isinstance(k, str)
             if k.startswith('x'):
                 self.con_x[k] = v
@@ -238,8 +238,8 @@ class ConstraintHandler(object):
                 raise ValueError(msg)
 
         self.constraints = OrderedDict()
-        self.constraints.update(sorted(self.con_x.iteritems()))
-        self.constraints.update(sorted(self.con_u.iteritems()))
+        self.constraints.update(sorted(self.con_x.items()))
+        self.constraints.update(sorted(self.con_u.items()))
 
     def get_constrained_spline_fncs(self, y_fncs, ydot_fncs, v_fncs):
         """converts the unconstrained spline-functions for yi, ydot_i, vi (3 lists) to 3 single

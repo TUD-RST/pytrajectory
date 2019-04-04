@@ -4,10 +4,10 @@ import sympy as sp
 import copy
 from collections import OrderedDict
 
-from splines import Spline, differentiate
-import splines
-from log import Logger
-import auxiliary
+from .splines import Spline, differentiate
+from . import splines
+from .log import Logger
+from . import auxiliary
 
 from ipydex import IPS
 
@@ -252,7 +252,7 @@ class Trajectory(Logger):
 
         # now handle the variables which are not part of any chain
         for i, xx in enumerate(self.sys.states):  ##:: ('x1',...,'xn')
-            if not x_fnc.has_key(xx):
+            if xx not in x_fnc:
 
                 # TODO: What happens with higher order boundary conditions bv={1:...}?
                 splines[xx] = Spline(self.sys.a, self.sys.b, n=self.n_parts_x,
@@ -266,7 +266,7 @@ class Trajectory(Logger):
 
         # now create splines for input (if chains are not used)
         for j, uu in enumerate(self.sys.inputs):
-            if not u_fnc.has_key(uu):
+            if uu not in u_fnc:
                 splines[uu] = Spline(self.sys.a, self.sys.b, n=self.n_parts_u,
                                      bv={0: bv[uu]}, tag=uu,
                                      nodes_type=self._parameters['nodes_type'],
@@ -283,11 +283,11 @@ class Trajectory(Logger):
         indep_vars = OrderedDict()
         ##:: because key of dict(splines) is only 'upper' (splines[upper]),
         ##:: splines{'x1': class Spline, 'x3': class Spline}
-        for ss in splines.keys():
+        for ss in list(splines.keys()):
             ##:: indep_coeffs[x1] = array([cx1_0_0, cx1_1_0, cx1_2_0, ..., cx1_14_0, cx1_15_0, cx1_16_0])
             indep_vars[ss] = splines[ss]._indep_coeffs
             
-        for pp in xrange(self.sys.n_par):
+        for pp in range(self.sys.n_par):
             indep_vars['z_par_{}'.format(pp + 1)] = np.array([sp.symbols('k{}'.format(pp))])
         
         if not export:
@@ -311,7 +311,7 @@ class Trajectory(Logger):
         :return: a list of all independent variables (ordering as in the OrderedDict)
         """
         assert isinstance(self.indep_vars, OrderedDict)
-        return list(np.concatenate(self.indep_vars.values()))
+        return list(np.concatenate(list(self.indep_vars.values())))
 
 
     def set_coeffs(self, sol):
@@ -337,7 +337,7 @@ class Trajectory(Logger):
         subs = dict()
 
         # iterate over the OrderedDict {'x1': [cx1_..., ...], 'u1': [cu1_...]}
-        for k, v in self.indep_vars.items():
+        for k, v in list(self.indep_vars.items()):
             i = len(v)
             # TODO: improve comment
             subs[k] = sol[:i]  # set numerical value to symbolical value
@@ -352,7 +352,7 @@ class Trajectory(Logger):
         # set numerical coefficients for each spline and derivative
         # TODO: handle `!!`-comments after talking to yx 
         ##!! spline_key_plus_k = self.splines.keys().append('k')
-        for k in self.splines.keys():  ##:: ['x1','x3']
+        for k in list(self.splines.keys()):  ##:: ['x1','x3']
             self.splines[k].set_coefficients(free_coeffs=subs[k])
             ##:: self._indep_vars = free_coeffs (self.splines[k]._indep_coeffs=free_coeffs) makes symbols changing into numbers. {'x1': <Spline object>, 'x3': <Spline object>}, Spline._P[k] saves the polynomial.
         
@@ -366,7 +366,7 @@ class Trajectory(Logger):
         i = 0
         j = 0
 
-        for k, v in self.indep_vars.items():
+        for k, v in list(self.indep_vars.items()):
         ##:: ['x1': array([0.12,0.13,...,]), 'x3':...] symbols change into numbers
             j += len(v)
             coeffs_sol[k] = sol_bak[i:j]
@@ -386,7 +386,7 @@ class Trajectory(Logger):
 
         # splines
         save['splines'] = OrderedDict((var, spline.save()) \
-                                      for var, spline in self.splines.iteritems())
+                                      for var, spline in self.splines.items())
 
         # sol
         save['coeffs_col'] = self.coeffs_sol

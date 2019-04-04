@@ -10,15 +10,15 @@ This module provides an interface for interacting with long lasting calculations
 import socket
 import threading
 import time
-import Queue
+import queue
 import platform
-from log import logging
+from .log import logging
 
 from ipydex import IPS
 
 # for data
-msgqueue = Queue.Queue()
-ctrlqueue = Queue.Queue()
+msgqueue = queue.Queue()
+ctrlqueue = queue.Queue()
 running = False
 listener = None
 
@@ -60,7 +60,7 @@ class ThreadedServer(object):
                 continue
         logging.debug("Connected to localhost:{}".format(self.port + i))
         if confirmflag:
-            raw_input("Press Enter.")
+            input("Press Enter.")
 
     def listen(self):
         self.sock.listen(5)
@@ -127,7 +127,7 @@ def start_stopable_thread(callable, dt=0.1, name=None):
                     break
             time.sleep(dt)
 
-        print "finish threads"
+        print("finish threads")
 
     return thrdfnc
 
@@ -213,7 +213,7 @@ def process_queue():
     logging.info("finished")
 
 if __name__ == "__main__":
-    PORT = input("Port? ")
+    PORT = eval(input("Port? "))
     listen_for_connections(PORT)
 
     process_queue()

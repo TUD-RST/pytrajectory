@@ -4,10 +4,10 @@ from numpy.linalg import solve, norm
 import scipy as scp
 import time
 
-from auxiliary import NanError, lzip
+from .auxiliary import NanError, lzip
 
-from log import Logger
-import interfaceserver
+from .log import Logger
+from . import interfaceserver
 
 from matplotlib import pyplot as plt
 
@@ -214,7 +214,7 @@ class Solver(Logger):
                     r = C.ff(C.X[:, i:i + 1], C.U[:, i:i + 1], C.P[:, i:i + 1]) - dX[:, i:i + 1]
                     # drop penalty values
                     plt.plot(abs(ff.T))
-                    plt.title(u"Fehler der refsol-Startschätzung: in Randbereichen am stärksten")
+                    plt.title("Fehler der refsol-Startschätzung: in Randbereichen am stärksten")
                     # Fazit: ggf die Veränderung der Parameter stärker wichten, wo die Fehler groß sind
                     # plt.figure()
                     # plt.plot(s)

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import  division
+
 import sys
 import scipy.integrate as integrate
 import scipy.interpolate as inter
@@ -28,7 +28,7 @@ np.set_printoptions(precision=4, suppress=True, linewidth=300)
 fname = "model.pcl"
 with open(fname, "rb") as pfile:
     pdict = pickle.load(pfile)
-    print fname, "gelesen"
+    print(fname, "gelesen")
 
 
 # Aus dem dict in "normale" Variablen laden
@@ -274,7 +274,7 @@ if 1:
     N = 200
     reslist = []
     for i in range(0, N):
-        print i, "------"
+        print(i, "------")
         first_guess = {'seed': i}
         first_guess = None
 
@@ -307,17 +307,17 @@ if 1:
 
         # run iteration
         S.solve(tcpport=None)
-        print S.eqs.solver.res, "\n"
-        print S.eqs.solver.x0[:9]
+        print(S.eqs.solver.res, "\n")
+        print(S.eqs.solver.x0[:9])
         sim_res.append(S.sim_data_xx[-1])
         residum_res.append(S.eqs.solver.res)
         if S.reached_accuracy:
-            print "success", i
-            userinput = raw_input("Press `q` to quit.\n")
+            print("success", i)
+            userinput = input("Press `q` to quit.\n")
             if userinput == "q":
                 break
         else:
-            print "fail"
+            print("fail")
 
         reslist.append(S.eqs.solver.x0)
         time.sleep(2)
@@ -357,7 +357,7 @@ def draw(xt, image):
     y_p.append( rod_lengths[0] * cos(phi[0]) )
 
     # the rest
-    for i in xrange(1,3):
+    for i in range(1,3):
         x_p.append( x_p[i-1] + rod_lengths[i] * sin(phi[i]) )
         y_p.append( y_p[i-1] + rod_lengths[i] * cos(phi[i]) )
 
@@ -372,7 +372,7 @@ def draw(xt, image):
     image.patches.append(joint)
 
     # then the pendulums
-    for i in xrange(3):
+    for i in range(3):
         image.patches.append( mpl.patches.Circle(xy=(x_p[i], y_p[i]),
                                                  radius=pendulum_sizes[i],
                                                  color='black') )
