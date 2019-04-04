@@ -791,11 +791,11 @@ def differentiate(spline_fnc):
     """
     # `im_func` is the function's id
     # `im_self` is the object of which `func` is the method
-    if spline_fnc.__func__ == Spline.f.__func__:
+    if spline_fnc.__func__ == Spline.f:
         return spline_fnc.__self__.df
-    elif spline_fnc.__func__ == Spline.df.__func__:
+    elif spline_fnc.__func__ == Spline.df:
         return spline_fnc.__self__.ddf
-    elif spline_fnc.__func__ == Spline.ddf.__func__:
+    elif spline_fnc.__func__ == Spline.ddf:
         return spline_fnc.__self__.dddf
     else:
         raise NotImplementedError()

@@ -1109,13 +1109,13 @@ def _get_derivation_order(fnc):
 
     from .splines import Spline
 
-    if fnc.__func__ == Spline.f.__func__:
+    if fnc.__func__ == Spline.f:
         return 0
-    elif fnc.__func__ == Spline.df.__func__:
+    elif fnc.__func__ == Spline.df:
         return 1
-    elif fnc.__func__ == Spline.ddf.__func__:
+    elif fnc.__func__ == Spline.ddf:
         return 2
-    elif fnc.__func__ == Spline.dddf.__func__:
+    elif fnc.__func__ == Spline.dddf:
         return 3
     else:
         raise ValueError()
