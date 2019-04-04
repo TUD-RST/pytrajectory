@@ -11,6 +11,7 @@ import socket
 import threading
 import time
 import Queue
+import platform
 from log import logging
 
 from ipydex import IPS
@@ -155,7 +156,17 @@ def stop_listening():
     # time.sleep(2)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect(server[-1].sock.getsockname())
+    address = server[-1].sock.getsockname()
+
+    if platform.system() == "Windows":
+        host, port = address
+
+        # Connecting to the any-address 0.0.0.0 is not allowed on Windows
+        # https://stackoverflow.com/questions/11982562/socket-connect-to-0-0-0-0-windows-vs-mac
+        if host == '0.0.0.0':
+            address = ('127.0.0.1', port)
+
+    sock.connect(address)
 
     sock.close()
     server[-1].sock.close()
