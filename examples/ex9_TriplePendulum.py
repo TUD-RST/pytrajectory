@@ -193,7 +193,7 @@ def solve_motion_equations(M, B, state_vars=[], input_vars=[], parameters_values
     # at first we create a buffer for the string that we complete and execute 
     # to dynamically define a function and return it
     fnc_str_buffer ='''
-def f(x, u):
+def f(x, u, uuref, t, pp):
     # System variables
     %s  # x_str
     %s  # u_str
