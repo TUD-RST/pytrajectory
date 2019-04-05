@@ -1,7 +1,8 @@
 language: python
+dist: xenial
 
 python:
-  - "3.6"
+  - "3.7"
 
 before_install:
   - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
