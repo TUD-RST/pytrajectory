@@ -1,14 +1,14 @@
 language: python
 
 python:
-  - "2.7"
+  - "3.6"
 
 before_install:
   - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
   - export PATH=/home/travis/miniconda2/bin:$PATH
-  - export DEPS="sympy=0.7.5 numpy=1.8 scipy=0.13 matplotlib ipython pytest"
+  - export DEPS="sympy=1.3 numpy=1.16.2 scipy=1.2.1 matplotlib ipython pytest"
   - conda update --yes --no-deps conda
   - pip install enum34
   - pip install ipython==5.4.1
