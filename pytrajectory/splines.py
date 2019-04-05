@@ -280,7 +280,7 @@ class Spline(Logger):
         This method yields a provisionally evaluation of the spline
         while there are no numerical values for its free parameters.
 
-        # Let t |--> S(t) denote the Spline Function
+        Let t ↦ S(t) denote the Spline Function
         This method returns a two vectors D1, D2 which reflect the dependence of the
         the value S(point) (`d`-th derivative's) on the
         independent coefficients a.

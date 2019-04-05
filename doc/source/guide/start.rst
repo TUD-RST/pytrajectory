@@ -29,7 +29,8 @@ vectorfield of a control system and to specify the desired boundary values.
 Installation
 ============
 
-PyTrajectory has been developed and tested on Python 2.7
+PyTrajectory has originally been developed on Python 2.7.
+Since April 2019 only Python 3.6  + is supported
 
 If you have troubles installing PyTrajectory, please don't hesitate to
 :ref:`contact <contacts>` us.
@@ -39,15 +40,14 @@ If you have troubles installing PyTrajectory, please don't hesitate to
 Dependencies
 ------------
 
-Before you install PyTrajectory make sure you have the following 
-dependencies installed on your system.
+PyTrajectory depends on the following packages: which should automatically be
+installed during installation process:
 
 * numpy
 * sympy
 * scipy
-* optional
-   * matplotlib [visualisation]
-   * ipython [debugging]
+* matplotlib
+* ipydex (for debugging)
 
 PyPI
 ----
@@ -76,103 +76,12 @@ Because the documentation is build automatically upon the source code, there are
 versions of the docs available. Please make sure that you always use matching versions of
 code and documentation.
 
-Windows
--------
+Windows and MAC OSX
+-------------------
 
-To install PyTrajectory on Windows machines please make sure you have already installed Python
-version 2.7 on your system. If not, please
-`download <https://www.python.org/ftp/python/2.7.10/python-2.7.10.msi>`_
-the latest version and install it by double-clicking the installer file.
-
-To be able to run the Python interpreter from any directory we have to append the *PATH*
-environment variable. This can be done by right-clicking the machine icon (usually on your Desktop,
-called *My Computer*), choosing *Properties*, selecting *Advance* and hitting *Environment Variables*.
-Then select the *PATH* (or *Path*) variable, click *Edit* an append the following at the end of the line ::
-
-  ;C:\Python27\;C:\Python27\Scripts\
-
-If you can't find a variable called *PATH* you can create it by clicking *New*, naming it *PATH*
-and insert the line above without the first *`;`* as the value.
-
-Before going on, open a command line with the shortcut consisting of the *Windows-key* and the *R*-key.
-Run *cmd* and after the command line interface started type the following: ::
-
-  C:\> pip --version
-
-If it prints the version number of *pip* you can skip the next two steps.
-Else, the next thing to do is to install a Python software package called *Setuptools* that extends packaging
-and installation facilities. To do so, download the Python script
-`ez_setup.py <https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py>`_
-and run it by typing ::
-
-  C:>\path\to\file\python ez_setup.py
-
-To simplify the installation of new packages we install a software called *pip*. This is simply done
-by downloading the file
-`get_pip.py <https://raw.githubusercontent.com/pypa/pip/master/contrib/get-pip.py>`_
-and running ::
-
-  C:>\path\to\file\python get_pip.py
-
-from the command line again.
-
-After that, (and after you have installed the :ref:`dependencies <dependencies>` with a similar command
-like the next one) you can run ::
-
-  C:>\pip install pytrajectory
-
-and pip should manage to install PyTrajectory. 
-
-Again, if you have troubles installing PyTrajectory, please :ref:`contact <contacts>` us.
-
-.. note::
-   The information provided in this section follows the guide available
-   `here <http://docs.python-guide.org/en/latest/starting/install/win/>`_.
-
-MAC OSX
--------
-
-To install PyTrajectory on machines running OSX you first have to make sure there is Python version 2.7
-installed on your system (should be with OSX >= 10.8). To check this, open a terminal and type ::
-
-  $ python --version
-
-If this is not the case we have to install it (obviously). To do so we will use a package manager called
-*Homebrew* that allows an installation procedure similar to Linux environments. But before we do this pease
-check if you have `XCode <https://developer.apple.com/xcode/>`_ installed.
-
-Homebrew can be installed
-by opening a terminal and typing ::
-
-  $ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-
-Once Homebrew is installed we insert its directory at the top of the *PATH* environment variable by adding
-the following line at the bottom of your `~\.profile` file (you have to relogin for this to take effect) ::
-
-  export PATH=/usr/local/bin:/usr/local/sbin:$PATH
-
-Now, installing Python version 2.7 is as easy as typing ::
-
-  $ brew install python2
-
-into a terminal. Homebrew also will install packages called *Setuptools* and *pip* that manage the installation
-of additional Python packages.
-
-Now, before installing PyTrajectory please make sure to install its :ref:`dependencies <dependencies>` via ::
-
-  $ pip install sympy
-
-and similar commands for the others. After that you can install Pytrajectory by typing ::
-
-  $ pip install pytrajectory
-
-or install it from the :ref:`source files <source>`.  
-
-Again, if you have troubles installing PyTrajectory, please :ref:`contact <contacts>` us.
-
-.. note::
-   The information provided in this section follows the guide available
-   `here <http://docs.python-guide.org/en/latest/starting/install/osx/>`_.
+PyTrajectory is mainly developed and tested on Linux machines. However, it should run on every
+platform where its dependencies do. We recommend a python distribution like
+`Miniconda <https://conda.io/en/latest/miniconda.html>`_.
 
 .. _usage:
 
@@ -213,7 +122,10 @@ So in Python this would be ::
 
    >>> from sympy import sin, cos
    >>>
-   >>> def f(x,u):
+   >>> def f(x, u, uref, t, p):
+   ... """ uref (optional reference input), t (time)
+   ...     and p (parameters) can be ignored for now
+   ... """
    ...     x1, x2, x3, x4 = x  # system variables
    ...     u1, = u             # input variable
    ...     
@@ -230,8 +142,8 @@ So in Python this would be ::
    ...
    >>> 
 
-Wanted is now the course for :math:`u(t)`, which transforms the system with the following start 
-and end states within :math:`T = 2 [s]`.
+Wanted is now the time evolution for :math:`u(t)`, which transfers the system from the following start
+state to the desired end state within :math:`T = 2 [s]`.
 
 .. math::
    :nowrap:
@@ -263,11 +175,11 @@ because we want :math:`u(0) = u(T) = 0`.
 
 Now we import all we need from PyTrajectory ::
 
-   >>> from pytrajectory import ControlSystem
+   >>> from pytrajectory import TransitionProblem
 
 and pass our parameters. ::
 
-   >>> S = ControlSystem(f, a, b, xa, xb, ua, ub)
+   >>> S = TransitionProblem(f, a, b, xa, xb, ua, ub)
 
 All we have to do now to solve our problem is ::
 

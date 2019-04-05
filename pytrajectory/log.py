@@ -96,7 +96,7 @@ class Logger(object):
         logging.info("{} {}".format(self.fp, msg), *args, **kwargs)
 
     def log_warn(self, msg, *args, **kwargs):
-        logging.warn("{} {}".format(self.fp, msg), *args, **kwargs)
+        logging.warning("{} {}".format(self.fp, msg), *args, **kwargs)
 
     def log_error(self, msg, *args, **kwargs):
         logging.error("{} {}".format(self.fp, msg), *args, **kwargs)
