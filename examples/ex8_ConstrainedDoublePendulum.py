@@ -143,7 +143,8 @@ def f(x, u, uuref, t, pp):
     # now we can replace all placeholders in the function string buffer
     fnc_str = fnc_str_buffer%(x_str, u_str, par_str, cse_str, ff_str)
     # and finally execute it which will create a python function 'f'
-    globals_locals = dict()
+    # pass the current global scope to exec(). this is necessary so that sympy functions like cos/sin can be used
+    globals_locals = globals()
     exec(fnc_str, globals_locals)
 
     # now we have defined a callable function that can be used within PyTrajectory
